@@ -132,3 +132,36 @@ export const canvasSizeOptions = [
         icon: '/images/tiktok.png',
     },
 ];
+
+export const recentCanvas = [
+    {
+        name: 'E-commerce',
+        image: '/images/p22.png',
+        text: 'E-commerce',
+    },
+    {
+        name: 'Bg Removal',
+        image: '/images/bgremoval.png',
+        text: 'remove image backgrounds',
+    },
+    {
+        name: 'Instagram Post',
+        image: '/images/rc1.png',
+        text: 'Create Instagram Story',
+    },
+    {
+        name: 'Image Editing',
+        image: '/images/imgediting.png',
+        text: 'edit any image',
+    },
+    {
+        name: 'Ai Image Generate',
+        image: '/images/p18.png',
+        text: 'Ai Generated Image',
+    },
+    {
+        name: 'Presentation',
+        image: '/images/rc7.png',
+        text: 'Create Presentations',
+    },
+];
