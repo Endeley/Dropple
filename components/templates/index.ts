@@ -1,0 +1,14 @@
+export { BusinessCard } from './business/BusinessCard';
+export { BusinessTemplate } from './business/BusinessTemplate';
+export { EcommerceTemplate } from './ecommerce/EcommerceTemplate';
+export { EditableInstagramPost } from './social/EditableInstagramPost';
+export { EducationTemplate } from './education/EducationTemplate';
+export { EnterpriseTemplate } from './enterprise/EnterpriseTemplate';
+export { Flyer } from './marketing/Flyer';
+export { InstagramPost } from './social/InstagramPost';
+export { InstagramStory } from './social/InstagramStory';
+export { Invoice } from './invoice/Invoice';
+export { PresentationSlide } from './presentations/PresentationSlide';
+export { Resume } from './resume/Resume';
+export { SocialMediaTemplate } from './social/SocialMediaTemplate';
+export { VisualTemplate } from './visual/VisualTemplate';

@@ -1,7 +1,9 @@
 {
-  "compilerOptions": {
-    "paths": {
-      "@/*": ["./*"]
-    }
-  }
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": { "@/*": ["*"] },
+        "checkJs": false
+    },
+    "include": ["app/**/*", "components/**/*", "lib/**/*"],
+    "exclude": ["node_modules", ".next", "public", "**/*.ts", "**/*.d.ts"]
 }

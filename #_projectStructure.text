@@ -1,0 +1,132 @@
+dropple/
+│
+├── .vscode/                     # (optional) editor settings
+│   └── settings.json
+│
+├── .env.local                   # environment variables (API keys, DB URIs, etc.)
+├── package.json
+├── tailwind.config.js
+├── postcss.config.js
+├── tsconfig.json (or jsconfig.json if no TS)
+├── next.config.js
+│
+├── /app                         # Next.js App Router pages
+│   ├── layout.jsx
+│   ├── page.jsx                 # Landing page
+│   │
+│   ├── /auth                    # Authentication routes
+│   │   ├── login/page.jsx
+│   │   ├── register/page.jsx
+│   │   └── callback/route.js
+│   │
+│   ├── /dashboard               # User dashboard
+│   │   ├── layout.jsx
+│   │   ├── page.jsx
+│   │   ├── /designs
+│   │   │   ├── page.jsx
+│   │   │   └── [id]/page.jsx    # Individual design editor
+│   │   ├── /templates
+│   │   │   └── page.jsx
+│   │   ├── /pro
+│   │   │   └── page.jsx
+│   │   ├── /settings
+│   │   │   ├── page.jsx
+│   │   │   └── billing/page.jsx
+│   │   └── /teams
+│   │       └── page.jsx
+│   │
+│   ├── /docs                    # Developer docs
+│   │   └── page.jsx
+│   │
+│   └── /api                     # Next.js API routes
+│       ├── /auth
+│       │   └── [...nextauth]/route.js  # NextAuth handler
+│       ├── /webhooks
+│       │   └── stackauth/route.js      # StackAuth webhook
+│       └── /upload/route.js            # File uploads
+│
+├── /components                  # Reusable UI components
+│   ├── Header.jsx
+│   ├── Footer.jsx
+│   ├── Sidebar.jsx
+│   ├── SearchBar.jsx
+│   ├── UserAvatar.jsx
+│   │
+│   ├── /ui                      # ShadCN + custom UI
+│   │   ├── button.jsx
+│   │   ├── card.jsx
+│   │   └── modal.jsx
+│   │
+│   ├── /dashboard               # Dashboard-specific components
+│   │   ├── TemplateCards.jsx
+│   │   ├── ProjectCards.jsx
+│   │   ├── UploadCard.jsx
+│   │   └── PreviewCard.jsx
+│   │
+│   └── /editor                  # Canvas editor
+│       ├── CanvasEditor.jsx
+│       ├── ToolSidebar.jsx
+│       ├── ExportModal.jsx
+│       └── Toolbar.jsx
+│
+├── /convex                      # Convex backend
+│   ├── schema.ts                 # Full schema (already drafted)
+│   ├── auth.js                   # Auth helpers
+│   ├── functions/                # Queries & mutations
+│   │   ├── users.js
+│   │   ├── teams.js
+│   │   ├── designs.js
+│   │   ├── templates.js
+│   │   ├── assets.js
+│   │   ├── tools.js
+│   │   └── marketplace.js
+│   └── seed.ts                   # Seeding data
+│
+├── /database                    # (if using Mongo/Prisma alongside Convex)
+│   ├── user.js
+│   ├── team.js
+│   └── plan.js
+│
+├── /lib                         # Helpers & utils
+│   ├── auth.js                   # NextAuth config
+│   ├── convexClient.js           # Convex client
+│   ├── stackauth.js              # StackAuth helpers
+│   ├── upload.js                 # File upload utilities
+│   └── analytics.js
+│
+├── /providers                   # Context Providers
+│   ├── ConvexClientProvider.jsx
+│   ├── AuthProvider.jsx
+│   ├── ThemeProvider.jsx
+│   └── UserDetailsProvider.jsx
+│
+├── /public                      # Static assets
+│   ├── /assets
+│   │   ├── templates/
+│   │   ├── icons/
+│   │   └── logos/
+│   └── favicon.ico
+│
+└── /styles
+    ├── globals.css
+    └── utils.css
+
+
+
+Architecture Roadmap
+
+Define template schema first: nail the JSON/TSType model for artboards, layers, variables, constraints, and versioning; settle on Fabric.js rendering + a CanvasAdapter interface so editor logic stays engine-agnostic.
+Stand up data layer: add Convex tables (templates, designs, assets, brandKits) with validation on insert/update, storage integration for assets, and helper mutations for draft/create/publish/duplicate.
+Build editor foundation: React shell with Zustand/Jotai state, undo/redo command stack, layer tree, artboard switcher, selection/transform controls, and Fabric bindings for text/image/shape/group layers.
+Layer in editing features: variable bindings + brand kit overrides, constraints/resizing rules, alignment guides, snapping, masking, grouped transforms, and inline text editing with style controls.
+Deliver outputs: thumbnail generation, export pipeline (PNG/JPEG first, PDF/SVG next), template sharing links, and design instantiation flow (Use template creates user-owned design doc).
+Ship gradually: seed a handful of starter templates, roll out teacher/student-tailored presets, add collaboration/sharing later, and keep schema migrations scripted so template data stays forward-compatible.
+ok give me bullet points on step by step please
+
+
+Nail the data contract: draft /types/template.ts with artboards, layers (text/image/shape/group), variables, constraints, and version field; review with team till stable.
+Provision backend tables: extend convex/schema.ts for templates, designs, assets, brandKits; add mutations/queries for create draft, update, publish, duplicate, list, and asset upload flow.
+Scaffold editor shell: build React layout (layers panel, Fabric canvas, inspector, top toolbar) backed by Zustand/Jotai state, selection model, and undo/redo command stack.
+Implement layer rendering + editing: connect Fabric adapter for text/image/shape/group, enable transform handles, inline text edit, styling controls, snapping, alignment, and variable bindings.
+Support sharing/output: generate thumbnails on publish, implement Use template to clone into designs, add PNG/JPEG export (PDF/SVG later), and surface template links for teachers/students.
+Seed and iterate: insert starter templates via Convex seed mutation, gather feedback from pilot users, tighten schema validation/migrations based on real edits, then expand element library (frames, charts, etc.).
