@@ -306,6 +306,9 @@ export function ensureTemplateData(data: LegacyTemplateLike, options?: { artboar
 
     if (data.artboards && data.artboards.length > 0) {
         const normalizedArtboards = data.artboards.map(normalizeArtboard);
+        const primaryArtboard = normalizedArtboards.find((artboard) => artboard.id === (data.defaultArtboardId ?? normalizedArtboards[0].id)) ?? normalizedArtboards[0];
+        const canvasSize = data.canvas ?? (primaryArtboard?.size ? { width: primaryArtboard.size.width, height: primaryArtboard.size.height } : undefined);
+
         return {
             version,
             artboards: normalizedArtboards,
@@ -318,7 +321,7 @@ export function ensureTemplateData(data: LegacyTemplateLike, options?: { artboar
             category: data.category,
             description: data.description,
             tags: data.tags,
-            canvas: data.canvas,
+            canvas: canvasSize,
             background: data.background,
             elements: data.elements,
             brandBindings: data.brandBindings,
@@ -351,7 +354,7 @@ export function ensureTemplateData(data: LegacyTemplateLike, options?: { artboar
         category: data.category,
         description: data.description,
         tags: data.tags,
-        canvas: data.canvas,
+        canvas,
         background: data.background,
         elements: data.elements,
         brandBindings: data.brandBindings,

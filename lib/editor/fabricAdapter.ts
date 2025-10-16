@@ -1,6 +1,6 @@
 // @ts-nocheck
 
-import fabric from 'fabric';
+import * as fabric from 'fabric';
 
 import type {
     Artboard,
@@ -42,7 +42,66 @@ function applyCommonProps(object: fabric.Object, layer: Layer) {
         name: layer.name,
     });
     const data = object.get('data') ?? {};
-    object.set('data', { ...data, layerId: layer.id });
+    const shapeKind = layer.type === 'shape' ? layer.shape : data.shapeKind;
+    object.set('data', { ...data, layerId: layer.id, shapeKind });
+}
+
+function applyShapeStyling(object: fabric.Object, layer: ShapeLayer) {
+    if (!object) return;
+    if (layer.fill?.kind === 'solid') {
+        object.set('fill', layer.fill.color);
+    } else if (!layer.fill) {
+        object.set('fill', DEFAULT_SHAPE_COLOR);
+    }
+    if (layer.stroke) {
+        object.set('stroke', layer.stroke.color);
+        object.set('strokeWidth', layer.stroke.width ?? 1);
+        if ('strokeUniform' in object) {
+            object.set('strokeUniform', true);
+        }
+    } else {
+        object.set('stroke', undefined);
+        object.set('strokeWidth', 0);
+    }
+    if (layer.shadow) {
+        object.set(
+            'shadow',
+            new fabric.Shadow({
+                color: layer.shadow.color,
+                blur: layer.shadow.blur,
+                offsetX: layer.shadow.offsetX,
+                offsetY: layer.shadow.offsetY,
+                opacity: layer.shadow.opacity ?? 1,
+            })
+        );
+    } else {
+        object.set('shadow', undefined);
+    }
+}
+
+function applyImageFilters(image: fabric.Image, layer: ImageLayer) {
+    if (!image) return;
+    const filters: fabric.IBaseFilter[] = [];
+    const adjustments = layer.filters ?? {};
+
+    if (typeof adjustments.brightness === 'number') {
+        filters.push(new fabric.filters.Brightness({ brightness: adjustments.brightness }));
+    }
+    if (typeof adjustments.contrast === 'number') {
+        filters.push(new fabric.filters.Contrast({ contrast: adjustments.contrast }));
+    }
+    if (typeof adjustments.saturation === 'number') {
+        filters.push(new fabric.filters.Saturation({ saturation: adjustments.saturation }));
+    }
+    if (typeof adjustments.blur === 'number' && adjustments.blur > 0) {
+        filters.push(new fabric.filters.Blur({ blur: adjustments.blur }));
+    }
+    if (typeof adjustments.grayscale === 'number' && adjustments.grayscale > 0) {
+        filters.push(new fabric.filters.Grayscale({ }));
+    }
+
+    image.filters = filters;
+    image.applyFilters();
 }
 
 function convertLayerToFabric(layer: Layer): Promise<fabric.Object | null> {
@@ -85,6 +144,16 @@ function convertLayerToFabric(layer: Layer): Promise<fabric.Object | null> {
                             left: layer.transform.x,
                             top: layer.transform.y,
                         });
+                        if (layer.cornerRadius) {
+                            img.set('rx', cornerValue(layer.cornerRadius));
+                            img.set('ry', cornerValue(layer.cornerRadius));
+                            img.set('clipPath', undefined);
+                        }
+                        if (layer.stroke) {
+                            img.set('stroke', layer.stroke.color);
+                            img.set('strokeWidth', layer.stroke.width ?? 1);
+                        }
+                        applyImageFilters(img, layer);
                         resolve(img);
                     },
                     { crossOrigin: 'anonymous' }
@@ -93,56 +162,113 @@ function convertLayerToFabric(layer: Layer): Promise<fabric.Object | null> {
         case 'shape':
             if (layer.shape === 'ellipse') {
                 return Promise.resolve(
-                    new fabric.Ellipse({
-                        left: layer.transform.x,
-                        top: layer.transform.y,
-                        originX: 'left',
-                        originY: 'top',
-                        rx: layer.transform.width / 2,
-                        ry: layer.transform.height / 2,
-                        fill: layer.fill && layer.fill.kind === 'solid' ? layer.fill.color : DEFAULT_SHAPE_COLOR,
-                        stroke: layer.stroke?.color,
-                        strokeWidth: layer.stroke?.width,
-                    })
+                    (() => {
+                        const ellipse = new fabric.Ellipse({
+                            left: layer.transform.x,
+                            top: layer.transform.y,
+                            originX: 'left',
+                            originY: 'top',
+                            rx: layer.transform.width / 2,
+                            ry: layer.transform.height / 2,
+                        });
+                        applyShapeStyling(ellipse, layer);
+                        return ellipse;
+                    })()
                 );
             }
             if (layer.shape === 'line') {
                 const x2 = layer.transform.x + layer.transform.width;
                 const y2 = layer.transform.y + layer.transform.height;
                 return Promise.resolve(
-                    new fabric.Line([layer.transform.x, layer.transform.y, x2, y2], {
-                        stroke: layer.stroke?.color ?? DEFAULT_SHAPE_COLOR,
-                        strokeWidth: layer.stroke?.width ?? 2,
-                    })
+                    (() => {
+                        const line = new fabric.Line([layer.transform.x, layer.transform.y, x2, y2], {
+                            stroke: layer.stroke?.color ?? DEFAULT_SHAPE_COLOR,
+                            strokeWidth: layer.stroke?.width ?? 2,
+                        });
+                        return line;
+                    })()
                 );
             }
-            if (layer.shape === 'polygon' && layer.points?.length) {
+            if (layer.shape === 'polygon' || layer.shape === 'star') {
+                if (layer.points?.length) {
+                    return Promise.resolve(
+                        (() => {
+                            const polygon = new fabric.Polygon(layer.points!.map((pt) => ({ ...pt })), {
+                                left: layer.transform.x,
+                                top: layer.transform.y,
+                                originX: 'center',
+                                originY: 'center',
+                            });
+                            applyShapeStyling(polygon, layer);
+                            polygon.set({ data: { layerId: layer.id, shapeKind: layer.shape } });
+                            polygon.scaleToWidth(layer.transform.width);
+                            polygon.scaleToHeight(layer.transform.height);
+                            polygon.set({
+                                left: layer.transform.x + layer.transform.width / 2,
+                                top: layer.transform.y + layer.transform.height / 2,
+                            });
+                            return polygon;
+                        })()
+                    );
+                }
+            }
+            if (layer.shape === 'path' && layer.path?.length) {
                 return Promise.resolve(
-                    new fabric.Polygon(layer.points.map((pt) => ({ ...pt })), {
-                        left: layer.transform.x,
-                        top: layer.transform.y,
-                        fill: layer.fill && layer.fill.kind === 'solid' ? layer.fill.color : DEFAULT_SHAPE_COLOR,
-                        stroke: layer.stroke?.color,
-                        strokeWidth: layer.stroke?.width,
-                    })
+                    (() => {
+                        const path = new fabric.Path(layer.path as any, {
+                            left: layer.transform.x,
+                            top: layer.transform.y,
+                        });
+                        applyShapeStyling(path, layer);
+                        const bounds = path.getBoundingRect(false, true);
+                        if (bounds.width && bounds.height) {
+                            const scaleX = layer.transform.width / bounds.width;
+                            const scaleY = layer.transform.height / bounds.height;
+                            path.scaleX = scaleX;
+                            path.scaleY = scaleY;
+                        }
+                        return path;
+                    })()
                 );
             }
             return Promise.resolve(
-                new fabric.Rect({
+                (() => {
+                    const rect = new fabric.Rect({
                     left: layer.transform.x,
                     top: layer.transform.y,
                     width: layer.transform.width,
                     height: layer.transform.height,
                     rx: cornerValue(layer.cornerRadius),
                     ry: cornerValue(layer.cornerRadius),
-                    fill: layer.fill && layer.fill.kind === 'solid' ? layer.fill.color : DEFAULT_SHAPE_COLOR,
-                    stroke: layer.stroke?.color,
-                    strokeWidth: layer.stroke?.width,
-                })
+                });
+                    applyShapeStyling(rect, layer);
+                    return rect;
+                })()
             );
         default:
             return Promise.resolve(null);
-    }
+   }
+}
+
+export function addOverlayRect(canvas: fabric.Canvas, color = 'rgba(14,165,233,0.35)', blend: GlobalCompositeOperation = 'multiply') {
+    const overlay = new fabric.Rect({
+        left: 0,
+        top: 0,
+        width: canvas.getWidth(),
+        height: canvas.getHeight(),
+        fill: color,
+        selectable: true,
+        hasBorders: false,
+        hasControls: true,
+        hoverCursor: 'move',
+    });
+    overlay.globalCompositeOperation = blend;
+    overlay.name = 'Overlay';
+    canvas.add(overlay);
+    overlay.moveTo(canvas.getObjects().length - 1);
+    canvas.setActiveObject(overlay);
+    canvas.renderAll();
+    return overlay;
 }
 
 function extractTransform(object: fabric.Object) {
@@ -196,26 +322,84 @@ function fabricObjectToLayer(object: fabric.Object, fallbackId: string, index: n
             src: imageObject.getSrc(),
             fit: 'cover',
         };
+        const filters = imageObject.filters ?? [];
+        if (filters.length) {
+            const adjustments: ImageLayer['filters'] = {};
+            filters.forEach((filter) => {
+                if (filter instanceof fabric.filters.Brightness) {
+                    adjustments.brightness = filter.brightness;
+                }
+                if (filter instanceof fabric.filters.Contrast) {
+                    adjustments.contrast = filter.contrast;
+                }
+                if (filter instanceof fabric.filters.Saturation) {
+                    adjustments.saturation = filter.saturation;
+                }
+                if (filter instanceof fabric.filters.Blur) {
+                    adjustments.blur = filter.blur;
+                }
+                if (filter instanceof fabric.filters.Grayscale) {
+                    adjustments.grayscale = 1;
+                }
+            });
+            layer.filters = adjustments;
+        }
+        if (object.stroke) {
+            layer.stroke = {
+                color: object.stroke as string,
+                width: object.strokeWidth ?? 1,
+            };
+        }
+        if ((object as any).rx || (object as any).ry) {
+            layer.cornerRadius = (object as any).rx ?? 0;
+        }
         return layer;
     }
 
+    const shapeKindFromData = (data.shapeKind as ShapeLayer['shape']) ?? undefined;
+    const transform = extractTransform(object);
     const shapeLayer: ShapeLayer = {
         id,
         type: 'shape',
         name: object.name,
-        transform: extractTransform(object),
-        shape: object.type === 'ellipse' || object.type === 'circle' ? 'ellipse' : object.type === 'line' ? 'line' : 'rect',
-        fill: object.fill
-            ? { kind: 'solid', color: object.fill as string }
-            : { kind: 'solid', color: DEFAULT_SHAPE_COLOR },
-        stroke: object.stroke
-            ? {
-                  color: object.stroke as string,
-                  width: object.strokeWidth ?? 1,
-              }
-            : undefined,
-        cornerRadius: 'rx' in object ? ((object as any).rx ?? 0) : undefined,
+        transform,
+        shape:
+            shapeKindFromData ??
+            (object.type === 'ellipse' || object.type === 'circle'
+                ? 'ellipse'
+                : object.type === 'line'
+                ? 'line'
+                : object.type === 'polygon'
+                ? 'polygon'
+                : object.type === 'path'
+                ? 'path'
+                : 'rect'),
     };
+
+    if (object.fill) {
+        shapeLayer.fill = { kind: 'solid', color: object.fill as string };
+    } else {
+        shapeLayer.fill = { kind: 'solid', color: DEFAULT_SHAPE_COLOR };
+    }
+    if (object.stroke) {
+        shapeLayer.stroke = {
+            color: object.stroke as string,
+            width: object.strokeWidth ?? 1,
+        };
+    }
+    if ('rx' in object && (object as any).rx) {
+        shapeLayer.cornerRadius = (object as any).rx ?? 0;
+    }
+    if (object.shadow) {
+        const shadow = object.shadow as fabric.Shadow;
+        shapeLayer.shadow = {
+            color: shadow.color ?? '#000000',
+            blur: shadow.blur ?? 0,
+            offsetX: shadow.offsetX ?? 0,
+            offsetY: shadow.offsetY ?? 0,
+            opacity: shadow.opacity ?? 1,
+        };
+    }
 
     if (object.type === 'line') {
         const line = object as fabric.Line;
@@ -224,6 +408,18 @@ function fabricObjectToLayer(object: fabric.Object, fallbackId: string, index: n
             { x: line.x2 ?? 0, y: line.y2 ?? 0 },
         ];
         shapeLayer.points = points.map((pt: any) => ({ x: pt.x, y: pt.y }));
+    }
+    if (object.type === 'polygon') {
+        const polygon = object as fabric.Polygon;
+        shapeLayer.points = polygon.points?.map((pt) => ({ x: pt.x, y: pt.y }));
+        if (!shapeKindFromData && polygon.points && polygon.points.length === 10) {
+            shapeLayer.shape = 'star';
+        }
+    }
+    if (object.type === 'path') {
+        const pathObj = object as fabric.Path;
+        shapeLayer.shape = 'path';
+        shapeLayer.path = pathObj.path?.map((segment) => [...segment]) as any;
     }
 
     return shapeLayer;
@@ -277,9 +473,9 @@ export class FabricCanvasAdapter implements CanvasAdapter {
         this.canvas.setHeight(artboard.size.height);
 
         if (artboard.background?.kind === 'color') {
-            this.canvas.setBackgroundColor(artboard.background.value, () => {});
+            this.canvas.backgroundColor = artboard.background.value;
         } else {
-            this.canvas.setBackgroundColor('#ffffff', () => {});
+            this.canvas.backgroundColor = '#ffffff';
         }
 
         const orderedLayers = sortLayers(artboard);
@@ -314,6 +510,34 @@ export class FabricCanvasAdapter implements CanvasAdapter {
 
     updateLayer(layer: LayerType): Promise<void> {
         const existing = this.layerMap.get(layer.id);
+        if (existing && layer.type === 'image' && existing.type === 'image') {
+            const image = existing as fabric.Image;
+            image.set({
+                left: layer.transform.x,
+                top: layer.transform.y,
+                opacity: layer.transform.opacity ?? 1,
+                angle: layer.transform.rotation ?? 0,
+            });
+            if (layer.transform.width && layer.transform.height) {
+                image.scaleToWidth(layer.transform.width, false);
+                image.scaleToHeight(layer.transform.height, false);
+            }
+            if (layer.cornerRadius) {
+                image.set('rx', cornerValue(layer.cornerRadius));
+                image.set('ry', cornerValue(layer.cornerRadius));
+            }
+            if (layer.stroke) {
+                image.set('stroke', layer.stroke.color);
+                image.set('strokeWidth', layer.stroke.width ?? 1);
+            } else {
+                image.set('stroke', undefined);
+                image.set('strokeWidth', 0);
+            }
+            applyImageFilters(image, layer as ImageLayer);
+            applyCommonProps(image, layer);
+            this.canvas.renderAll();
+            return Promise.resolve();
+        }
         if (existing) {
             this.canvas.remove(existing);
             this.layerMap.delete(layer.id);

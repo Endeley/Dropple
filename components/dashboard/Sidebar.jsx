@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import Image from 'next/image';
 import {
     LayoutDashboard,
     LayoutPanelTop,
@@ -19,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import { dashboardNavItems, dashboardSidebarCta } from '../../lib/dashboard/navigation';
+import BrandMark from '../BrandMark.jsx';
 
 const iconMap = {
     layoutDashboard: LayoutDashboard,
@@ -48,10 +48,12 @@ export default function DashboardSidebar({
         <aside
             className={`sticky top-6 flex h-fit w-56 flex-col justify-between gap-8 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-sm shadow-slate-200/60 dark:shadow-slate-950/50 ${className}`.trim()}>
             <div className='space-y-8'>
-                <div className='flex items-center gap-3 text-lg font-semibold text-slate-900 dark:text-slate-100'>
-                    <Image src='/logo.svg' alt='Dropple logo' width={36} height={36} />
-                    Dropple
-                </div>
+                <BrandMark
+                    href='/dashboard'
+                    size={36}
+                    className='text-lg font-semibold text-slate-900 dark:text-slate-100'
+                    labelClassName='text-lg'
+                />
 
                 <nav className='flex flex-col gap-2 text-sm'>
                     {items.map((item) => {

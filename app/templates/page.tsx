@@ -2,6 +2,7 @@ import { api } from '../../convex/_generated/api';
 import { fetchQuery } from 'convex/nextjs';
 import TemplatesView from '../../components/templates/TemplatesView';
 import { TEMPLATE_CATALOG, TEMPLATE_CATEGORIES, CATEGORY_METADATA } from '@/lib/templates/catalog';
+import { getTemplateComponentKey, getTemplateMetaBySlug, getTemplatePreviewInfo } from '@/lib/templates/preview';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
 
@@ -17,6 +18,46 @@ export default async function TemplatesPage({ searchParams }: TemplatesPageProps
 
   let categories: { key: string; label: string }[] = [];
   let templates: any[] = [];
+
+  const enhanceTemplate = (tpl: any) => {
+    if (!tpl?.slug) {
+      return tpl;
+    }
+
+    const componentKey = tpl.componentKey ?? getTemplateComponentKey(tpl.slug);
+    const previewInfo = getTemplatePreviewInfo(tpl.slug);
+    const meta = getTemplateMetaBySlug(tpl.slug);
+
+    const fallbackThumbnail =
+      tpl.thumbnail ??
+      meta?.thumbnail ??
+      (tpl.thumbnailUrl
+        ? {
+            type: 'image',
+            src: tpl.thumbnailUrl,
+          }
+        : undefined);
+
+    const thumbnailUrl =
+      tpl.thumbnailUrl ??
+      (typeof fallbackThumbnail === 'string'
+        ? fallbackThumbnail
+        : fallbackThumbnail?.type === 'image'
+        ? fallbackThumbnail.src
+        : fallbackThumbnail?.type === 'hybrid'
+        ? fallbackThumbnail.image?.src
+        : undefined);
+
+    return {
+      ...tpl,
+      componentKey,
+      previewComponentKey: tpl.previewComponentKey ?? previewInfo?.componentKey ?? componentKey,
+      previewVariant: tpl.previewVariant ?? previewInfo?.variant,
+      thumbnail: fallbackThumbnail,
+      thumbnailUrl,
+      thumbnailLabel: tpl.thumbnailLabel ?? meta?.thumbnailLabel,
+    };
+  };
 
   try {
     categories = await fetchQuery(api.templateBrowser.categories, {});
@@ -61,12 +102,27 @@ export default async function TemplatesPage({ searchParams }: TemplatesPageProps
         ? TEMPLATE_CATALOG
         : TEMPLATE_CATALOG.filter((tpl) => tpl.category === currentCategory);
 
-    templates = fallbackCatalog.map((tpl) => ({
-      ...tpl,
-      _id: tpl.slug,
-      thumbnailUrl: tpl.thumbnail,
-    }));
+    templates = fallbackCatalog.map(({ component, ...tpl }) => {
+      const thumbnail = tpl.thumbnail;
+      const thumbnailUrl =
+        typeof thumbnail === 'string'
+          ? thumbnail
+          : thumbnail?.type === 'image'
+          ? thumbnail.src
+          : thumbnail?.type === 'hybrid'
+          ? thumbnail.image?.src
+          : undefined;
+
+      return {
+        ...tpl,
+        _id: tpl.slug,
+        thumbnail,
+        thumbnailUrl,
+      };
+    });
   }
+
+  templates = Array.isArray(templates) ? templates.map(enhanceTemplate) : [];
 
   return (
     <div className='mx-auto max-w-7xl px-6 py-8'>

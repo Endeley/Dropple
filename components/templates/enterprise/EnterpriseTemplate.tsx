@@ -3,14 +3,19 @@
 export type EnterpriseVariant =
   | 'dashboard'
   | 'analytics'
+  | 'analytics-overview'
   | 'executive-summary'
   | 'quarterly-report'
+  | 'annual-report'
   | 'kpi-dashboard'
+  | 'kpi-panel'
   | 'project-timeline'
   | 'org-chart'
   | 'swot'
   | 'roadmap'
-  | 'strategy';
+  | 'roadmap-vision'
+  | 'strategy'
+  | 'architecture-layout';
 
 export interface EnterpriseData {
   title: string;
@@ -43,6 +48,14 @@ const DEFAULTS: Record<EnterpriseVariant, EnterpriseData> = {
     bgColor: '#1e293b',
     accentColor: '#06b6d4',
   },
+  'analytics-overview': {
+    title: 'Monthly Performance Dashboard',
+    metric1: '742K',
+    metric2: '+24.8%',
+    metric3: '98%',
+    bgColor: '#0f172a',
+    accentColor: '#38bdf8',
+  },
   'executive-summary': {
     title: 'Executive Summary',
     metric1: 'Q4 2025',
@@ -59,6 +72,14 @@ const DEFAULTS: Record<EnterpriseVariant, EnterpriseData> = {
     bgColor: '#0c4a6e',
     accentColor: '#7dd3fc',
   },
+  'annual-report': {
+    title: '2025 Annual Business Report',
+    metric1: '$7.8M',
+    metric2: '+32%',
+    metric3: '245K',
+    bgColor: '#ffffff',
+    accentColor: '#0ea5e9',
+  },
   'kpi-dashboard': {
     title: 'KPI Metrics',
     metric1: 'Performance',
@@ -66,6 +87,14 @@ const DEFAULTS: Record<EnterpriseVariant, EnterpriseData> = {
     metric3: 'Quality',
     bgColor: '#14532d',
     accentColor: '#86efac',
+  },
+  'kpi-panel': {
+    title: 'Q4 Key Performance Indicators',
+    metric1: 'Conversion 4.8%',
+    metric2: 'Revenue +12%',
+    metric3: 'Churn 1.8%',
+    bgColor: '#111827',
+    accentColor: '#22d3ee',
   },
   'project-timeline': {
     title: 'Project Timeline',
@@ -99,6 +128,14 @@ const DEFAULTS: Record<EnterpriseVariant, EnterpriseData> = {
     bgColor: '#fef3c7',
     accentColor: '#92400e',
   },
+  'roadmap-vision': {
+    title: 'Product Roadmap 2025',
+    metric1: 'Launch',
+    metric2: 'Scale',
+    metric3: 'Evolve',
+    bgColor: '#ffffff',
+    accentColor: '#0ea5e9',
+  },
   strategy: {
     title: 'Strategic Plan',
     metric1: 'Vision',
@@ -107,12 +144,20 @@ const DEFAULTS: Record<EnterpriseVariant, EnterpriseData> = {
     bgColor: '#1e3a8a',
     accentColor: '#dbeafe',
   },
+  'architecture-layout': {
+    title: 'Enterprise Architecture Overview',
+    metric1: 'Platform',
+    metric2: 'Integrations',
+    metric3: 'Security',
+    bgColor: '#f9fafb',
+    accentColor: '#0f172a',
+  },
 };
 
 export function EnterpriseTemplate({ variant, customData }: EnterpriseTemplateProps) {
   const data = { ...DEFAULTS[variant], ...customData };
 
-  if (['dashboard', 'analytics', 'kpi-dashboard', 'quarterly-report'].includes(variant)) {
+  if (['dashboard', 'analytics', 'analytics-overview', 'kpi-dashboard', 'kpi-panel', 'quarterly-report', 'annual-report'].includes(variant)) {
     const isDark = !data.bgColor.startsWith('#f');
     const textColor = isDark ? '#ffffff' : '#1f2937';
 
@@ -181,7 +226,7 @@ export function EnterpriseTemplate({ variant, customData }: EnterpriseTemplatePr
     );
   }
 
-  if (variant === 'project-timeline' || variant === 'roadmap') {
+  if (variant === 'project-timeline' || variant === 'roadmap' || variant === 'roadmap-vision') {
     return (
       <div className='h-[400px] w-[650px] overflow-hidden rounded-lg p-8 shadow-xl' style={{ backgroundColor: data.bgColor }}>
         <h1 className='mb-8 text-[24px] font-bold' style={{ color: data.accentColor }}>
@@ -206,6 +251,38 @@ export function EnterpriseTemplate({ variant, customData }: EnterpriseTemplatePr
               {phase}
             </div>
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === 'architecture-layout') {
+    return (
+      <div className='flex h-[420px] w-[620px] flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white/70 p-8 shadow-xl'>
+        <div>
+          <h1 className='text-[28px] font-bold' style={{ color: data.accentColor }}>
+            {data.title}
+          </h1>
+          <p className='mt-2 text-[12px] text-slate-500'>Scalable systems, resilient foundations.</p>
+        </div>
+        <div className='grid grid-cols-3 gap-4 text-[11px] text-slate-600'>
+          {[
+            { label: data.metric1, color: '#0ea5e9' },
+            { label: data.metric2, color: '#22d3ee' },
+            { label: data.metric3, color: '#38bdf8' },
+          ].map(({ label, color }) => (
+            <div key={label} className='rounded-xl border bg-white/80 p-4 shadow' style={{ borderColor: `${color}33` }}>
+              <div className='mb-3 h-10 w-10 rounded-lg' style={{ backgroundColor: `${color}1a` }} />
+              <p className='font-semibold' style={{ color }}>
+                {label}
+              </p>
+              <p className='mt-1 text-[10px] text-slate-500'>System components and service ownership details.</p>
+            </div>
+          ))}
+        </div>
+        <div className='flex items-center justify-between rounded-lg border border-dashed border-slate-300 bg-white/60 p-4 text-[11px] text-slate-500'>
+          <span>Updated: Oct 2025</span>
+          <span style={{ color: data.accentColor }}>Architecture Board</span>
         </div>
       </div>
     );

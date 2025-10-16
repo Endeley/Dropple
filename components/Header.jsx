@@ -1,9 +1,9 @@
 'use client';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useCallback } from 'react';
 import { stackClientApp } from '../stack/client';
 import { headerLinks } from '../lib/constants/home.constants';
+import BrandMark from './BrandMark.jsx';
 
 export default function Header() {
     const user = stackClientApp.useUser();
@@ -13,10 +13,13 @@ export default function Header() {
 
     return (
         <header className='flex items-center justify-between gap-6 rounded-full border border-slate-100 bg-white/90 px-6 py-4 shadow-sm shadow-slate-200/60 backdrop-blur dark:border-slate-800/70 dark:bg-slate-900/90 dark:text-slate-100 dark:shadow-slate-900/50'>
-            <Link href='/' className='flex items-center gap-2 font-semibold text-slate-900 dark:text-white'>
-                <Image src='/logo.svg' alt='Dropple logo' width={36} height={36} priority />
-                <span className='text-lg tracking-tight'>Dropple</span>
-            </Link>
+            <BrandMark
+                href='/'
+                size={36}
+                priority
+                className='font-semibold text-slate-900 dark:text-white'
+                labelClassName='text-lg tracking-tight'
+            />
 
             <nav className='hidden md:flex items-center gap-6 text-sm text-slate-600 dark:text-slate-300'>
                 {headerLinks.map((item) => (

@@ -2,7 +2,7 @@
 
 import { Mail, Phone, Globe } from 'lucide-react';
 
-export type BusinessCardVariant = 'modern' | 'classic' | 'creative';
+export type BusinessCardVariant = 'modern' | 'classic' | 'creative' | 'modern-blue';
 
 export interface BusinessCardData {
   name: string;
@@ -27,6 +27,15 @@ const DEFAULTS: Record<BusinessCardVariant, BusinessCardData> = {
     email: 'sarah.mitchell@company.com',
     website: 'www.company.com',
     accentColor: '#3b82f6',
+  },
+  'modern-blue': {
+    name: 'Jane Doe',
+    title: 'Creative Director',
+    phone: '+1 (555) 765-4321',
+    email: 'jane@studio.com',
+    website: 'dropple.studio',
+    company: 'Dropple Studio',
+    accentColor: '#1d4ed8',
   },
   classic: {
     name: 'James Anderson',
@@ -70,6 +79,38 @@ export function BusinessCard({ variant = 'modern', customData }: BusinessCardPro
           <div className='flex items-center gap-2'>
             <Globe className='h-3 w-3' />
             <span>{data.website}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === 'modern-blue') {
+    return (
+      <div className='relative flex h-[200px] w-[350px] overflow-hidden rounded-xl bg-white shadow-xl'>
+        <div
+          className='absolute inset-y-0 left-0 w-28'
+          style={{ background: `linear-gradient(180deg, ${data.accentColor}, ${data.accentColor}cc)` }}
+        />
+        <div className='relative flex flex-1 flex-col justify-between p-6 pl-32'>
+          <div>
+            <h3 className='mb-1 text-[20px] font-bold text-slate-900'>{data.name}</h3>
+            <p className='text-[12px] font-medium text-slate-500'>{data.title}</p>
+            {data.company ? <p className='mt-2 text-[11px] uppercase tracking-wider text-slate-400'>{data.company}</p> : null}
+          </div>
+          <div className='space-y-1 text-[10px] text-slate-500'>
+            <div className='flex items-center gap-2 text-slate-600'>
+              <Phone className='h-3 w-3 text-slate-400' />
+              <span>{data.phone}</span>
+            </div>
+            <div className='flex items-center gap-2 text-slate-600'>
+              <Mail className='h-3 w-3 text-slate-400' />
+              <span>{data.email}</span>
+            </div>
+            <div className='flex items-center gap-2 text-slate-600'>
+              <Globe className='h-3 w-3 text-slate-400' />
+              <span>{data.website}</span>
+            </div>
           </div>
         </div>
       </div>

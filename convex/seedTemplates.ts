@@ -1,6 +1,7 @@
 import { mutation } from './_generated/server';
 
 import { ensureTemplateData, type LegacyTemplateLike, validateTemplateData } from './templateData';
+import { DROPPLE_TEMPLATES } from '../lib/templates';
 
 type CategorySeed = {
     key: string;
@@ -176,5 +177,99 @@ export const seedSampleTemplates = mutation({
         }
 
         return 'Sample templates seeded';
+    },
+});
+
+function formatCategoryLabel(key: string) {
+    return key
+        .split(/[-_]/g)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+
+export const seedDroppleTemplates = mutation({
+    args: {},
+    handler: async (ctx) => {
+        const now = Date.now();
+
+        const categories = Array.from(
+            new Set(
+                DROPPLE_TEMPLATES.map((tpl) =>
+                    typeof tpl.category === 'string' && tpl.category.trim().length > 0 ? tpl.category.trim().toLowerCase() : 'general'
+                )
+            )
+        ).sort();
+
+        await Promise.all(
+            categories.map(async (key, index) => {
+                const label = formatCategoryLabel(key);
+                const existing = await ctx.db
+                    .query('templateCategories')
+                    .withIndex('by_key', (q: any) => q.eq('key', key))
+                    .first();
+
+                if (existing) {
+                    await ctx.db.patch(existing._id, {
+                        label,
+                        sortOrder: existing.sortOrder ?? index,
+                        icon: existing.icon ?? undefined,
+                        isVisible: existing.isVisible ?? true,
+                        updatedAt: now,
+                    });
+                } else {
+                    await ctx.db.insert('templateCategories', {
+                        key,
+                        label,
+                        sortOrder: index,
+                        icon: undefined,
+                        description: undefined,
+                        isVisible: true,
+                        createdAt: now,
+                        updatedAt: now,
+                    });
+                }
+            })
+        );
+
+        let count = 0;
+        for (const tpl of DROPPLE_TEMPLATES) {
+            if (!tpl?.slug) continue;
+
+            const category = typeof tpl.category === 'string' && tpl.category.trim().length > 0 ? tpl.category.trim().toLowerCase() : 'general';
+            const thumbnailUrl = typeof tpl.thumbnail === 'string' ? tpl.thumbnail : undefined;
+
+            const existing = await ctx.db
+                .query('templates')
+                .withIndex('by_slug', (q: any) => q.eq('slug', tpl.slug))
+                .first();
+
+            const baseDoc = {
+                slug: tpl.slug,
+                title: tpl.title ?? tpl.slug,
+                category,
+                description: tpl.description ?? undefined,
+                thumbnailUrl,
+                tags: Array.isArray(tpl.tags) ? tpl.tags : [],
+                isFeatured: Boolean(tpl.isFeatured),
+                data: tpl,
+                popularityScore: existing?.popularityScore ?? 0,
+                usageCount: existing?.usageCount ?? 0,
+                isPremium: existing?.isPremium ?? false,
+                status: existing?.status ?? 'active',
+                updatedAt: now,
+            };
+
+            if (existing) {
+                await ctx.db.patch(existing._id, baseDoc);
+            } else {
+                await ctx.db.insert('templates', {
+                    ...baseDoc,
+                    createdAt: now,
+                });
+            }
+            count += 1;
+        }
+
+        return { count };
     },
 });

@@ -1,0 +1,27 @@
+{
+  "modules": [
+    { "path": "./json/businessEnterpriseTemplates", "export": "BUSINESS_ENTERPRISE_TEMPLATES" },
+    { "path": "./json/socialTemplates", "export": "SOCIAL_TEMPLATES" },
+    { "path": "./json/marketingInvoicesTemplates", "export": "MARKETING_INVOICES_TEMPLATES" },
+    { "path": "./json/ecommerceEducationTemplates", "export": "ECOMMERCE_EDUCATION_TEMPLATES" },
+    { "path": "./json/ecommerceMarketingTemplates", "export": "ECOMMERCE_MARKETING_TEMPLATES" },
+    { "path": "./json/realEstateFoodTemplates", "export": "REAL_ESTATE_FOOD_TEMPLATES" },
+    { "path": "./json/medicalTravelTemplates", "export": "MEDICAL_TRAVEL_TEMPLATES" },
+    { "path": "./json/medicalHealthTemplates", "export": "MEDICAL_HEALTH_TEMPLATES" },
+    { "path": "./json/photographyCampaignsTechLogisticsTemplates", "export": "PHOTOGRAPHY_CAMPAIGNS_TECH_LOGISTICS_TEMPLATES" },
+    { "path": "./json/foodRealEstateFashionNatureTemplates", "export": "FOOD_REALESTATE_FASHION_NATURE_TEMPLATES" },
+    { "path": "./json/educationResumeMarketingInvoicesTemplates", "export": "EDUCATION_RESUME_MARKETING_INVOICES_TEMPLATES" },
+    { "path": "./json/brandIdentityTemplates", "export": "BRAND_IDENTITY_TEMPLATES" },
+    { "path": "./json/contentCreatorTemplates", "export": "CONTENT_CREATOR_TEMPLATES" },
+    { "path": "./json/aiMockupTemplates", "export": "AI_MOCKUP_TEMPLATES" },
+    { "path": "./json/culturalHeritageTemplates", "export": "CULTURAL_HERITAGE_TEMPLATES" },
+    { "path": "./json/foodCampaignsTemplates", "export": "FOOD_CAMPAIGNS_TEMPLATES" },
+    { "path": "./json/techTransportStartupTemplates", "export": "TECH_TRANSPORT_STARTUP_TEMPLATES" },
+    { "path": "./json/abstractGradientTemplates", "export": "ABSTRACT_GRADIENT_TEMPLATES" },
+    { "path": "./json/travelRealEstatePhotographyTemplates", "export": "TRAVEL_REALESTATE_PHOTOGRAPHY_TEMPLATES" },
+    { "path": "./json/presentationsSocialPopularTemplates", "export": "PRESENTATIONS_SOCIAL_POPULAR_TEMPLATES" },
+    { "path": "./json/seasonalHolidayTemplates", "export": "SEASONAL_HOLIDAY_TEMPLATES" },
+    { "path": "./json/eventsInvitationsTemplates", "export": "EVENTS_INVITATIONS_TEMPLATES" },
+    { "path": "./json/infographicsDataTemplates", "export": "INFOGRAPHICS_DATA_TEMPLATES" }
+  ]
+}

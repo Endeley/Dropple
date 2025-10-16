@@ -3,7 +3,9 @@
 export type BusinessDocumentVariant =
   | 'proposal'
   | 'proposal-project'
+  | 'proposal-gradient'
   | 'letterhead'
+  | 'letterhead-gray'
   | 'report'
   | 'agenda'
   | 'plan'
@@ -12,7 +14,8 @@ export type BusinessDocumentVariant =
   | 'quote'
   | 'receipt'
   | 'press-release'
-  | 'case-study';
+  | 'case-study'
+  | 'email-signature-blue';
 
 export interface BusinessDocumentData {
   title: string;
@@ -45,6 +48,14 @@ const DEFAULTS: Record<BusinessDocumentVariant, BusinessDocumentData> = {
     bgColor: '#7c3aed',
     accentColor: '#c4b5fd',
   },
+  'proposal-gradient': {
+    title: 'Project Proposal',
+    subtitle: 'Prepared for Pelican Logistics',
+    date: 'October 2025',
+    company: 'Dropple Design Studio',
+    bgColor: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+    accentColor: '#e0e7ff',
+  },
   letterhead: {
     title: 'Company Name',
     subtitle: '123 Business St, City, State 12345',
@@ -52,6 +63,14 @@ const DEFAULTS: Record<BusinessDocumentVariant, BusinessDocumentData> = {
     company: '',
     bgColor: '#ffffff',
     accentColor: '#1f2937',
+  },
+  'letterhead-gray': {
+    title: 'Pelican Group of Companies',
+    subtitle: '123 Harbor Ave, Suite 500, San Francisco, CA',
+    date: 'October 4, 2025',
+    company: '',
+    bgColor: '#f8fafc',
+    accentColor: '#1e293b',
   },
   report: {
     title: 'Annual Report',
@@ -125,12 +144,38 @@ const DEFAULTS: Record<BusinessDocumentVariant, BusinessDocumentData> = {
     bgColor: '#0c4a6e',
     accentColor: '#7dd3fc',
   },
+  'email-signature-blue': {
+    title: 'John Smith',
+    subtitle: 'Operations Manager',
+    date: '',
+    company: 'Pelican Logistics Ltd.',
+    bgColor: '#ffffff',
+    accentColor: '#1d4ed8',
+  },
 };
 
 export function BusinessTemplate({ variant, customData }: BusinessTemplateProps) {
   const data = { ...DEFAULTS[variant], ...customData };
 
-  if (['letterhead', 'contract', 'nda', 'agenda'].includes(variant)) {
+  if (variant === 'email-signature-blue') {
+    return (
+      <div className='flex h-[160px] w-[380px] items-center gap-4 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-md'>
+        <div className='h-24 w-24 rounded-lg bg-slate-200/70' />
+        <div className='flex flex-1 flex-col justify-between'>
+          <div>
+            <h2 className='text-[18px] font-semibold text-slate-900'>{data.title}</h2>
+            {data.subtitle ? <p className='text-[12px] text-slate-500'>{data.subtitle}</p> : null}
+          </div>
+          <div className='h-px w-full bg-slate-200' />
+          <div className='text-[12px] font-semibold' style={{ color: data.accentColor }}>
+            {data.company}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (['letterhead', 'contract', 'nda', 'agenda', 'letterhead-gray'].includes(variant)) {
     return (
       <div className='h-[650px] w-[500px] overflow-hidden rounded-lg bg-white p-12 shadow-xl'>
         <div className='mb-6 border-b-2 pb-4' style={{ borderColor: data.accentColor }}>
@@ -191,7 +236,7 @@ export function BusinessTemplate({ variant, customData }: BusinessTemplateProps)
   }
 
   return (
-    <div className='relative h-[650px] w-[500px] overflow-hidden rounded-lg shadow-xl' style={{ backgroundColor: data.bgColor }}>
+    <div className='relative h-[650px] w-[500px] overflow-hidden rounded-lg shadow-xl' style={{ background: data.bgColor }}>
       <div className='absolute inset-0 flex flex-col p-12'>
         <div className='flex flex-1 items-center'>
           <div>

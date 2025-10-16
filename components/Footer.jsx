@@ -1,5 +1,6 @@
-import Image from 'next/image';
+import Link from 'next/link';
 import { footerSections, footerLegalLinks, footerLinks } from '../lib/constants/home.constants';
+import BrandMark from './BrandMark.jsx';
 
 export default function Footer() {
     return (
@@ -14,24 +15,25 @@ export default function Footer() {
                             <ul className='space-y-2 text-sm text-slate-600 dark:text-slate-300'>
                                 {section.links.map((link) => (
                                     <li key={link.label}>
-                                        <a href={link.href} className='transition-colors hover:text-slate-900 dark:hover:text-slate-100'>
+                                        <Link href={link.href} className='transition-colors hover:text-slate-900 dark:hover:text-slate-100'>
                                             {link.label}
-                                        </a>
+                                        </Link>
                                     </li>
                                 ))}
                             </ul>
                         </div>
                     ))}
                     <div className='space-y-4 text-left'>
-                        <div className='flex items-center gap-3 text-slate-900 dark:text-slate-100'>
-                            <Image src='/logo.svg' alt='Dropple logo' width={40} height={40} />
-                            <span className='text-lg font-semibold'>Dropple</span>
-                        </div>
+                        <BrandMark
+                            size={40}
+                            className='text-slate-900 dark:text-slate-100'
+                            labelClassName='text-lg font-semibold'
+                        />
                         <div className='space-y-2 text-sm text-slate-600 dark:text-slate-300'>
                             {footerLegalLinks.map((link) => (
-                                <a key={link.label} href={link.href} className='block transition-colors hover:text-slate-900 dark:hover:text-slate-100'>
+                                <Link key={link.label} href={link.href} className='block transition-colors hover:text-slate-900 dark:hover:text-slate-100'>
                                     {link.label}
-                                </a>
+                                </Link>
                             ))}
                         </div>
                     </div>
@@ -40,9 +42,9 @@ export default function Footer() {
                     <span>&copy; {new Date().getFullYear()} Dropple. All rights reserved.</span>
                     <nav className='flex flex-wrap items-center justify-center gap-4'>
                         {footerLinks.map((link) => (
-                            <a key={link.label} href={link.href} className='transition-colors hover:text-slate-900 dark:hover:text-slate-100'>
+                            <Link key={link.label} href={link.href} className='transition-colors hover:text-slate-900 dark:hover:text-slate-100'>
                                 {link.label}
-                            </a>
+                            </Link>
                         ))}
                     </nav>
                 </div>

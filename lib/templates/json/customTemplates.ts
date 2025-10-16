@@ -1,3 +1,27 @@
+import { SOCIAL_TEMPLATE_RECORD } from './socialTemplates';
+import { BUSINESS_TEMPLATE_RECORD } from './businessEnterpriseTemplates';
+import { MARKETING_INVOICES_RECORD } from './marketingInvoicesTemplates';
+import { ECOMMERCE_EDUCATION_RECORD } from './ecommerceEducationTemplates';
+import { REAL_ESTATE_FOOD_RECORD } from './realEstateFoodTemplates';
+import { MEDICAL_TRAVEL_RECORD } from './medicalTravelTemplates';
+import { PHOTOGRAPHY_CAMPAIGNS_TECH_LOGISTICS_RECORD } from './photographyCampaignsTechLogisticsTemplates';
+import { FOOD_REALESTATE_FASHION_NATURE_RECORD } from './foodRealEstateFashionNatureTemplates';
+import { EDUCATION_RESUME_MARKETING_INVOICES_RECORD } from './educationResumeMarketingInvoicesTemplates';
+import { PRESENTATIONS_SOCIAL_POPULAR_RECORD } from './presentationsSocialPopularTemplates';
+import { TECH_TRANSPORT_STARTUP_RECORD } from './techTransportStartupTemplates';
+import { TRAVEL_REALESTATE_PHOTOGRAPHY_RECORD } from './travelRealEstatePhotographyTemplates';
+import { FOOD_CAMPAIGNS_RECORD } from './foodCampaignsTemplates';
+import { MEDICAL_HEALTH_RECORD } from './medicalHealthTemplates';
+import { ECOMMERCE_MARKETING_RECORD } from './ecommerceMarketingTemplates';
+import { BRAND_IDENTITY_RECORD } from './brandIdentityTemplates';
+import { CONTENT_CREATOR_RECORD } from './contentCreatorTemplates';
+import { EVENTS_INVITATIONS_RECORD } from './eventsInvitationsTemplates';
+import { INFOGRAPHICS_DATA_RECORD } from './infographicsDataTemplates';
+import { SEASONAL_HOLIDAY_RECORD } from './seasonalHolidayTemplates';
+import { ABSTRACT_GRADIENT_RECORD } from './abstractGradientTemplates';
+import { CULTURAL_HERITAGE_RECORD } from './culturalHeritageTemplates';
+import { AI_MOCKUP_RECORD } from './aiMockupTemplates';
+
 const instagramPostMinimal = {
     version: 1,
     title: 'Instagram Post - Minimalist',
@@ -485,4 +509,27 @@ export const CUSTOM_TEMPLATE_DATA: Record<string, Record<string, unknown>> = {
     'flyer-modern-1': flyerBoldColorful,
     'social-story-1': instagramStoryGradient,
     'business-card-1': businessCardProfessional,
+    ...SOCIAL_TEMPLATE_RECORD,
+    ...BUSINESS_TEMPLATE_RECORD,
+    ...MARKETING_INVOICES_RECORD,
+    ...ECOMMERCE_EDUCATION_RECORD,
+    ...REAL_ESTATE_FOOD_RECORD,
+    ...MEDICAL_TRAVEL_RECORD,
+    ...PHOTOGRAPHY_CAMPAIGNS_TECH_LOGISTICS_RECORD,
+    ...FOOD_REALESTATE_FASHION_NATURE_RECORD,
+    ...EDUCATION_RESUME_MARKETING_INVOICES_RECORD,
+    ...PRESENTATIONS_SOCIAL_POPULAR_RECORD,
+    ...TECH_TRANSPORT_STARTUP_RECORD,
+    ...TRAVEL_REALESTATE_PHOTOGRAPHY_RECORD,
+    ...FOOD_CAMPAIGNS_RECORD,
+    ...MEDICAL_HEALTH_RECORD,
+    ...ECOMMERCE_MARKETING_RECORD,
+    ...BRAND_IDENTITY_RECORD,
+    ...CONTENT_CREATOR_RECORD,
+    ...EVENTS_INVITATIONS_RECORD,
+    ...INFOGRAPHICS_DATA_RECORD,
+    ...SEASONAL_HOLIDAY_RECORD,
+    ...ABSTRACT_GRADIENT_RECORD,
+    ...CULTURAL_HERITAGE_RECORD,
+    ...AI_MOCKUP_RECORD,
 };

@@ -73,8 +73,16 @@ export const startFromTemplate = mutation({
               }
             : null;
 
-        const width = designData?.canvas?.width ?? template.data?.canvas?.width;
-        const height = designData?.canvas?.height ?? template.data?.canvas?.height;
+        const candidateData = designData ?? normalizedData ?? (template.data as any);
+        const artboards: any[] = candidateData?.artboards ?? [];
+        const defaultArtboardId = candidateData?.defaultArtboardId;
+        const primaryArtboard = artboards.find((board) => board.id === defaultArtboardId) ?? artboards[0];
+        const canvasSize = candidateData?.canvas ?? (primaryArtboard?.size
+            ? { width: primaryArtboard.size.width, height: primaryArtboard.size.height }
+            : undefined);
+
+        const width = canvasSize?.width ?? (template.data as any)?.canvas?.width ?? primaryArtboard?.size?.width ?? 1080;
+        const height = canvasSize?.height ?? (template.data as any)?.canvas?.height ?? primaryArtboard?.size?.height ?? 1080;
         const pages = designData ? [designData] : normalizedData ? [normalizedData] : [];
 
         const initialData = designData

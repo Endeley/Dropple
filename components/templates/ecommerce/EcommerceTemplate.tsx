@@ -4,15 +4,20 @@ import { ImageWithFallback } from '@/components/ImageWithFallback';
 
 export type EcommerceVariant =
   | 'product-card'
+  | 'product-card-clean'
   | 'product-showcase'
+  | 'product-showcase-lifestyle'
   | 'sale-banner'
+  | 'sale-banner-fashion'
   | 'hero-banner'
   | 'email-receipt'
+  | 'email-receipt-minimal'
   | 'order-confirmation'
   | 'shipping-update'
   | 'product-launch'
   | 'category-banner'
   | 'pricing-table'
+  | 'pricing-table-gradient'
   | 'cart-abandonment'
   | 'product-review';
 
@@ -38,6 +43,13 @@ const DEFAULTS: Record<EcommerceVariant, EcommerceData> = {
     bgColor: '#ffffff',
     accentColor: '#1f2937',
   },
+  'product-card-clean': {
+    title: 'Wireless Headphones',
+    price: '$129.99',
+    description: 'Noise cancelling • Bluetooth 5.3',
+    bgColor: '#ffffff',
+    accentColor: '#16a34a',
+  },
   'product-showcase': {
     title: 'Featured Collection',
     price: 'Starting at $149',
@@ -45,11 +57,25 @@ const DEFAULTS: Record<EcommerceVariant, EcommerceData> = {
     bgColor: '#0f172a',
     accentColor: '#ffffff',
   },
+  'product-showcase-lifestyle': {
+    title: 'Minimalist Backpack',
+    price: '$189.00',
+    description: 'Everyday carry • Weatherproof',
+    bgColor: '#0f172a',
+    accentColor: '#38bdf8',
+  },
   'sale-banner': {
     title: 'MEGA SALE',
     price: 'UP TO 70% OFF',
     description: 'Limited Time Only',
     bgColor: '#dc2626',
+    accentColor: '#ffffff',
+  },
+  'sale-banner-fashion': {
+    title: '50% OFF New Arrivals',
+    price: 'Summer Collection',
+    description: 'Free shipping today only',
+    bgColor: '#f43f5e',
     accentColor: '#ffffff',
   },
   'hero-banner': {
@@ -65,6 +91,13 @@ const DEFAULTS: Record<EcommerceVariant, EcommerceData> = {
     description: 'Thank you for your purchase!',
     bgColor: '#ffffff',
     accentColor: '#059669',
+  },
+  'email-receipt-minimal': {
+    title: 'Order Confirmation',
+    price: 'Order #98652',
+    description: 'Arriving in 3-5 business days',
+    bgColor: '#f9fafb',
+    accentColor: '#1e293b',
   },
   'order-confirmation': {
     title: 'Order Confirmed',
@@ -101,6 +134,13 @@ const DEFAULTS: Record<EcommerceVariant, EcommerceData> = {
     bgColor: '#ffffff',
     accentColor: '#7c3aed',
   },
+  'pricing-table-gradient': {
+    title: 'Pro Plan – $29 / mo',
+    price: '$29/mo',
+    description: 'Cancel anytime • Unlimited projects',
+    bgColor: '#ffffff',
+    accentColor: '#3b82f6',
+  },
   'cart-abandonment': {
     title: 'Still Thinking?',
     price: 'Complete Your Order',
@@ -120,7 +160,7 @@ const DEFAULTS: Record<EcommerceVariant, EcommerceData> = {
 export function EcommerceTemplate({ variant, customData }: EcommerceTemplateProps) {
   const data = { ...DEFAULTS[variant], ...customData };
 
-  if (variant === 'product-card' || variant === 'product-showcase') {
+  if (['product-card', 'product-card-clean', 'product-showcase', 'product-showcase-lifestyle'].includes(variant)) {
     const textColor = data.accentColor === '#ffffff' ? data.bgColor : data.accentColor;
 
     return (
@@ -147,7 +187,7 @@ export function EcommerceTemplate({ variant, customData }: EcommerceTemplateProp
     );
   }
 
-  if (variant === 'sale-banner' || variant === 'hero-banner') {
+  if (['sale-banner', 'sale-banner-fashion', 'hero-banner'].includes(variant)) {
     return (
       <div
         className='flex h-[300px] w-[700px] items-center justify-center overflow-hidden rounded-lg p-12 shadow-xl'
@@ -168,7 +208,7 @@ export function EcommerceTemplate({ variant, customData }: EcommerceTemplateProp
     );
   }
 
-  if (variant === 'email-receipt' || variant === 'order-confirmation' || variant === 'shipping-update') {
+  if (['email-receipt', 'email-receipt-minimal', 'order-confirmation', 'shipping-update'].includes(variant)) {
     return (
       <div className='h-[400px] w-[500px] overflow-hidden rounded-lg p-8 shadow-xl' style={{ backgroundColor: data.bgColor }}>
         <div className='mb-8 text-center'>
@@ -205,7 +245,7 @@ export function EcommerceTemplate({ variant, customData }: EcommerceTemplateProp
     );
   }
 
-  if (variant === 'pricing-table') {
+  if (variant === 'pricing-table' || variant === 'pricing-table-gradient') {
     return (
       <div
         className='h-[500px] w-[350px] overflow-hidden rounded-lg border-2 p-8 shadow-xl'

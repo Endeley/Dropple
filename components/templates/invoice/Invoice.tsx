@@ -9,7 +9,12 @@ export type InvoiceVariant =
   | 'minimal'
   | 'service'
   | 'product'
-  | 'freelance';
+  | 'freelance'
+  | 'gradient-header'
+  | 'clean-blue'
+  | 'modern-teal'
+  | 'minimal-gray'
+  | 'gradient-creative';
 
 export interface InvoiceProps {
   variant?: InvoiceVariant;
@@ -142,6 +147,230 @@ export function Invoice({ variant = 'standard' }: InvoiceProps) {
             Payment due within 30 days
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (variant === 'gradient-header') {
+    return (
+      <div className='h-[520px] w-[400px] overflow-hidden rounded-xl bg-white shadow-xl'>
+        <div className='bg-gradient-to-r from-indigo-500 to-sky-500 p-6 text-white'>
+          <div className='flex items-center justify-between'>
+            <div>
+              <p className='text-[11px] uppercase tracking-wide text-indigo-100'>Invoice</p>
+              <h1 className='text-[28px] font-bold'>INVOICE</h1>
+            </div>
+            <div className='text-right text-[10px] text-indigo-100'>
+              <p>Pelican Group</p>
+              <p>billing@pelicangroup.com</p>
+            </div>
+          </div>
+        </div>
+        <div className='space-y-5 p-6 text-[11px] text-slate-600'>
+          <div className='flex items-center justify-between rounded-lg border border-indigo-100/60 bg-indigo-50/40 p-3'>
+            <span className='font-semibold text-indigo-600'>Invoice #2025-014</span>
+            <span className='font-semibold text-indigo-600'>Due Nov 04, 2025</span>
+          </div>
+          <div className='space-y-3 rounded-lg border border-slate-200 p-4'>
+            {[
+              ['Product Design Sprint', '$3,200.00'],
+              ['Brand Identity Kit', '$1,400.00'],
+              ['User Testing Sessions', '$650.00'],
+            ].map(([label, value]) => (
+              <div key={label} className='flex items-center justify-between'>
+                <span>{label}</span>
+                <span className='font-semibold text-slate-800'>{value}</span>
+              </div>
+            ))}
+            <div className='flex items-center justify-between border-t border-slate-200 pt-3 text-[13px] font-bold text-indigo-600'>
+              <span>Total Due</span>
+              <span>$5,250.00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === 'clean-blue') {
+    return (
+      <div className='h-[520px] w-[400px] overflow-hidden rounded-xl border border-slate-100 bg-slate-50 shadow-xl'>
+        <div className='flex items-center justify-between bg-white px-6 py-5'>
+          <div>
+            <p className='text-[10px] font-semibold uppercase tracking-widest text-slate-400'>Invoice #0001</p>
+            <h1 className='text-[26px] font-bold text-slate-900'>Pelican Group</h1>
+          </div>
+          <div className='h-12 w-12 rounded-lg bg-slate-200' />
+        </div>
+        <div className='space-y-5 px-6 py-6 text-[11px] text-slate-600'>
+          <div className='grid grid-cols-2 gap-4'>
+            <div className='rounded-lg bg-white p-4'>
+              <p className='text-[10px] font-semibold text-slate-500'>Billed To</p>
+              <p className='mt-1 font-semibold text-slate-900'>Northwind LLC</p>
+              <p>billing@northwind.com</p>
+            </div>
+            <div className='rounded-lg bg-white p-4'>
+              <p className='text-[10px] font-semibold text-slate-500'>Dates</p>
+              <p className='mt-1 font-semibold text-slate-900'>Issued Oct 01</p>
+              <p>Due Nov 01</p>
+            </div>
+          </div>
+          <div className='rounded-lg bg-white p-4'>
+            <div className='flex items-center justify-between text-[10px] font-semibold text-slate-500'>
+              <span>Item</span>
+              <span>Amount</span>
+            </div>
+            <div className='mt-3 space-y-2 text-[11px]'>
+              <div className='flex items-center justify-between'>
+                <span>Consulting Services</span>
+                <span className='font-semibold text-slate-900'>$2,800.00</span>
+              </div>
+              <div className='flex items-center justify-between'>
+                <span>Monthly Retainer</span>
+                <span className='font-semibold text-slate-900'>$1,200.00</span>
+              </div>
+            </div>
+            <div className='mt-4 flex items-center justify-between border-t border-slate-200 pt-3 text-[13px] font-bold text-slate-900'>
+              <span>Total</span>
+              <span>$4,000.00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === 'modern-teal') {
+    return (
+      <div className='h-[520px] w-[400px] overflow-hidden rounded-xl bg-white shadow-xl'>
+        <div className='bg-teal-500 px-6 py-5 text-white'>
+          <p className='text-[11px] uppercase tracking-wide text-teal-100'>Invoice</p>
+          <div className='flex items-center justify-between'>
+            <h1 className='text-[30px] font-extrabold'>INVOICE</h1>
+            <div className='text-right text-[10px] text-teal-100'>
+              <p>Invoice #1048</p>
+              <p>Issued Oct 04, 2025</p>
+            </div>
+          </div>
+        </div>
+        <div className='space-y-4 px-6 py-6 text-[11px] text-slate-600'>
+          <div className='flex items-start justify-between rounded-xl border border-teal-100 bg-teal-50/60 p-4'>
+            <div>
+              <p className='text-[10px] font-semibold text-teal-600'>Bill To</p>
+              <p className='mt-1 font-semibold text-slate-900'>Acme Robotics</p>
+              <p>accounts@acmerobotics.io</p>
+            </div>
+            <div className='text-right'>
+              <p className='text-[10px] font-semibold text-teal-600'>Payment Due</p>
+              <p className='mt-1 font-semibold text-slate-900'>Nov 04, 2025</p>
+            </div>
+          </div>
+          <div className='rounded-xl border border-slate-200 p-4'>
+            {[
+              ['Design Sprint', '$1,800'],
+              ['Prototype Build', '$2,400'],
+              ['User Testing', '$650'],
+            ].map(([label, amt]) => (
+              <div key={label} className='flex items-center justify-between py-2'>
+                <span>{label}</span>
+                <span className='font-semibold text-slate-900'>{amt}</span>
+              </div>
+            ))}
+            <div className='mt-3 flex items-center justify-between border-t border-slate-200 pt-3 text-[13px] font-bold text-teal-600'>
+              <span>Total</span>
+              <span>$4,850</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === 'minimal-gray') {
+    return (
+      <div className='h-[520px] w-[400px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-8 shadow-xl'>
+        <div className='flex items-center justify-between'>
+          <div>
+            <p className='text-[10px] font-semibold uppercase tracking-widest text-slate-400'>Invoice</p>
+            <h1 className='text-[28px] font-bold text-slate-900'>INVOICE</h1>
+          </div>
+          <div className='h-10 w-10 rounded-lg bg-slate-300' />
+        </div>
+        <div className='mt-8 space-y-3 text-[11px] text-slate-600'>
+          <div className='grid grid-cols-2 gap-4'>
+            <div>
+              <p className='text-[10px] font-semibold text-slate-500'>Bill To</p>
+              <p className='font-semibold text-slate-900'>Studio Aurora</p>
+              <p>hello@studioaurora.co</p>
+            </div>
+            <div>
+              <p className='text-[10px] font-semibold text-slate-500'>Dates</p>
+              <p className='font-semibold text-slate-900'>Issued Oct 4</p>
+              <p>Due Nov 4</p>
+            </div>
+          </div>
+        </div>
+        <div className='mt-6 rounded-lg border border-slate-200 bg-white p-4 text-[11px]'>
+          <div className='flex items-center justify-between border-b border-slate-200 pb-2 text-[10px] font-semibold text-slate-500'>
+            <span>Description</span>
+            <span>Amount</span>
+          </div>
+          <div className='space-y-2 pt-2'>
+            <div className='flex items-center justify-between text-slate-700'>
+              <span>Consulting Services</span>
+              <span className='font-semibold text-slate-900'>$2,600</span>
+            </div>
+            <div className='flex items-center justify-between text-slate-700'>
+              <span>Implementation</span>
+              <span className='font-semibold text-slate-900'>$1,750</span>
+            </div>
+          </div>
+          <div className='mt-3 flex items-center justify-between border-t border-slate-200 pt-3 text-[13px] font-bold text-slate-900'>
+            <span>Total</span>
+            <span>$4,350</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === 'gradient-creative') {
+    return (
+      <div className='h-[520px] w-[400px] overflow-hidden rounded-xl bg-gradient-to-br from-pink-500 via-fuchsia-500 to-indigo-500 p-8 text-white shadow-2xl'>
+        <div className='flex items-center justify-between'>
+          <h1 className='text-[30px] font-black'>INVOICE</h1>
+          <div className='h-10 w-10 rounded-lg bg-white/20' />
+        </div>
+        <p className='mt-1 text-[11px] font-semibold uppercase tracking-widest text-white/70'>Invoice #5729</p>
+        <div className='mt-8 grid grid-cols-2 gap-4 text-[11px]'>
+          <div className='rounded-xl bg-white/10 p-4'>
+            <p className='text-[10px] font-semibold text-white/70'>Bill To</p>
+            <p className='mt-1 font-semibold text-white'>Lumen Studio</p>
+            <p className='text-white/70'>accounts@lumen.studio</p>
+          </div>
+          <div className='rounded-xl bg-white/10 p-4'>
+            <p className='text-[10px] font-semibold text-white/70'>Payment Due</p>
+            <p className='mt-1 font-semibold text-white'>Nov 12, 2025</p>
+            <p className='text-white/70'>Wire transfer • Net 30</p>
+          </div>
+        </div>
+        <div className='mt-8 rounded-xl bg-white/10 p-4 text-[11px]'>
+          {[
+            ['UX Audit & Research', '$1,950'],
+            ['Design System Build', '$2,650'],
+            ['Handoff & Documentation', '$900'],
+          ].map(([label, amount]) => (
+            <div key={label} className='flex items-center justify-between py-2 text-white/90'>
+              <span>{label}</span>
+              <span className='font-semibold text-white'>{amount}</span>
+            </div>
+          ))}
+          <div className='mt-3 flex items-center justify-between border-t border-white/30 pt-3 text-[14px] font-bold text-white'>
+            <span>Total</span>
+            <span>$5,500</span>
+          </div>
+        </div>
+        <p className='mt-6 text-center text-[10px] uppercase tracking-widest text-white/60'>Thank you for your business</p>
       </div>
     );
   }

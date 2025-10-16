@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation } from 'convex/react';
-import { fabric } from 'fabric';
+import * as fabric from 'fabric';
 import { Save, Type, Square, Circle, Image as ImageIcon } from 'lucide-react';
 
 import { api } from '../../../../convex/_generated/api';

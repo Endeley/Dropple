@@ -1,0 +1,323 @@
+export const SEASONAL_HOLIDAY_TEMPLATES = [
+    {
+        version: 1,
+        title: 'Christmas Greeting – Cozy Lights',
+        slug: 'holiday-christmas-1',
+        category: 'popular',
+        tags: ['christmas', 'holiday', 'greeting'],
+        thumbnail: {
+            type: 'css',
+            style: {
+                background: 'linear-gradient(135deg, #0f172a, #1f2937)',
+                borderRadius: '12px',
+                boxShadow: '0 4px 18px rgba(15,23,42,0.25)',
+            },
+        },
+        defaultArtboardId: 'canvas-1',
+        artboards: [
+            {
+                id: 'canvas-1',
+                name: 'Christmas Greeting',
+                size: { width: 1080, height: 1080 },
+                background: { kind: 'color', value: '#0f172a' },
+                layers: [
+                    {
+                        id: 'background-photo',
+                        type: 'image',
+                        src: 'https://images.unsplash.com/photo-1608889175150-cf66e1a7e8b2?w=1600',
+                        transform: { x: 0, y: 0, width: 1080, height: 1080, rotation: 0 },
+                        fit: 'cover',
+                        opacity: 1,
+                        flip: { horizontal: false, vertical: false },
+                        filters: { contrast: 0, brightness: 0, saturation: 0, blur: 0 },
+                    },
+                    {
+                        id: 'overlay',
+                        type: 'shape',
+                        shape: 'rect',
+                        transform: { x: 0, y: 0, width: 1080, height: 1080, rotation: 0 },
+                        fill: { kind: 'solid', color: '#000000' },
+                        opacity: 0.4,
+                    },
+                    {
+                        id: 'title',
+                        type: 'text',
+                        content: 'Merry Christmas',
+                        transform: { x: 100, y: 400, width: 880, height: 200, rotation: 0 },
+                        fontFamily: 'Inter, serif',
+                        fontSize: 96,
+                        fontWeight: 700,
+                        fill: '#ffffff',
+                        align: 'center',
+                    },
+                    {
+                        id: 'subtitle',
+                        type: 'text',
+                        content: 'Wishing you peace, joy, and love 🎄',
+                        transform: { x: 100, y: 620, width: 880, height: 60, rotation: 0 },
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize: 28,
+                        fontWeight: 400,
+                        fill: '#f8fafc',
+                        align: 'center',
+                    },
+                ],
+            },
+        ],
+        editableData: {
+            title: 'Merry Christmas',
+            subtitle: 'Wishing you peace, joy, and love 🎄',
+            image: 'https://images.unsplash.com/photo-1608889175150-cf66e1a7e8b2?w=1600',
+        },
+    },
+    {
+        version: 1,
+        title: 'New Year – Golden Fireworks Banner',
+        slug: 'holiday-newyear-1',
+        category: 'marketing',
+        tags: ['new year', 'celebration', 'banner'],
+        thumbnail: {
+            type: 'css',
+            style: {
+                background: 'linear-gradient(135deg, #0f172a, #1f2937)',
+                borderRadius: '12px',
+                boxShadow: '0 4px 18px rgba(15,23,42,0.25)',
+            },
+        },
+        defaultArtboardId: 'canvas-1',
+        artboards: [
+            {
+                id: 'canvas-1',
+                name: 'New Year Banner',
+                size: { width: 1920, height: 1080 },
+                background: { kind: 'color', value: '#0f172a' },
+                layers: [
+                    {
+                        id: 'background-photo',
+                        type: 'image',
+                        src: 'https://images.unsplash.com/photo-1513279922550-250c2129b13d?w=1920',
+                        transform: { x: 0, y: 0, width: 1920, height: 1080, rotation: 0 },
+                        fit: 'cover',
+                        opacity: 1,
+                        flip: { horizontal: false, vertical: false },
+                        filters: { contrast: 0, brightness: 0, saturation: 0, blur: 0 },
+                    },
+                    {
+                        id: 'overlay',
+                        type: 'shape',
+                        shape: 'rect',
+                        transform: { x: 0, y: 0, width: 1920, height: 1080, rotation: 0 },
+                        fill: { kind: 'solid', color: '#000000' },
+                        opacity: 0.5,
+                    },
+                    {
+                        id: 'title',
+                        type: 'text',
+                        content: 'Happy New Year 2026 🎆',
+                        transform: { x: 200, y: 400, width: 1520, height: 100, rotation: 0 },
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize: 72,
+                        fontWeight: 900,
+                        fill: '#facc15',
+                        align: 'center',
+                    },
+                    {
+                        id: 'subtitle',
+                        type: 'text',
+                        content: 'New beginnings, new dreams, same determination.',
+                        transform: { x: 200, y: 540, width: 1520, height: 80, rotation: 0 },
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize: 36,
+                        fontWeight: 400,
+                        fill: '#e2e8f0',
+                        align: 'center',
+                    },
+                ],
+            },
+        ],
+        editableData: {
+            title: 'Happy New Year 2026 🎆',
+            subtitle: 'New beginnings, new dreams, same determination.',
+            image: 'https://images.unsplash.com/photo-1513279922550-250c2129b13d?w=1920',
+        },
+    },
+    {
+        version: 1,
+        title: 'Valentine Poster – Love Gradient',
+        slug: 'holiday-valentine-1',
+        category: 'marketing',
+        tags: ['valentine', 'love', 'poster'],
+        thumbnail: {
+            type: 'css',
+            style: {
+                background: 'linear-gradient(135deg, #f43f5e, #ec4899)',
+                borderRadius: '12px',
+                boxShadow: '0 4px 18px rgba(236,72,153,0.25)',
+            },
+        },
+        defaultArtboardId: 'canvas-1',
+        artboards: [
+            {
+                id: 'canvas-1',
+                name: 'Valentine Poster',
+                size: { width: 1080, height: 1350 },
+                background: {
+                    kind: 'gradient',
+                    gradient: {
+                        type: 'linear',
+                        angle: 120,
+                        stops: [
+                            { at: 0, color: '#f43f5e' },
+                            { at: 1, color: '#ec4899' },
+                        ],
+                    },
+                },
+                layers: [
+                    {
+                        id: 'heart-base',
+                        type: 'shape',
+                        shape: 'ellipse',
+                        transform: { x: 290, y: 320, width: 500, height: 460, rotation: 0 },
+                        fill: { kind: 'solid', color: '#ffffff' },
+                    },
+                    {
+                        id: 'heart-overlay',
+                        type: 'shape',
+                        shape: 'ellipse',
+                        transform: { x: 320, y: 360, width: 440, height: 420, rotation: 0 },
+                        fill: { kind: 'solid', color: '#fce7f3' },
+                        opacity: 0.4,
+                    },
+                    {
+                        id: 'title',
+                        type: 'text',
+                        content: 'Be My Valentine 💘',
+                        transform: { x: 100, y: 880, width: 880, height: 100, rotation: 0 },
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize: 64,
+                        fontWeight: 800,
+                        fill: '#ffffff',
+                        align: 'center',
+                    },
+                ],
+            },
+        ],
+        editableData: {
+            title: 'Be My Valentine 💘',
+            gradient: ['#f43f5e', '#ec4899'],
+        },
+    },
+    {
+        version: 1,
+        title: 'Easter Greeting – Pastel Joy',
+        slug: 'holiday-easter-1',
+        category: 'popular',
+        tags: ['easter', 'holiday', 'greeting'],
+        thumbnail: {
+            type: 'css',
+            style: {
+                background: 'linear-gradient(135deg, #fef3c7, #fde68a)',
+                borderRadius: '12px',
+                boxShadow: '0 4px 18px rgba(254,215,170,0.25)',
+            },
+        },
+        defaultArtboardId: 'canvas-1',
+        artboards: [
+            {
+                id: 'canvas-1',
+                name: 'Easter Greeting',
+                size: { width: 1080, height: 1080 },
+                background: { kind: 'color', value: '#fef3c7' },
+                layers: [
+                    {
+                        id: 'eggs',
+                        type: 'image',
+                        src: 'https://images.unsplash.com/photo-1522938974444-f12497b69347?w=1600',
+                        transform: { x: 140, y: 120, width: 800, height: 500, rotation: 0 },
+                        fit: 'cover',
+                        opacity: 1,
+                        flip: { horizontal: false, vertical: false },
+                        filters: { contrast: 0, brightness: 0, saturation: 0, blur: 0 },
+                    },
+                    {
+                        id: 'title',
+                        type: 'text',
+                        content: 'Happy Easter 🐣',
+                        transform: { x: 100, y: 700, width: 880, height: 100, rotation: 0 },
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize: 64,
+                        fontWeight: 800,
+                        fill: '#78350f',
+                        align: 'center',
+                    },
+                ],
+            },
+        ],
+        editableData: {
+            title: 'Happy Easter 🐣',
+            image: 'https://images.unsplash.com/photo-1522938974444-f12497b69347?w=1600',
+        },
+    },
+    {
+        version: 1,
+        title: 'Black Friday – Bold Sale Banner',
+        slug: 'holiday-blackfriday-1',
+        category: 'ecommerce',
+        tags: ['sale', 'black friday', 'banner'],
+        thumbnail: {
+            type: 'css',
+            style: {
+                background: 'linear-gradient(135deg, #0f172a, #1e293b)',
+                borderRadius: '12px',
+                boxShadow: '0 4px 18px rgba(15,23,42,0.25)',
+            },
+        },
+        defaultArtboardId: 'canvas-1',
+        artboards: [
+            {
+                id: 'canvas-1',
+                name: 'Black Friday Banner',
+                size: { width: 1920, height: 600 },
+                background: { kind: 'color', value: '#0f172a' },
+                layers: [
+                    {
+                        id: 'title',
+                        type: 'text',
+                        content: 'BLACK FRIDAY MEGA SALE',
+                        transform: { x: 100, y: 180, width: 1720, height: 100, rotation: 0 },
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize: 80,
+                        fontWeight: 900,
+                        fill: '#f43f5e',
+                        align: 'center',
+                    },
+                    {
+                        id: 'subtitle',
+                        type: 'text',
+                        content: 'Up to 70% Off – Limited Time!',
+                        transform: { x: 100, y: 320, width: 1720, height: 80, rotation: 0 },
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize: 40,
+                        fontWeight: 600,
+                        fill: '#ffffff',
+                        align: 'center',
+                    },
+                ],
+            },
+        ],
+        editableData: {
+            title: 'BLACK FRIDAY MEGA SALE',
+            subtitle: 'Up to 70% Off – Limited Time!',
+            accentColor: '#f43f5e',
+        },
+    },
+];
+
+export const SEASONAL_HOLIDAY_RECORD: Record<string, Record<string, unknown>> = SEASONAL_HOLIDAY_TEMPLATES.reduce(
+    (acc, template) => {
+        acc[template.slug] = template;
+        return acc;
+    },
+    {} as Record<string, Record<string, unknown>>
+);
+

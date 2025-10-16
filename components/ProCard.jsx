@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function ProCard() {
     return (
         <div
@@ -10,11 +12,11 @@ export default function ProCard() {
             <p className='mt-2 text-sm text-slate-600 dark:text-slate-300'>
                 Unlock premium templates, advanced AI credits, and priority support for your entire team.
             </p>
-            <a
-                href='#upgrade'
+            <Link
+                href='/dashboard?view=pricing&plan=pro'
                 className='mt-6 inline-flex w-fit items-center justify-center rounded-full bg-indigo-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-400/30 transition hover:bg-indigo-600 dark:shadow-indigo-900/40'>
                 Upgrade
-            </a>
+            </Link>
         </div>
     );
 }

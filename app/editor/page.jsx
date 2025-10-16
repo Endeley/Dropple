@@ -8,6 +8,8 @@ import { Plus, Upload, FileText, LayoutDashboard, Shapes, Star, Clock, Sparkles 
 
 import { api } from '../../convex/_generated/api';
 import { stackClientApp } from '../../stack/client';
+import { TemplatePreview } from '@/components/templates/previews';
+import { getTemplateComponentKey, getTemplatePreviewInfo, getTemplateMetaBySlug } from '@/lib/templates/preview';
 
 const NAV_SECTIONS = [
     {
@@ -39,6 +41,46 @@ const RECENT_PROJECTS = [
     { title: 'Weekly Class Slides', date: 'Mar 18' },
     { title: 'Pitch – Spring Cohort', date: 'Mar 16' },
 ];
+
+const enhanceTemplateWithPreview = (template) => {
+    if (!template?.slug) {
+        return template;
+    }
+
+    const componentKey = template.componentKey ?? getTemplateComponentKey(template.slug);
+    const previewInfo = getTemplatePreviewInfo(template.slug);
+    const meta = getTemplateMetaBySlug(template.slug);
+
+    const thumbnail =
+        template.thumbnail ??
+        meta?.thumbnail ??
+        (template.thumbnailUrl
+            ? {
+                  type: 'image',
+                  src: template.thumbnailUrl,
+              }
+            : undefined);
+
+    const thumbnailUrl =
+        template.thumbnailUrl ??
+        (typeof thumbnail === 'string'
+            ? thumbnail
+            : thumbnail?.type === 'image'
+            ? thumbnail.src
+            : thumbnail?.type === 'hybrid'
+            ? thumbnail.image?.src
+            : undefined);
+
+    return {
+        ...template,
+        componentKey,
+        previewComponentKey: template.previewComponentKey ?? previewInfo?.componentKey ?? componentKey,
+        previewVariant: template.previewVariant ?? previewInfo?.variant,
+        thumbnail,
+        thumbnailUrl,
+        thumbnailLabel: template.thumbnailLabel ?? meta?.thumbnailLabel,
+    };
+};
 
 function Sidebar() {
     return (
@@ -128,12 +170,16 @@ function TemplateGridCard({ template, onUse, isBusy }) {
     return (
         <div className='group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md'>
             <Link href={`/templates/${template.slug}`} className='relative block aspect-[4/3] bg-slate-200'>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                    src={template.thumbnailUrl ?? '/placeholder.png'}
-                    alt={template.title}
-                    className='h-full w-full object-cover transition group-hover:scale-[1.02]'
-                />
+                {template.thumbnailUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                        src={template.thumbnailUrl}
+                        alt={template.title}
+                        className='h-full w-full object-cover transition group-hover:scale-[1.02]'
+                    />
+                ) : (
+                    <TemplatePreview componentKey={template.previewComponentKey ?? template.componentKey} variant={template.previewVariant} />
+                )}
             </Link>
             <div className='flex flex-1 flex-col gap-3 p-4'>
                 <div className='space-y-1'>
@@ -230,8 +276,14 @@ export default function EditorHomePage() {
         }
     };
 
-    const recentTemplates = useMemo(() => templatesRecent ?? [], [templatesRecent]);
-    const popularTemplates = useMemo(() => templatesPopular ?? [], [templatesPopular]);
+    const recentTemplates = useMemo(
+        () => (templatesRecent ?? []).map((template) => enhanceTemplateWithPreview(template)),
+        [templatesRecent]
+    );
+    const popularTemplates = useMemo(
+        () => (templatesPopular ?? []).map((template) => enhanceTemplateWithPreview(template)),
+        [templatesPopular]
+    );
 
     return (
         <div className='flex min-h-screen bg-slate-50 text-slate-900'>

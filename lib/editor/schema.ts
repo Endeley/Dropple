@@ -121,7 +121,9 @@ export type ImageLayer = BaseLayer & {
     crop?: { x: number; y: number; width: number; height: number };
 };
 
-export type ShapeKind = 'rect' | 'ellipse' | 'line' | 'polygon' | 'star';
+export type PathCommand = [string, ...number[]];
+
+export type ShapeKind = 'rect' | 'ellipse' | 'line' | 'polygon' | 'star' | 'path';
 export type ShapeLayer = BaseLayer & {
     type: 'shape';
     shape: ShapeKind;
@@ -131,6 +133,7 @@ export type ShapeLayer = BaseLayer & {
     cornerRadius?: CornerRadii;
     points?: Point[];
     closed?: boolean;
+    path?: PathCommand[];
 };
 
 export type GroupLayer = BaseLayer & {

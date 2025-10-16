@@ -2,6 +2,7 @@
 
 export type EducationVariant =
   | 'certificate'
+  | 'certificate-gold'
   | 'award'
   | 'lesson-plan'
   | 'worksheet'
@@ -37,6 +38,15 @@ const DEFAULTS: Record<EducationVariant, EducationData> = {
     bgColor: '#ffffff',
     accentColor: '#1e40af',
     borderColor: '#dbeafe',
+  },
+  'certificate-gold': {
+    title: 'Certificate of Achievement',
+    name: 'Award Recipient',
+    course: 'Excellence in Learning',
+    date: '2025',
+    bgColor: '#fffbea',
+    accentColor: '#facc15',
+    borderColor: '#fde68a',
   },
   award: {
     title: 'Achievement Award',
@@ -133,7 +143,7 @@ const DEFAULTS: Record<EducationVariant, EducationData> = {
 export function EducationTemplate({ variant, customData }: EducationTemplateProps) {
   const data = { ...DEFAULTS[variant], ...customData };
 
-  if (variant === 'certificate' || variant === 'award') {
+  if (variant === 'certificate' || variant === 'certificate-gold' || variant === 'award') {
     return (
       <div
         className='relative h-[450px] w-[600px] overflow-hidden rounded-lg p-12 shadow-xl'

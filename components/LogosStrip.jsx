@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { logos } from '../lib/constants/home.constants';
 
 export default function LogosStrip() {
@@ -8,9 +9,13 @@ export default function LogosStrip() {
             <h3 className='text-base font-semibold text-slate-900 dark:text-white'>Trusted by modern teams</h3>
             <div className='mt-6 flex flex-wrap items-center gap-x-8 gap-y-4 text-base font-medium text-slate-400 dark:text-slate-500'>
                 {logos.map((logo) => (
-                    <span key={logo} className='tracking-wide text-slate-400/80 dark:text-slate-500/80'>
-                        {logo}
-                    </span>
+                    <Link
+                        key={logo.label}
+                        href={logo.href ?? '/templates'}
+                        className='tracking-wide text-slate-400/80 transition hover:text-indigo-500 dark:text-slate-500/80 dark:hover:text-indigo-300'
+                    >
+                        {logo.label}
+                    </Link>
                 ))}
             </div>
         </div>

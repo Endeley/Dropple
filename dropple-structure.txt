@@ -1,0 +1,29 @@
+
+/Users/endeleykonboye/Desktop/MyProjects/dropple
+├── #_projectStructure.text
+├── README.md
+├── app
+├── components
+├── components.json
+├── convex
+├── dropple-structure.txt
+├── eslint.config.mjs
+├── jsconfig.json
+├── lib
+├── middleware.js
+├── next-env.d.ts
+├── next.config.mjs
+├── node_modules
+├── package-lock.json
+├── package.json
+├── postcss.config.js
+├── public
+├── stack
+├── tailwind.config.js
+└── tsconfig.json
+
+directory: 7 file: 14
+
+
+
+[2K[1G

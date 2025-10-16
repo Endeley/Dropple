@@ -542,6 +542,48 @@ export default defineSchema({
         .index('by_team_time', ['teamId', 'createdAt']),
 
     // -----------------------------------------------------------------------
+    // Real-time presence & cursors
+    // -----------------------------------------------------------------------
+    presence: defineTable({
+        userId: v.id('users'),
+        userName: v.string(),
+        userAvatar: v.optional(v.string()),
+        designId: v.string(),
+        cursor: v.optional(
+            v.object({
+                x: v.number(),
+                y: v.number(),
+            })
+        ),
+        active: v.boolean(),
+        updatedAt: vTimestamp,
+    }).index('by_design', ['designId']),
+
+    // -----------------------------------------------------------------------
+    // Chat Messages & Threads
+    // -----------------------------------------------------------------------
+    messages: defineTable({
+        threadId: v.string(),
+        userId: v.id('users'),
+        userName: v.string(),
+        userAvatar: v.optional(v.string()),
+        text: v.string(),
+        createdAt: vTimestamp,
+    }).index('by_thread_time', ['threadId', 'createdAt']),
+
+    // -----------------------------------------------------------------------
+    // Shared Canvas Live Nodes
+    // -----------------------------------------------------------------------
+    canvasNodes: defineTable({
+        designId: v.string(),
+        nodeId: v.string(),
+        type: v.string(),
+        props: v.any(),
+        updatedBy: v.optional(v.id('users')),
+        updatedAt: vTimestamp,
+    }).index('by_design', ['designId']),
+
+    // -----------------------------------------------------------------------
     // Analytics & usage
     // -----------------------------------------------------------------------
     usageMonthly: defineTable({

@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function Hero() {
     return (
         <div className='space-y-6 animate-fade-up' id='get-started' style={{ animationDelay: '0.15s' }}>
@@ -12,16 +14,16 @@ export default function Hero() {
                 Build stunning visuals in minutes using our templates, AI-assisted tools, and brand kits. Collaborate with your team and publish everywhere.
             </p>
             <div className='flex flex-wrap items-center gap-3 text-sm animate-fade-up' style={{ animationDelay: '0.35s' }}>
-                <a
-                    href='#get-started'
+                <Link
+                    href='/handler/sign-up'
                     className='rounded-full bg-indigo-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-400/30 transition hover:bg-indigo-600 dark:shadow-indigo-900/40'>
                     Get Started
-                </a>
-                <a
-                    href='#features'
+                </Link>
+                <Link
+                    href='/templates'
                     className='rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:text-indigo-600 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200 dark:hover:border-indigo-500 dark:hover:text-indigo-300'>
                     View Templates
-                </a>
+                </Link>
             </div>
         </div>
     );
