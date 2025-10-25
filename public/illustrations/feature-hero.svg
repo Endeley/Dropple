@@ -1,0 +1,22 @@
+<svg width="360" height="300" viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="orb" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#a855f7" stop-opacity="0.95"/>
+      <stop offset="45%" stop-color="#6366f1" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0.35"/>
+    </radialGradient>
+    <linearGradient id="beam" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#e0f2fe"/>
+      <stop offset="100%" stop-color="#ede9fe"/>
+    </linearGradient>
+  </defs>
+  <rect width="360" height="300" rx="40" fill="url(#beam)"/>
+  <circle cx="180" cy="150" r="90" fill="url(#orb)"/>
+  <circle cx="180" cy="150" r="52" fill="white" opacity="0.9"/>
+  <path d="M180 115c12 0 24 6 30 18l-18 4c-4-6-7-8-12-8s-8 2-12 8l-18-4c6-12 18-18 30-18z" fill="#6366f1" opacity="0.7"/>
+  <rect x="90" y="210" width="180" height="28" rx="14" fill="#ffffff" opacity="0.85"/>
+  <rect x="116" y="218" width="68" height="12" rx="6" fill="#6366f1" opacity="0.85"/>
+  <rect x="198" y="218" width="56" height="12" rx="6" fill="#38bdf8" opacity="0.75"/>
+  <circle cx="108" cy="92" r="10" fill="#38bdf8" opacity="0.45"/>
+  <circle cx="248" cy="92" r="10" fill="#a855f7" opacity="0.5"/>
+</svg>

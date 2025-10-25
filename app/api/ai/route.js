@@ -1,9 +1,18 @@
 import OpenAI from 'openai';
 import { NextResponse } from 'next/server';
 
-const client = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+let client;
+function getClient() {
+    if (client) return client;
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+        throw new Error('OPENAI_API_KEY is not configured.');
+    }
+
+    client = new OpenAI({ apiKey });
+    return client;
+}
 
 export async function POST(req) {
     try {
@@ -11,7 +20,7 @@ export async function POST(req) {
         const { type, prompt, colorContext, layoutContext, imagePrompt, threadContext, userPrompt } = body;
 
         if (type === 'chat') {
-            const completion = await client.chat.completions.create({
+            const completion = await getClient().chat.completions.create({
                 model: 'gpt-4o-mini',
                 messages: [
                     {
@@ -31,7 +40,7 @@ export async function POST(req) {
         }
 
         if (type === 'text') {
-            const completion = await client.chat.completions.create({
+            const completion = await getClient().chat.completions.create({
                 model: 'gpt-4o-mini',
                 messages: [
                     {
@@ -45,7 +54,7 @@ export async function POST(req) {
         }
 
         if (type === 'palette') {
-            const completion = await client.chat.completions.create({
+            const completion = await getClient().chat.completions.create({
                 model: 'gpt-4o-mini',
                 messages: [
                     { role: 'system', content: 'Generate a 5-color palette as HEX values based on a design theme.' },
@@ -59,7 +68,7 @@ export async function POST(req) {
         }
 
         if (type === 'layout') {
-            const completion = await client.chat.completions.create({
+            const completion = await getClient().chat.completions.create({
                 model: 'gpt-4o-mini',
                 messages: [
                     {
@@ -75,7 +84,7 @@ export async function POST(req) {
         }
 
         if (type === 'image') {
-            const image = await client.images.generate({
+            const image = await getClient().images.generate({
                 model: 'gpt-image-1',
                 prompt: imagePrompt || 'a creative modern stock photo',
                 size: '1024x1024',
@@ -84,7 +93,7 @@ export async function POST(req) {
         }
 
         if (type === 'layoutSuggestion') {
-            const completion = await client.chat.completions.create({
+            const completion = await getClient().chat.completions.create({
                 model: 'gpt-4o-mini',
                 messages: [
                     {

@@ -4,6 +4,6 @@
         "paths": { "@/*": ["*"] },
         "checkJs": false
     },
-    "include": ["app/**/*", "components/**/*", "lib/**/*"],
+  "include": ["app/**/*", "lib/**/*"],
     "exclude": ["node_modules", ".next", "public", "**/*.ts", "**/*.d.ts"]
 }

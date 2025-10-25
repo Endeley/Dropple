@@ -1,0 +1,26 @@
+<svg width="360" height="280" viewBox="0 0 360 280" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="codeBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e0f2fe"/>
+      <stop offset="100%" stop-color="#ede9fe"/>
+    </linearGradient>
+    <linearGradient id="codePanel" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#312e81" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#2563eb" stop-opacity="0.85"/>
+    </linearGradient>
+  </defs>
+  <rect width="360" height="280" rx="32" fill="url(#codeBg)"/>
+  <rect x="52" y="60" width="256" height="164" rx="22" fill="white" opacity="0.92"/>
+  <rect x="72" y="84" width="216" height="120" rx="18" fill="url(#codePanel)"/>
+  <rect x="88" y="76" width="32" height="8" rx="4" fill="#a5b4fc" opacity="0.8"/>
+  <rect x="128" y="76" width="32" height="8" rx="4" fill="#c7d2fe" opacity="0.7"/>
+  <circle cx="244" cy="158" r="22" fill="#38bdf8" opacity="0.75"/>
+  <rect x="104" y="104" width="88" height="10" rx="5" fill="#818cf8"/>
+  <rect x="104" y="122" width="120" height="10" rx="5" fill="#a5b4fc"/>
+  <rect x="104" y="140" width="70" height="10" rx="5" fill="#c7d2fe"/>
+  <rect x="104" y="158" width="96" height="10" rx="5" fill="#a5b4fc"/>
+  <rect x="104" y="176" width="60" height="10" rx="5" fill="#c7d2fe"/>
+  <rect x="72" y="200" width="216" height="24" rx="12" fill="#e0e7ff"/>
+  <rect x="84" y="206" width="84" height="12" rx="6" fill="#6366f1" opacity="0.8"/>
+  <rect x="180" y="206" width="64" height="12" rx="6" fill="#38bdf8" opacity="0.7"/>
+</svg>
