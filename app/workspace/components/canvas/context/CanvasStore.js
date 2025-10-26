@@ -6,6 +6,108 @@ import { create } from 'zustand';
 const DEFAULT_FRAME_BACKGROUND = '#0F172A';
 const DEFAULT_TEXT_COLOR = '#ECE9FE';
 
+const SHARED_ELEMENT_DEFAULTS = {
+    rotation: 0,
+    opacity: 1,
+    scaleX: 1,
+    scaleY: 1,
+    skewX: 0,
+    skewY: 0,
+    fillType: 'solid',
+    gradientType: 'linear',
+    gradientAngle: 45,
+    gradientStart: '#8B5CF6',
+    gradientEnd: '#3B82F6',
+    patternRepeat: 'repeat',
+    patternScale: 1,
+    patternOffsetX: 0,
+    patternOffsetY: 0,
+    imageUrl: null,
+    backgroundFit: 'cover',
+    backgroundBlendMode: 'normal',
+    visible: true,
+    blendMode: 'normal',
+    blur: 0,
+    brightness: 100,
+    contrast: 100,
+    saturation: 100,
+    hueRotate: 0,
+    shadowColor: null,
+    shadowOffsetX: 0,
+    shadowOffsetY: 0,
+    shadowBlur: 0,
+    shadowSpread: 0,
+    glowColor: null,
+    glowBlur: 24,
+};
+
+const TEXT_ELEMENT_DEFAULTS = {
+    fontFamily: 'Inter, system-ui, sans-serif',
+    fontSize: 18,
+    fontWeight: 500,
+    lineHeight: 1.4,
+    letterSpacing: 0,
+    textTransform: 'none',
+    align: 'left',
+    fill: DEFAULT_TEXT_COLOR,
+    textFillType: 'solid',
+    textGradientStart: '#8B5CF6',
+    textGradientEnd: '#3B82F6',
+    textGradientAngle: 45,
+    textShadowColor: null,
+    textShadowBlur: 0,
+    textShadowX: 0,
+    textShadowY: 0,
+};
+
+const RECT_ELEMENT_DEFAULTS = {
+    fill: '#201C3C',
+    cornerRadius: 16,
+    stroke: null,
+    strokeWidth: 0,
+};
+
+const IMAGE_ELEMENT_DEFAULTS = {
+    preserveAspectRatio: true,
+};
+
+function withElementDefaults(element) {
+    if (!element) return element;
+    if (element.type === 'group') {
+        return {
+            ...element,
+            props: {
+                opacity: element.props?.opacity ?? 1,
+                rotation: element.props?.rotation ?? 0,
+                scaleX: element.props?.scaleX ?? 1,
+                scaleY: element.props?.scaleY ?? 1,
+                skewX: element.props?.skewX ?? 0,
+                skewY: element.props?.skewY ?? 0,
+                visible: element.props?.visible ?? true,
+                ...(element.props ?? {}),
+            },
+        };
+    }
+
+    const typeDefaults =
+        element.type === 'text'
+            ? TEXT_ELEMENT_DEFAULTS
+            : element.type === 'rect'
+                ? RECT_ELEMENT_DEFAULTS
+                : element.type === 'image'
+                    ? IMAGE_ELEMENT_DEFAULTS
+                    : {};
+
+    return {
+        ...element,
+        props: {
+            ...SHARED_ELEMENT_DEFAULTS,
+            ...typeDefaults,
+            ...(element.props ?? {}),
+        },
+    };
+}
+
 const initialFrame = {
     id: 'frame-1',
     name: 'Home Page',
@@ -17,17 +119,27 @@ const initialFrame = {
     backgroundColor: DEFAULT_FRAME_BACKGROUND,
     backgroundImage: null,
     backgroundFit: 'cover',
+    backgroundFillType: 'solid',
+    backgroundGradientType: 'linear',
+    backgroundGradientStart: '#8B5CF6',
+    backgroundGradientEnd: '#3B82F6',
+    backgroundGradientAngle: 45,
+    backgroundPatternScale: 1,
+    backgroundPatternOffsetX: 0,
+    backgroundPatternOffsetY: 0,
+    backgroundPatternRepeat: 'repeat',
+    backgroundBlendMode: 'normal',
     timelineDuration: 20,
     elements: [
-        {
+        withElementDefaults({
             id: 'text-hero',
             type: 'text',
             parentId: null,
             props: {
                 text: 'Welcome to Dropple',
                 fontSize: 48,
+                fontWeight: 700,
                 fill: DEFAULT_TEXT_COLOR,
-                fontStyle: 'bold',
                 x: 120,
                 y: 140,
                 width: 520,
@@ -36,8 +148,8 @@ const initialFrame = {
                 align: 'left',
                 opacity: 1,
             },
-        },
-        {
+        }),
+        withElementDefaults({
             id: 'rect-card',
             type: 'rect',
             parentId: null,
@@ -51,8 +163,12 @@ const initialFrame = {
                 stroke: '#8B5CF6',
                 strokeWidth: 1,
                 opacity: 0.92,
+                shadowColor: 'rgba(139,92,246,0.35)',
+                shadowBlur: 48,
+                shadowOffsetX: 0,
+                shadowOffsetY: 24,
             },
-        },
+        }),
     ],
 };
 
@@ -105,6 +221,7 @@ export const useCanvasStore = create((set, get) => ({
     activeToolOverlay: null,
     comments: [],
     timelineAssets: [],
+    timelineActions: [],
 
     setMode: (mode) => set({ mode }),
     setScale: (value) =>
@@ -200,6 +317,16 @@ export const useCanvasStore = create((set, get) => ({
                 backgroundColor: overrides.backgroundColor ?? DEFAULT_FRAME_BACKGROUND,
                 backgroundImage: overrides.backgroundImage ?? null,
                 backgroundFit: overrides.backgroundFit ?? 'cover',
+                backgroundFillType: overrides.backgroundFillType ?? 'solid',
+                backgroundGradientType: overrides.backgroundGradientType ?? 'linear',
+                backgroundGradientStart: overrides.backgroundGradientStart ?? '#8B5CF6',
+                backgroundGradientEnd: overrides.backgroundGradientEnd ?? '#3B82F6',
+                backgroundGradientAngle: overrides.backgroundGradientAngle ?? 45,
+                backgroundPatternScale: overrides.backgroundPatternScale ?? 1,
+                backgroundPatternOffsetX: overrides.backgroundPatternOffsetX ?? 0,
+                backgroundPatternOffsetY: overrides.backgroundPatternOffsetY ?? 0,
+                backgroundPatternRepeat: overrides.backgroundPatternRepeat ?? 'repeat',
+                backgroundBlendMode: overrides.backgroundBlendMode ?? 'normal',
                 timelineDuration: overrides.timelineDuration ?? 20,
                 elements: [],
             };
@@ -225,11 +352,28 @@ export const useCanvasStore = create((set, get) => ({
                 if (frame.id !== frameId) return frame;
                 return {
                     ...frame,
+                    backgroundFillType: updates.backgroundFillType ?? frame.backgroundFillType ?? 'solid',
                     backgroundColor:
                         updates.backgroundColor !== undefined ? updates.backgroundColor : frame.backgroundColor,
                     backgroundImage:
                         updates.backgroundImage !== undefined ? updates.backgroundImage : frame.backgroundImage,
                     backgroundFit: updates.backgroundFit ?? frame.backgroundFit ?? 'cover',
+                    backgroundBlendMode: updates.backgroundBlendMode ?? frame.backgroundBlendMode ?? 'normal',
+                    backgroundGradientType: updates.backgroundGradientType ?? frame.backgroundGradientType ?? 'linear',
+                    backgroundGradientStart:
+                        updates.backgroundGradientStart ?? frame.backgroundGradientStart ?? '#8B5CF6',
+                    backgroundGradientEnd:
+                        updates.backgroundGradientEnd ?? frame.backgroundGradientEnd ?? '#3B82F6',
+                    backgroundGradientAngle:
+                        updates.backgroundGradientAngle ?? frame.backgroundGradientAngle ?? 45,
+                    backgroundPatternScale:
+                        updates.backgroundPatternScale ?? frame.backgroundPatternScale ?? 1,
+                    backgroundPatternOffsetX:
+                        updates.backgroundPatternOffsetX ?? frame.backgroundPatternOffsetX ?? 0,
+                    backgroundPatternOffsetY:
+                        updates.backgroundPatternOffsetY ?? frame.backgroundPatternOffsetY ?? 0,
+                    backgroundPatternRepeat:
+                        updates.backgroundPatternRepeat ?? frame.backgroundPatternRepeat ?? 'repeat',
                 };
             }),
         })),
@@ -238,14 +382,10 @@ export const useCanvasStore = create((set, get) => ({
         set((state) => ({
             frames: state.frames.map((frame) => {
                 if (frame.id !== frameId) return frame;
-                const newElement = {
+                const newElement = withElementDefaults({
                     ...element,
                     parentId: parentId ?? element.parentId ?? null,
-                    props: {
-                        opacity: 1,
-                        ...element.props,
-                    },
-                };
+                });
                 return { ...frame, elements: [...frame.elements, newElement] };
             }),
         })),
@@ -314,6 +454,56 @@ export const useCanvasStore = create((set, get) => ({
             comments: state.comments.filter((comment) => comment.elementId !== elementId),
         })),
 
+    bringElementForward: (frameId, elementId) =>
+        set((state) => ({
+            frames: state.frames.map((frame) => {
+                if (frame.id !== frameId) return frame;
+                const index = frame.elements.findIndex((element) => element.id === elementId);
+                if (index === -1 || index === frame.elements.length - 1) return frame;
+                const elements = [...frame.elements];
+                [elements[index], elements[index + 1]] = [elements[index + 1], elements[index]];
+                return { ...frame, elements };
+            }),
+        })),
+
+    sendElementBackward: (frameId, elementId) =>
+        set((state) => ({
+            frames: state.frames.map((frame) => {
+                if (frame.id !== frameId) return frame;
+                const index = frame.elements.findIndex((element) => element.id === elementId);
+                if (index <= 0) return frame;
+                const elements = [...frame.elements];
+                [elements[index], elements[index - 1]] = [elements[index - 1], elements[index]];
+                return { ...frame, elements };
+            }),
+        })),
+
+    bringElementToFront: (frameId, elementId) =>
+        set((state) => ({
+            frames: state.frames.map((frame) => {
+                if (frame.id !== frameId) return frame;
+                const index = frame.elements.findIndex((element) => element.id === elementId);
+                if (index === -1 || index === frame.elements.length - 1) return frame;
+                const elements = [...frame.elements];
+                const [target] = elements.splice(index, 1);
+                elements.push(target);
+                return { ...frame, elements };
+            }),
+        })),
+
+    sendElementToBack: (frameId, elementId) =>
+        set((state) => ({
+            frames: state.frames.map((frame) => {
+                if (frame.id !== frameId) return frame;
+                const index = frame.elements.findIndex((element) => element.id === elementId);
+                if (index <= 0) return frame;
+                const elements = [...frame.elements];
+                const [target] = elements.splice(index, 1);
+                elements.unshift(target);
+                return { ...frame, elements };
+            }),
+        })),
+
     groupSelectedElements: () => {
         const state = get();
         const { selectedFrameId, selectedElementIds } = state;
@@ -334,7 +524,7 @@ export const useCanvasStore = create((set, get) => ({
         if (!bounds) return;
 
         const groupId = `group-${nanoid(6)}`;
-        const groupElement = {
+        const groupElement = withElementDefaults({
             id: groupId,
             type: 'group',
             parentId,
@@ -344,9 +534,10 @@ export const useCanvasStore = create((set, get) => ({
                 width: bounds.width || 120,
                 height: bounds.height || 120,
                 fill: 'transparent',
-                opacity: 1,
+                stroke: 'rgba(148,163,184,0.35)',
+                strokeWidth: 1,
             },
-        };
+        });
 
         let groupInserted = false;
         const updatedElements = [];
@@ -464,6 +655,145 @@ export const useCanvasStore = create((set, get) => ({
         });
     },
 
+    alignSelectedElements: (alignment) => {
+        const state = get();
+        const { selectedFrameId, selectedElementIds } = state;
+        if (!selectedFrameId || selectedElementIds.length === 0) return;
+
+        set((currentState) => {
+            const frame = currentState.frames.find((item) => item.id === selectedFrameId);
+            if (!frame) return {};
+
+            const selection = new Set(selectedElementIds);
+            const updatedElements = frame.elements.map((element) => {
+                if (!selection.has(element.id)) return element;
+                const props = element.props ?? {};
+                const width = Number.isFinite(props.width) ? props.width : 0;
+                const height = Number.isFinite(props.height) ? props.height : 0;
+                const updates = {};
+                switch (alignment) {
+                    case 'left':
+                        updates.x = 0;
+                        break;
+                    case 'center':
+                        updates.x = Number.isFinite(width) ? (frame.width - width) / 2 : props.x ?? 0;
+                        break;
+                    case 'right':
+                        updates.x = Number.isFinite(width) ? frame.width - width : props.x ?? 0;
+                        break;
+                    case 'top':
+                        updates.y = 0;
+                        break;
+                    case 'middle':
+                        updates.y = Number.isFinite(height) ? (frame.height - height) / 2 : props.y ?? 0;
+                        break;
+                    case 'bottom':
+                        updates.y = Number.isFinite(height) ? frame.height - height : props.y ?? 0;
+                        break;
+                    default:
+                        break;
+                }
+                return {
+                    ...element,
+                    props: {
+                        ...props,
+                        ...updates,
+                    },
+                };
+            });
+
+            const updatedFrame = { ...frame, elements: updatedElements };
+            return {
+                frames: currentState.frames.map((item) =>
+                    item.id === frame.id ? updatedFrame : item,
+                ),
+            };
+        });
+    },
+
+    distributeSelectedElements: (axis) => {
+        const state = get();
+        const { selectedFrameId, selectedElementIds } = state;
+        if (!selectedFrameId || selectedElementIds.length < 3) return;
+
+        set((currentState) => {
+            const frame = currentState.frames.find((item) => item.id === selectedFrameId);
+            if (!frame) return {};
+
+            const selection = frame.elements
+                .filter((element) => selectedElementIds.includes(element.id))
+                .filter((element) => {
+                    const props = element.props ?? {};
+                    return axis === 'horizontal'
+                        ? Number.isFinite(props.width)
+                        : Number.isFinite(props.height);
+                });
+
+            if (selection.length < 3) return {};
+
+            const sorted = [...selection].sort((a, b) => {
+                const aProps = a.props ?? {};
+                const bProps = b.props ?? {};
+                if (axis === 'horizontal') {
+                    return (aProps.x ?? 0) - (bProps.x ?? 0);
+                }
+                return (aProps.y ?? 0) - (bProps.y ?? 0);
+            });
+
+            const firstProps = sorted[0]?.props ?? {};
+            const lastProps = sorted[sorted.length - 1]?.props ?? {};
+            const firstStart = axis === 'horizontal' ? firstProps.x ?? 0 : firstProps.y ?? 0;
+            const lastEnd =
+                axis === 'horizontal'
+                    ? (lastProps.x ?? 0) + (lastProps.width ?? 0)
+                    : (lastProps.y ?? 0) + (lastProps.height ?? 0);
+
+            const totalSpan = lastEnd - firstStart;
+            const totalSize = sorted.reduce((acc, element) => {
+                const props = element.props ?? {};
+                return acc + (axis === 'horizontal' ? props.width ?? 0 : props.height ?? 0);
+            }, 0);
+            const gap = (totalSpan - totalSize) / (sorted.length - 1);
+
+            if (!Number.isFinite(gap)) return {};
+
+            const firstWidth = axis === 'horizontal' ? firstProps.width ?? 0 : firstProps.height ?? 0;
+            let cursor = firstStart + firstWidth + gap;
+            const updates = new Map();
+            sorted.forEach((element, index) => {
+                const props = element.props ?? {};
+                if (index === 0) {
+                    return;
+                }
+
+                const targetPosition = cursor;
+                updates.set(element.id, {
+                    ...props,
+                    [axis === 'horizontal' ? 'x' : 'y']: targetPosition,
+                });
+                cursor += (axis === 'horizontal' ? props.width ?? 0 : props.height ?? 0) + gap;
+            });
+
+            const updatedElements = frame.elements.map((element) => {
+                if (!updates.has(element.id)) return element;
+                return {
+                    ...element,
+                    props: {
+                        ...element.props,
+                        ...updates.get(element.id),
+                    },
+                };
+            });
+
+            const updatedFrame = { ...frame, elements: updatedElements };
+            return {
+                frames: currentState.frames.map((item) =>
+                    item.id === frame.id ? updatedFrame : item,
+                ),
+            };
+        });
+    },
+
     setPrototypeMode: (value) =>
         set((state) => {
             const frames = state.frames ?? [];
@@ -541,26 +871,154 @@ export const useCanvasStore = create((set, get) => ({
         set((state) => ({
             comments: state.comments.filter((comment) => comment.id !== commentId),
         })),
-    addTimelineAsset: ({ frameId, label, type, duration }) => {
-        if (!frameId || !label) return;
+    pushTimelineAction: (action) =>
         set((state) => ({
-            timelineAssets: [
-                ...state.timelineAssets,
-                {
-                    id: `asset-${nanoid(6)}`,
-                    frameId,
-                    label,
-                    type: type ?? 'clip',
-                    duration: duration ?? 5,
-                    createdAt: new Date().toISOString(),
-                },
-            ],
-        }));
+            timelineActions: [...state.timelineActions.slice(-49), action],
+        })),
+    undoTimelineAction: () => {
+        const state = get();
+        const actions = [...state.timelineActions];
+        const last = actions.pop();
+        if (!last) return null;
+        set((prevState) => {
+            let timelineAssets = prevState.timelineAssets;
+            switch (last.type) {
+                case 'add':
+                    timelineAssets = prevState.timelineAssets.filter((asset) => asset.id !== last.assetId);
+                    break;
+                case 'remove':
+                    if (last.before) {
+                        timelineAssets = [...prevState.timelineAssets, last.before];
+                    }
+                    break;
+                case 'update':
+                    if (last.before) {
+                        timelineAssets = prevState.timelineAssets.map((asset) =>
+                            asset.id === last.assetId ? last.before : asset,
+                        );
+                    }
+                    break;
+                default:
+                    break;
+            }
+            return {
+                timelineAssets,
+                timelineActions: actions,
+            };
+        });
+        return last;
     },
-    removeTimelineAsset: (assetId) =>
+    clearTimelineHistory: () => set({ timelineActions: [] }),
+    commitTimelineAssetChange: (assetId, previousState) => {
+        const current = get().timelineAssets.find((asset) => asset.id === assetId);
+        if (!current || !previousState) return;
+        get().pushTimelineAction({
+            id: `ta-${nanoid(6)}`,
+            type: 'update',
+            assetId,
+            frameId: current.frameId,
+            before: { ...previousState, waveform: previousState.waveform ? [...previousState.waveform] : null },
+            after: { ...current, waveform: current.waveform ? [...current.waveform] : null },
+            timestamp: new Date().toISOString(),
+        });
+    },
+    addTimelineAsset: ({ frameId, label, type, duration, offset = 0, thumbnailUrl = null, waveform = null }) => {
+        if (!frameId || !label) return;
+        const normalizedWaveform = Array.isArray(waveform)
+            ? waveform.filter((value) => Number.isFinite(value))
+            : typeof waveform === 'string'
+                ? waveform
+                      .split(',')
+                      .map((value) => Number(value.trim()))
+                      .filter((value) => Number.isFinite(value))
+                : null;
+        const newAsset = {
+            id: `asset-${nanoid(6)}`,
+            frameId,
+            label,
+            type: type ?? 'clip',
+            duration: duration ?? 5,
+            offset: Math.max(0, offset ?? 0),
+            thumbnailUrl: thumbnailUrl ?? null,
+            waveform: normalizedWaveform,
+            createdAt: new Date().toISOString(),
+        };
+        set((state) => ({
+            timelineAssets: [...state.timelineAssets, newAsset],
+        }));
+        get().pushTimelineAction({
+            id: `ta-${nanoid(6)}`,
+            type: 'add',
+            assetId: newAsset.id,
+            frameId,
+            before: null,
+            after: { ...newAsset, waveform: newAsset.waveform ? [...newAsset.waveform] : null },
+            timestamp: new Date().toISOString(),
+        });
+    },
+    removeTimelineAsset: (assetId) => {
+        const existing = get().timelineAssets.find((asset) => asset.id === assetId);
+        if (!existing) return;
         set((state) => ({
             timelineAssets: state.timelineAssets.filter((asset) => asset.id !== assetId),
-        })),
+        }));
+        get().pushTimelineAction({
+            id: `ta-${nanoid(6)}`,
+            type: 'remove',
+            assetId,
+            frameId: existing.frameId,
+            before: { ...existing, waveform: existing.waveform ? [...existing.waveform] : null },
+            after: null,
+            timestamp: new Date().toISOString(),
+        });
+    },
+    updateTimelineAsset: (assetId, updates, options = {}) => {
+        const { log = true, previousState = null } = options;
+        let before = null;
+        let after = null;
+        set((state) => {
+            const timelineAssets = state.timelineAssets.map((asset) => {
+                if (asset.id !== assetId) return asset;
+                before = asset;
+                const updated = {
+                    ...asset,
+                    ...(updates.duration !== undefined
+                        ? { duration: Math.max(0.1, updates.duration) }
+                        : {}),
+                    ...(updates.offset !== undefined ? { offset: Math.max(0, updates.offset) } : {}),
+                    ...(updates.thumbnailUrl !== undefined ? { thumbnailUrl: updates.thumbnailUrl } : {}),
+                    ...(updates.waveform !== undefined
+                        ? {
+                              waveform: Array.isArray(updates.waveform)
+                                  ? updates.waveform.filter((value) => Number.isFinite(value))
+                                  : typeof updates.waveform === 'string'
+                                      ? updates.waveform
+                                            .split(',')
+                                            .map((value) => Number(value.trim()))
+                                            .filter((value) => Number.isFinite(value))
+                                      : null,
+                          }
+                        : {}),
+                };
+                after = updated;
+                return updated;
+            });
+            return { timelineAssets };
+        });
+        if (log && before && after && (previousState || before.offset !== after.offset || before.duration !== after.duration)) {
+            get().pushTimelineAction({
+                id: `ta-${nanoid(6)}`,
+                type: 'update',
+                assetId,
+                frameId: before.frameId,
+                before: previousState
+                    ? { ...previousState, waveform: previousState.waveform ? [...previousState.waveform] : null }
+                    : { ...before, waveform: before.waveform ? [...before.waveform] : null },
+                after: { ...after, waveform: after.waveform ? [...after.waveform] : null },
+                timestamp: new Date().toISOString(),
+            });
+        }
+    },
     chainFrames: (frameIds) => {
         const uniqueIds = Array.from(new Set(Array.isArray(frameIds) ? frameIds : [])).filter(Boolean);
         if (uniqueIds.length < 2) return;

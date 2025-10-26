@@ -2,6 +2,10 @@ import { getConvexProvidersConfig } from '@stackframe/stack';
 
 const projectId = process.env.NEXT_PUBLIC_STACK_PROJECT_ID;
 
-export default {
-    providers: getConvexProvidersConfig(projectId ? { projectId } : {}),
+const providers = projectId ? getConvexProvidersConfig({ projectId }) : [];
+
+const authConfig = {
+    providers,
 };
+
+export default authConfig;

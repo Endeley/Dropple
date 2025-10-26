@@ -224,46 +224,163 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
         window.addEventListener('pointerup', handlePointerUp);
     };
 
-    const commonStyle = useMemo(
-        () => ({
+    const commonStyle = useMemo(() => {
+        const scaleX = Number.isFinite(props.scaleX) ? props.scaleX : 1;
+        const scaleY = Number.isFinite(props.scaleY) ? props.scaleY : 1;
+        const skewX = Number.isFinite(props.skewX) ? props.skewX : 0;
+        const skewY = Number.isFinite(props.skewY) ? props.skewY : 0;
+        const rotation = Number.isFinite(props.rotation) ? props.rotation : 0;
+        const transforms = [];
+        if (rotation) transforms.push(`rotate(${rotation}deg)`);
+        if (skewX || skewY) transforms.push(`skew(${skewX}deg, ${skewY}deg)`);
+        if (scaleX !== 1 || scaleY !== 1) transforms.push(`scale(${scaleX}, ${scaleY})`);
+        const transform = transforms.length > 0 ? transforms.join(' ') : undefined;
+
+        const fillType = props.fillType ?? (props.imageUrl ? 'image' : 'solid');
+        const gradientType = props.gradientType ?? 'linear';
+        const gradientStart = props.gradientStart ?? props.fill ?? '#8B5CF6';
+        const gradientEnd = props.gradientEnd ?? '#3B82F6';
+        const gradientAngle = Number.isFinite(props.gradientAngle) ? props.gradientAngle : 45;
+
+        let backgroundColor;
+        let backgroundImage;
+        let backgroundRepeat;
+        let backgroundSize = props.backgroundFit ?? 'cover';
+        let backgroundPosition = 'center';
+
+        if (props.imageUrl && (fillType === 'image' || fillType === 'pattern')) {
+            backgroundImage = `url(${props.imageUrl})`;
+            backgroundRepeat = fillType === 'pattern' ? props.patternRepeat ?? 'repeat' : 'no-repeat';
+            if (fillType === 'pattern') {
+                const patternScale = Number.isFinite(props.patternScale) ? props.patternScale : 1;
+                backgroundSize = `${Math.max(patternScale, 0.01) * 100}%`;
+                backgroundPosition = `${props.patternOffsetX ?? 0}px ${props.patternOffsetY ?? 0}px`;
+            }
+        } else if (fillType === 'gradient') {
+            if (gradientType === 'linear') {
+                backgroundImage = `linear-gradient(${gradientAngle}deg, ${gradientStart} 0%, ${gradientEnd} 100%)`;
+            } else if (gradientType === 'radial') {
+                backgroundImage = `radial-gradient(circle, ${gradientStart} 0%, ${gradientEnd} 100%)`;
+            } else if (gradientType === 'conic') {
+                backgroundImage = `conic-gradient(from ${gradientAngle}deg, ${gradientStart}, ${gradientEnd})`;
+            }
+        } else if (props.fill) {
+            backgroundColor = props.fill;
+        }
+
+        const shadowColor = props.shadowColor;
+        const shadowOffsetX = Number.isFinite(props.shadowOffsetX) ? props.shadowOffsetX : 0;
+        const shadowOffsetY = Number.isFinite(props.shadowOffsetY) ? props.shadowOffsetY : 0;
+        const shadowBlur = Number.isFinite(props.shadowBlur) ? props.shadowBlur : 0;
+        const shadowSpread = Number.isFinite(props.shadowSpread) ? props.shadowSpread : 0;
+        const glowColor = props.glowColor;
+        const glowBlur = Number.isFinite(props.glowBlur) ? props.glowBlur : 0;
+        const shadows = [];
+        if (shadowColor && (shadowBlur || shadowOffsetX || shadowOffsetY || shadowSpread)) {
+            shadows.push(`${shadowOffsetX}px ${shadowOffsetY}px ${shadowBlur}px ${shadowSpread}px ${shadowColor}`);
+        }
+        if (glowColor) {
+            shadows.push(`0 0 ${Math.max(glowBlur, 1)}px ${glowColor}`);
+        }
+        const boxShadow = shadows.length > 0 ? shadows.join(', ') : undefined;
+
+        const filterParts = [];
+        if (Number.isFinite(props.blur) && props.blur > 0) filterParts.push(`blur(${props.blur}px)`);
+        if (Number.isFinite(props.brightness) && props.brightness !== 100)
+            filterParts.push(`brightness(${props.brightness}%)`);
+        if (Number.isFinite(props.contrast) && props.contrast !== 100)
+            filterParts.push(`contrast(${props.contrast}%)`);
+        if (Number.isFinite(props.saturation) && props.saturation !== 100)
+            filterParts.push(`saturate(${props.saturation}%)`);
+        if (Number.isFinite(props.hueRotate) && props.hueRotate !== 0)
+            filterParts.push(`hue-rotate(${props.hueRotate}deg)`);
+        const filter = filterParts.length > 0 ? filterParts.join(' ') : undefined;
+
+        let borderRadius;
+        if (props.cornerRadius != null) {
+            if (typeof props.cornerRadius === 'object') {
+                const {
+                    topLeft = 0,
+                    topRight = 0,
+                    bottomRight = 0,
+                    bottomLeft = 0,
+                } = props.cornerRadius;
+                borderRadius = `${topLeft}px ${topRight}px ${bottomRight}px ${bottomLeft}px`;
+            } else if (Number.isFinite(props.cornerRadius)) {
+                borderRadius = `${props.cornerRadius}px`;
+            }
+        }
+        const border =
+            props.stroke && props.strokeWidth
+                ? `${props.strokeWidth}px solid ${props.stroke}`
+                : undefined;
+
+        return {
             left: props.x ?? 0,
             top: props.y ?? 0,
             width: props.width,
             height: props.height,
-            transform: props.rotation ? `rotate(${props.rotation}deg)` : undefined,
+            transform,
+            transformOrigin: props.transformOrigin ?? '50% 50%',
             opacity: props.opacity ?? 1,
-            borderRadius: props.cornerRadius,
-            border:
-                props.stroke && props.strokeWidth !== 0
-                    ? `${props.strokeWidth ?? 1}px solid ${props.stroke}`
-                    : undefined,
+            borderRadius,
+            border,
             textAlign: props.align,
-            backgroundColor: props.fill && !props.imageUrl ? props.fill : undefined,
-            backgroundImage: props.imageUrl ? `url(${props.imageUrl})` : undefined,
-            backgroundSize: props.backgroundFit ?? 'cover',
-            backgroundPosition: 'center',
-            backgroundRepeat: props.imageUrl ? 'no-repeat' : undefined,
-            boxShadow: props.boxShadow,
-            filter: props.filter && props.filter !== 'none' ? props.filter : undefined,
-        }),
-        [
-            props.x,
-            props.y,
-            props.width,
-            props.height,
-            props.rotation,
-            props.opacity,
-            props.cornerRadius,
-            props.stroke,
-            props.strokeWidth,
-            props.align,
-            props.fill,
-            props.imageUrl,
-            props.backgroundFit,
-            props.boxShadow,
-            props.filter,
-        ],
-    );
+            backgroundColor,
+            backgroundImage,
+            backgroundSize,
+            backgroundRepeat,
+            backgroundPosition,
+            backgroundBlendMode: props.backgroundBlendMode ?? undefined,
+            boxShadow,
+            filter,
+            mixBlendMode:
+                props.blendMode && props.blendMode !== 'normal' ? props.blendMode : undefined,
+            visibility: props.visible === false ? 'hidden' : 'visible',
+        };
+    }, [
+        props.align,
+        props.backgroundFit,
+        props.blur,
+        props.blendMode,
+        props.brightness,
+        props.cornerRadius,
+        props.contrast,
+        props.fill,
+        props.fillType,
+        props.glowBlur,
+        props.glowColor,
+        props.gradientAngle,
+        props.gradientEnd,
+        props.gradientStart,
+        props.gradientType,
+        props.height,
+        props.hueRotate,
+        props.imageUrl,
+        props.opacity,
+        props.patternOffsetX,
+        props.patternOffsetY,
+        props.patternRepeat,
+        props.patternScale,
+        props.rotation,
+        props.saturation,
+        props.scaleX,
+        props.scaleY,
+        props.shadowBlur,
+        props.shadowColor,
+        props.shadowOffsetX,
+        props.shadowOffsetY,
+        props.shadowSpread,
+        props.skewX,
+        props.skewY,
+        props.stroke,
+        props.strokeWidth,
+        props.transformOrigin,
+        props.visible,
+        props.width,
+        props.x,
+        props.y,
+    ]);
 
     const linkBadge = hasLink ? (
         <span className='pointer-events-none absolute right-2 top-2 rounded-full border border-[rgba(59,130,246,0.35)] bg-[rgba(59,130,246,0.15)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[rgba(148,163,184,0.85)]'>
@@ -328,6 +445,43 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                 </div>
             );
         case 'text':
+            {
+                const textFillType = props.textFillType ?? 'solid';
+                const textColor = props.fill ?? '#ECE9FE';
+                const textGradientStart = props.textGradientStart ?? textColor;
+                const textGradientEnd = props.textGradientEnd ?? textColor;
+                const textGradientAngle = Number.isFinite(props.textGradientAngle)
+                    ? props.textGradientAngle
+                    : 45;
+                const textShadowColor = props.textShadowColor;
+                const textShadowX = Number.isFinite(props.textShadowX) ? props.textShadowX : 0;
+                const textShadowY = Number.isFinite(props.textShadowY) ? props.textShadowY : 0;
+                const textShadowBlur = Number.isFinite(props.textShadowBlur) ? props.textShadowBlur : 0;
+                const computedTextShadow =
+                    textShadowColor && textShadowColor !== 'transparent'
+                        ? `${textShadowX}px ${textShadowY}px ${textShadowBlur}px ${textShadowColor}`
+                        : undefined;
+                const textStyle = {
+                    ...commonStyle,
+                    backgroundColor: 'transparent',
+                    backgroundImage:
+                        textFillType === 'gradient'
+                            ? `linear-gradient(${textGradientAngle}deg, ${textGradientStart} 0%, ${textGradientEnd} 100%)`
+                            : 'none',
+                    backgroundClip: textFillType === 'gradient' ? 'text' : undefined,
+                    WebkitBackgroundClip: textFillType === 'gradient' ? 'text' : undefined,
+                    color: textFillType === 'gradient' ? 'transparent' : textColor,
+                    fontSize: props.fontSize,
+                    fontFamily: props.fontFamily,
+                    fontWeight:
+                        props.fontWeight ??
+                        (props.fontStyle?.includes('bold') ? '600' : undefined),
+                    fontStyle: props.fontStyle?.includes('italic') ? 'italic' : undefined,
+                    lineHeight: props.lineHeight,
+                    letterSpacing: props.letterSpacing,
+                    textTransform: props.textTransform ?? 'none',
+                    textShadow: computedTextShadow,
+                };
             return (
                 <div
                     className={clsx(
@@ -338,16 +492,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                             'shadow-[0_0_0_2px_rgba(139,92,246,0.6)]': isSelected,
                         },
                     )}
-                    style={{
-                        ...commonStyle,
-                        backgroundColor: 'transparent',
-                        color: props.fill ?? '#ECE9FE',
-                        fontSize: props.fontSize,
-                        fontWeight: props.fontWeight ?? (props.fontStyle?.includes('bold') ? '600' : undefined),
-                        fontStyle: props.fontStyle?.includes('italic') ? 'italic' : undefined,
-                        lineHeight: props.lineHeight,
-                        letterSpacing: props.letterSpacing,
-                    }}
+                    style={textStyle}
                     onPointerDown={handlePointerDown}
                 >
                     {props.text}
@@ -356,6 +501,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                     {commentBadge}
                 </div>
             );
+            }
         case 'group':
             return (
                 <div

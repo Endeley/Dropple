@@ -3,6 +3,7 @@
 import clsx from 'clsx';
 import { useMemo, useRef } from 'react';
 import ElementNode from './ElementNode';
+import TimelineBar from './TimelineBar';
 import { useCanvasStore } from './context/CanvasStore';
 import { createFrameTargets, snapRectToTargets, snapResizedRectToTargets } from './utils/alignmentUtils';
 import { FRAME_MIN_SIZE, RESIZE_HANDLES, computeResizedBox } from './utils/resizeUtils';
@@ -56,6 +57,78 @@ export default function FrameNode({ frame }) {
         const rounded = Math.round(timelineTotalDuration * 10) / 10;
         return Number.isInteger(rounded) ? String(Math.trunc(rounded)) : rounded.toFixed(1);
     }, [timelineTotalDuration]);
+
+    const frameBackgroundStyle = useMemo(() => {
+        const fillType = frame.backgroundFillType ?? (frame.backgroundImage ? 'image' : 'solid');
+        const gradientType = frame.backgroundGradientType ?? 'linear';
+        const baseColor = frame.backgroundColor ?? 'rgba(15,23,42,0.94)';
+
+        const layers = [];
+        const sizes = [];
+        const repeats = [];
+        const positions = [];
+
+        if (fillType === 'gradient') {
+            const start = frame.backgroundGradientStart ?? '#8B5CF6';
+            const end = frame.backgroundGradientEnd ?? '#3B82F6';
+            const angle = frame.backgroundGradientAngle ?? 45;
+            let gradient;
+            switch (gradientType) {
+                case 'radial':
+                    gradient = `radial-gradient(circle, ${start} 0%, ${end} 100%)`;
+                    break;
+                case 'conic':
+                    gradient = `conic-gradient(from ${angle}deg, ${start}, ${end})`;
+                    break;
+                case 'linear':
+                default:
+                    gradient = `linear-gradient(${angle}deg, ${start} 0%, ${end} 100%)`;
+                    break;
+            }
+            layers.push(gradient);
+            sizes.push('cover');
+            repeats.push('no-repeat');
+            positions.push('center');
+        }
+
+        if (fillType === 'image' && frame.backgroundImage) {
+            layers.push(`url(${frame.backgroundImage})`);
+            sizes.push(frame.backgroundFit ?? 'cover');
+            repeats.push('no-repeat');
+            positions.push('center');
+        }
+
+        if (fillType === 'pattern' && frame.backgroundImage) {
+            const scale = Math.max(frame.backgroundPatternScale ?? 1, 0.01) * 100;
+            layers.push(`url(${frame.backgroundImage})`);
+            sizes.push(`${scale}%`);
+            repeats.push(frame.backgroundPatternRepeat ?? 'repeat');
+            positions.push(`${frame.backgroundPatternOffsetX ?? 0}px ${frame.backgroundPatternOffsetY ?? 0}px`);
+        }
+
+        return {
+            backgroundColor: baseColor,
+            backgroundImage: layers.length ? layers.join(', ') : undefined,
+            backgroundSize: layers.length ? sizes.join(', ') : undefined,
+            backgroundRepeat: layers.length ? repeats.join(', ') : undefined,
+            backgroundPosition: layers.length ? positions.join(', ') : undefined,
+            backgroundBlendMode: layers.length ? frame.backgroundBlendMode ?? 'normal' : undefined,
+        };
+    }, [
+        frame.backgroundBlendMode,
+        frame.backgroundColor,
+        frame.backgroundFillType,
+        frame.backgroundFit,
+        frame.backgroundGradientAngle,
+        frame.backgroundGradientEnd,
+        frame.backgroundGradientStart,
+        frame.backgroundGradientType,
+        frame.backgroundImage,
+        frame.backgroundPatternOffsetX,
+        frame.backgroundPatternOffsetY,
+        frame.backgroundPatternRepeat,
+        frame.backgroundPatternScale,
+    ]);
 
     const getTimelineStyles = (asset) => {
         switch (asset.type) {
@@ -240,11 +313,7 @@ export default function FrameNode({ frame }) {
                 width: frame.width,
                 height: frame.height,
                 opacity: frame.opacity ?? 1,
-                backgroundColor: frame.backgroundColor ?? 'rgba(15,23,42,0.94)',
-                backgroundImage: frame.backgroundImage ? `url(${frame.backgroundImage})` : undefined,
-                backgroundSize: frame.backgroundFit ?? 'cover',
-                backgroundPosition: 'center',
-                backgroundRepeat: frame.backgroundImage ? 'no-repeat' : 'no-repeat',
+                ...frameBackgroundStyle,
             }}
             onPointerDown={handlePointerDown}
         >
@@ -277,30 +346,7 @@ export default function FrameNode({ frame }) {
                             <div className='h-px flex-1 bg-[rgba(59,130,246,0.35)]' />
                             <span>{timelineDurationLabel}s</span>
                         </div>
-                        <div className='mt-2 flex h-6 w-full items-center gap-1'>
-                            {(() => {
-                                const total = timelineTotalDuration || 1;
-                                return frameTimelineAssets.map((asset) => {
-                                    const widthPercent = Math.max(((asset.duration || 1) / total) * 100, 6);
-                                    const preview = getTimelineStyles(asset);
-                                    return (
-                                        <div
-                                            key={asset.id}
-                                            className='relative flex h-full items-center justify-center rounded-full border border-transparent px-2 text-[10px] font-semibold text-[rgba(226,232,240,0.92)]'
-                                            style={{
-                                                width: `${widthPercent}%`,
-                                                ...preview.style,
-                                                border: preview.style?.border || '1px solid rgba(59,130,246,0.35)',
-                                            }}
-                                            title={`${asset.label} • ${asset.duration || 1}s`}
-                                        >
-                                            <span className='mr-1'>{preview.icon}</span>
-                                            <span className='truncate'>{asset.label}</span>
-                                        </div>
-                                    );
-                                });
-                            })()}
-                        </div>
+                        <TimelineBar frameId={frame.id} assets={frameTimelineAssets} totalDuration={timelineTotalDuration} getTimelineStyles={getTimelineStyles} />
                     </div>
                 </div>
             ) : null}

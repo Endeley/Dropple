@@ -111,6 +111,11 @@ export const MODE_CONFIG = {
                 items: ['Fill', 'Stroke', 'Shadow', 'Blur'],
             },
             {
+                id: 'effects',
+                title: 'Effects',
+                items: ['Shadow', 'Glow', 'Filters'],
+            },
+            {
                 id: 'typography',
                 title: 'Typography',
                 items: ['Font family', 'Weight', 'Spacing', 'Alignment'],
