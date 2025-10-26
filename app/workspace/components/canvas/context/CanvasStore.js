@@ -244,6 +244,8 @@ export const useCanvasStore = create(
             comments: [],
             timelineAssets: [],
             timelineActions: [],
+            gridVisible: false,
+            gridSize: 40,
             clipboard: null,
             contextMenu: null,
 
@@ -251,7 +253,10 @@ export const useCanvasStore = create(
             setScale: (value) =>
                 set((state) => ({ scale: typeof value === 'function' ? value(state.scale) : value })),
             setPosition: (value) =>
-        set((state) => ({ position: typeof value === 'function' ? value(state.position) : value })),
+                set((state) => ({ position: typeof value === 'function' ? value(state.position) : value })),
+            setGridVisible: (visible) => set({ gridVisible: Boolean(visible) }),
+            toggleGrid: () => set((state) => ({ gridVisible: !state.gridVisible })),
+            setGridSize: (size) => set({ gridSize: Math.max(4, Number(size) || 4) }),
     setSelectedTool: (tool) => set({ selectedTool: tool }),
     setActiveGuides: (guides) => set({ activeGuides: Array.isArray(guides) ? guides : [] }),
     clearActiveGuides: () => set({ activeGuides: [] }),
@@ -1317,6 +1322,8 @@ export const useCanvasStore = create(
                 timelineAssets: state.timelineAssets,
                 prototypeMode: state.prototypeMode,
                 activePrototypeFrameId: state.activePrototypeFrameId,
+                gridVisible: state.gridVisible,
+                gridSize: state.gridSize,
             }),
         },
     ),

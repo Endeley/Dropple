@@ -17,11 +17,13 @@ export default function CanvasControls() {
     const position = useCanvasStore((state) => state.position);
     const prototypeMode = useCanvasStore((state) => state.prototypeMode);
     const activeOverlay = useCanvasStore((state) => state.activeToolOverlay);
+    const gridVisible = useCanvasStore((state) => state.gridVisible);
     const setScale = useCanvasStore((state) => state.setScale);
     const setPosition = useCanvasStore((state) => state.setPosition);
     const setPrototypeMode = useCanvasStore((state) => state.setPrototypeMode);
     const setActivePrototypeFrameId = useCanvasStore((state) => state.setActivePrototypeFrameId);
     const setActiveToolOverlay = useCanvasStore((state) => state.setActiveToolOverlay);
+    const toggleGrid = useCanvasStore((state) => state.toggleGrid);
 
     const modeConfig = MODE_CONFIG[mode] ?? MODE_CONFIG.design;
     const actions = modeConfig.bottomActions ?? [];
@@ -48,6 +50,14 @@ export default function CanvasControls() {
     const handleZoomChange = (event) => {
         const next = clampScale(Number.parseFloat(event.target.value));
         setScale(next);
+    };
+
+    const handleActionClick = (id) => {
+        if (id === 'grid') {
+            toggleGrid();
+            return;
+        }
+        setActiveToolOverlay(activeOverlay === id ? null : id);
     };
 
     const formattedScale = Math.round(clampScale(scale) * 100);
@@ -109,12 +119,12 @@ export default function CanvasControls() {
                     {actions.map((action) => {
                         const id = action.id ?? action;
                         const label = action.label ?? action;
-                        const isActive = activeOverlay === id;
+                        const isActive = id === 'grid' ? gridVisible : activeOverlay === id;
                         return (
                             <button
                                 key={id}
                                 type='button'
-                                onClick={() => setActiveToolOverlay(isActive ? null : id)}
+                                onClick={() => handleActionClick(id)}
                                 className={`rounded-xl px-3 py-1.5 text-sm font-medium capitalize transition-colors ${
                                     isActive
                                         ? 'bg-[var(--color-primary)] text-white shadow-[0_0_0_1px_rgba(236,233,254,0.35)]'

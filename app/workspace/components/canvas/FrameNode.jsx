@@ -31,6 +31,8 @@ export default function FrameNode({ frame }) {
     const setActiveToolOverlay = useCanvasStore((state) => state.setActiveToolOverlay);
     const selectElementsInRect = useCanvasStore((state) => state.selectElementsInRect);
     const setContextMenu = useCanvasStore((state) => state.setContextMenu);
+    const gridVisible = useCanvasStore((state) => state.gridVisible);
+    const gridSize = useCanvasStore((state) => state.gridSize);
 
     const dragStateRef = useRef(null);
     const resizeStateRef = useRef(null);
@@ -277,9 +279,16 @@ export default function FrameNode({ frame }) {
             const snapped = snapRectToTargets({ rect: candidateRect, targets });
             storeApi.setActiveGuides(snapped.guides ?? []);
 
+            let nextX = snapped.x;
+            let nextY = snapped.y;
+            if (gridVisible && gridSize > 0) {
+                nextX = Math.round(nextX / gridSize) * gridSize;
+                nextY = Math.round(nextY / gridSize) * gridSize;
+            }
+
             updateFrame(frame.id, {
-                x: snapped.x,
-                y: snapped.y,
+                x: nextX,
+                y: nextY,
             });
         };
 
@@ -373,7 +382,18 @@ export default function FrameNode({ frame }) {
             });
             storeApi.setActiveGuides(snapped.guides ?? []);
 
-            updateFrame(frame.id, snapped.rect);
+            let rect = snapped.rect;
+            if (gridVisible && gridSize > 0) {
+                rect = {
+                    ...rect,
+                    x: Math.round(rect.x / gridSize) * gridSize,
+                    y: Math.round(rect.y / gridSize) * gridSize,
+                    width: Math.max(gridSize, Math.round(rect.width / gridSize) * gridSize),
+                    height: Math.max(gridSize, Math.round(rect.height / gridSize) * gridSize),
+                };
+            }
+
+            updateFrame(frame.id, rect);
         };
 
         const handlePointerUp = () => {

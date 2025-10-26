@@ -152,6 +152,8 @@ export default function CanvasContainer() {
     const position = useCanvasStore((state) => state.position);
     const setPosition = useCanvasStore((state) => state.setPosition);
     const selectedTool = useCanvasStore((state) => state.selectedTool);
+    const gridVisible = useCanvasStore((state) => state.gridVisible);
+    const gridSize = useCanvasStore((state) => state.gridSize);
 
     const creationCursor = useMemo(
         () =>
@@ -429,6 +431,23 @@ export default function CanvasContainer() {
         });
     }, []);
 
+    const gridBackground = useMemo(() => {
+        if (!gridVisible || gridSize <= 0) {
+            return {};
+        }
+        const scaledSize = gridSize * scale;
+        const offsetX = ((position.x % scaledSize) + scaledSize) % scaledSize;
+        const offsetY = ((position.y % scaledSize) + scaledSize) % scaledSize;
+        const lineColor = 'rgba(139,92,246,0.1)';
+        const strongLine = 'rgba(139,92,246,0.25)';
+        const major = gridSize * 4 * scale;
+        return {
+            backgroundImage: `linear-gradient(to right, ${lineColor} 1px, transparent 1px), linear-gradient(to bottom, ${lineColor} 1px, transparent 1px), linear-gradient(to right, ${strongLine} 1px, transparent 1px), linear-gradient(to bottom, ${strongLine} 1px, transparent 1px)`,
+            backgroundSize: `${scaledSize}px ${scaledSize}px, ${scaledSize}px ${scaledSize}px, ${major}px ${major}px, ${major}px ${major}px`,
+            backgroundPosition: `${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px`,
+        };
+    }, [gridVisible, gridSize, position.x, position.y, scale]);
+
     return (
         <>
             <div
@@ -438,6 +457,7 @@ export default function CanvasContainer() {
                     'relative h-full w-full overflow-hidden bg-[var(--color-canvas)]',
                     creationCursor ? 'cursor-crosshair' : 'cursor-default',
                 )}
+                style={gridBackground}
                 onWheel={handleWheel}
                 onPointerDown={handlePointerDown}
                 onContextMenu={handleCanvasContextMenu}
