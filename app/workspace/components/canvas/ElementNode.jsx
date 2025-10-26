@@ -25,8 +25,17 @@ function normalizePadding(padding) {
     };
 }
 
-function computeAutoLayoutDrop(frame, parentId, elementId, layoutMode, candidatePoint) {
-    if (!frame) return 0;
+function computeAutoLayoutDrop({ frame, parentId, elementId, layoutMode, candidatePoint, container }) {
+    if (!frame) {
+        return {
+            index: 0,
+            beforeId: null,
+            afterId: null,
+            ordered: [],
+            previewRect: null,
+        };
+    }
+
     const siblings = frame.elements.filter((item) => (item.parentId ?? null) === parentId && item.id !== elementId);
     if (siblings.length === 0) {
         return {
@@ -34,6 +43,9 @@ function computeAutoLayoutDrop(frame, parentId, elementId, layoutMode, candidate
             beforeId: null,
             afterId: null,
             ordered: [],
+            previewRect: container
+                ? computeEmptyContainerPreviewRect(container)
+                : null,
         };
     }
 
@@ -56,9 +68,15 @@ function computeAutoLayoutDrop(frame, parentId, elementId, layoutMode, candidate
         })
         .sort((a, b) => {
             if (layoutMode === 'flex-row') {
+                if (Math.abs(a.centerY - b.centerY) > 1) {
+                    return a.centerY - b.centerY;
+                }
                 return a.centerX - b.centerX;
             }
             if (layoutMode === 'flex-column') {
+                if (Math.abs(a.centerX - b.centerX) > 1) {
+                    return a.centerX - b.centerX;
+                }
                 return a.centerY - b.centerY;
             }
             // grid and any future layout: row-major (y, then x)
@@ -72,11 +90,25 @@ function computeAutoLayoutDrop(frame, parentId, elementId, layoutMode, candidate
     for (let index = 0; index < ordered.length; index += 1) {
         const sibling = ordered[index];
         if (layoutMode === 'flex-row') {
+            if (candidatePoint.y < sibling.centerY - Math.max(8, sibling.height / 3)) {
+                targetIndex = Math.max(0, index - 1);
+                break;
+            }
+            if (candidatePoint.y > sibling.centerY + Math.max(8, sibling.height / 3)) {
+                continue;
+            }
             if (candidatePoint.x < sibling.centerX) {
                 targetIndex = index;
                 break;
             }
         } else if (layoutMode === 'flex-column') {
+            if (candidatePoint.x < sibling.centerX - Math.max(8, sibling.width / 3)) {
+                targetIndex = Math.max(0, index - 1);
+                break;
+            }
+            if (candidatePoint.x > sibling.centerX + Math.max(8, sibling.width / 3)) {
+                continue;
+            }
             if (candidatePoint.y < sibling.centerY) {
                 targetIndex = index;
                 break;
@@ -97,11 +129,328 @@ function computeAutoLayoutDrop(frame, parentId, elementId, layoutMode, candidate
 
     const beforeId = targetIndex < ordered.length ? ordered[targetIndex].id : null;
     const afterId = targetIndex > 0 ? ordered[targetIndex - 1].id : null;
+
+    let previewRect = null;
+    if (container) {
+        if (layoutMode === 'flex-row') {
+            previewRect = computeFlexRowPreviewRect({
+                container,
+                ordered,
+                beforeId,
+                afterId,
+                candidatePoint,
+            });
+        } else if (layoutMode === 'flex-column') {
+            previewRect = computeFlexColumnPreviewRect({
+                container,
+                ordered,
+                beforeId,
+                afterId,
+                candidatePoint,
+            });
+        }
+    }
+
     return {
         index: targetIndex,
         beforeId,
         afterId,
         ordered,
+        previewRect,
+    };
+}
+
+function computeEmptyContainerPreviewRect(container) {
+    const padding = container.padding ?? {};
+    const innerLeft = padding.left ?? 0;
+    const innerTop = padding.top ?? 0;
+    const innerWidth = Math.max(
+        0,
+        (container.width ?? 0) - (padding.left ?? 0) - (padding.right ?? 0),
+    );
+    const innerHeight = Math.max(
+        0,
+        (container.height ?? 0) - (padding.top ?? 0) - (padding.bottom ?? 0),
+    );
+    return {
+        x: innerLeft,
+        y: innerTop,
+        width: innerWidth,
+        height: innerHeight,
+    };
+}
+
+function buildFlexRowGroups(ordered, threshold) {
+    const rows = [];
+    const rowMap = new Map();
+    let currentRow = null;
+
+    const sortedByY = [...ordered].sort((a, b) => a.centerY - b.centerY);
+    sortedByY.forEach((item) => {
+        const top = item.props?.y ?? 0;
+        const bottom = top + (item.props?.height ?? 0);
+        if (!currentRow || top - currentRow.bottom > threshold) {
+            currentRow = {
+                top,
+                bottom,
+                items: [],
+            };
+            rows.push(currentRow);
+        } else {
+            currentRow.top = Math.min(currentRow.top, top);
+            currentRow.bottom = Math.max(currentRow.bottom, bottom);
+        }
+        currentRow.items.push(item);
+        rowMap.set(item.id, currentRow);
+    });
+
+    return { rows, rowMap };
+}
+
+function computeFlexRowPreviewRect({ container, ordered, beforeId, afterId, candidatePoint }) {
+    const padding = container.padding ?? {};
+    const innerLeft = padding.left ?? 0;
+    const innerRight = Math.max(innerLeft, (container.width ?? 0) - (padding.right ?? 0));
+    const innerTop = padding.top ?? 0;
+    const innerBottom = Math.max(innerTop, (container.height ?? 0) - (padding.bottom ?? 0));
+    const gap = container.gap ?? 0;
+    const rowGap = container.rowGap ?? gap;
+    const wrapMode = container.layoutWrap ?? 'nowrap';
+
+    const highlightWidth = Math.max(6, Math.min(16, gap || 12));
+    const groupThreshold = Math.max(12, rowGap || gap || 16);
+    const { rows, rowMap } = buildFlexRowGroups(ordered, groupThreshold);
+    const defaultRowHeight =
+        rows.length > 0
+            ? rows.reduce((acc, row) => acc + Math.max(24, row.bottom - row.top), 0) / rows.length
+            : Math.max(40, innerBottom - innerTop);
+
+    const targetRowFromIds = beforeId && rowMap.has(beforeId)
+        ? rowMap.get(beforeId)
+        : afterId && rowMap.has(afterId)
+            ? rowMap.get(afterId)
+            : null;
+
+    const rowCandidate = rows.find(
+        (row) =>
+            candidatePoint.y >= row.top - groupThreshold &&
+            candidatePoint.y <= row.bottom + groupThreshold,
+    );
+
+    let rowForPreview = targetRowFromIds ?? rowCandidate ?? null;
+    let baseRowHeight = rowForPreview
+        ? Math.max(24, rowForPreview.bottom - rowForPreview.top)
+        : defaultRowHeight;
+
+    let tentativeTop;
+    let tentativeBottom;
+
+    if (rowForPreview) {
+        tentativeTop = rowForPreview.top;
+        tentativeBottom = rowForPreview.bottom;
+
+        if (wrapMode !== 'nowrap') {
+            if (candidatePoint.y < rowForPreview.top - groupThreshold) {
+                tentativeBottom = rowForPreview.top - Math.max(4, rowGap / 2);
+                tentativeTop = tentativeBottom - baseRowHeight;
+            } else if (candidatePoint.y > rowForPreview.bottom + groupThreshold) {
+                tentativeTop = rowForPreview.bottom + Math.max(4, rowGap / 2);
+                tentativeBottom = tentativeTop + baseRowHeight;
+            }
+        }
+    } else if (rows.length > 0) {
+        const firstRow = rows[0];
+        const lastRow = rows[rows.length - 1];
+        if (wrapMode === 'wrap-reverse') {
+            tentativeBottom = (firstRow?.top ?? innerTop) - Math.max(4, rowGap / 2);
+            tentativeTop = tentativeBottom - baseRowHeight;
+        } else {
+            tentativeTop = (lastRow?.bottom ?? innerTop) + Math.max(4, rowGap / 2);
+            tentativeBottom = tentativeTop + baseRowHeight;
+        }
+    } else {
+        tentativeTop = innerTop;
+        tentativeBottom = innerTop + baseRowHeight;
+    }
+
+    const availableHeight = Math.max(1, innerBottom - innerTop);
+    const clampedHeight = Math.max(4, Math.min(Math.abs(tentativeBottom - tentativeTop), availableHeight));
+    tentativeTop = Math.max(innerTop, Math.min(tentativeTop, innerBottom - clampedHeight));
+    const height = clampedHeight;
+
+    let highlightX;
+    if (beforeId && rowMap.has(beforeId)) {
+        const before = ordered.find((item) => item.id === beforeId);
+        highlightX = (before?.props?.x ?? innerLeft) - highlightWidth / 2;
+        if (
+            wrapMode !== 'nowrap' &&
+            candidatePoint.y > (rowMap.get(beforeId)?.bottom ?? candidatePoint.y) + groupThreshold
+        ) {
+            highlightX = innerLeft;
+        }
+    } else if (afterId && rowMap.has(afterId)) {
+        const after = ordered.find((item) => item.id === afterId);
+        highlightX =
+            (after?.props?.x ?? innerLeft) +
+            (after?.props?.width ?? 0) -
+            highlightWidth / 2;
+        if (
+            wrapMode !== 'nowrap' &&
+            candidatePoint.y > (rowMap.get(afterId)?.bottom ?? candidatePoint.y) + groupThreshold
+        ) {
+            highlightX = innerLeft;
+        }
+    } else {
+        highlightX = candidatePoint.x - highlightWidth / 2;
+    }
+
+    const availableWidth = Math.max(1, innerRight - innerLeft);
+    const width = Math.min(Math.max(4, highlightWidth), availableWidth);
+    highlightX = Math.max(innerLeft, Math.min(highlightX, innerLeft + availableWidth - width));
+
+    return {
+        x: highlightX,
+        y: tentativeTop,
+        width,
+        height,
+    };
+}
+
+function buildFlexColumnGroups(ordered, threshold) {
+    const columns = [];
+    const columnMap = new Map();
+    let currentColumn = null;
+
+    const sortedByX = [...ordered].sort((a, b) => a.centerX - b.centerX);
+    sortedByX.forEach((item) => {
+        const left = item.props?.x ?? 0;
+        const right = left + (item.props?.width ?? 0);
+        if (!currentColumn || left - currentColumn.right > threshold) {
+            currentColumn = {
+                left,
+                right,
+                items: [],
+            };
+            columns.push(currentColumn);
+        } else {
+            currentColumn.left = Math.min(currentColumn.left, left);
+            currentColumn.right = Math.max(currentColumn.right, right);
+        }
+        currentColumn.items.push(item);
+        columnMap.set(item.id, currentColumn);
+    });
+
+    return { columns, columnMap };
+}
+
+function computeFlexColumnPreviewRect({ container, ordered, beforeId, afterId, candidatePoint }) {
+    const padding = container.padding ?? {};
+    const innerLeft = padding.left ?? 0;
+    const innerRight = Math.max(innerLeft, (container.width ?? 0) - (padding.right ?? 0));
+    const innerTop = padding.top ?? 0;
+    const innerBottom = Math.max(innerTop, (container.height ?? 0) - (padding.bottom ?? 0));
+    const gap = container.gap ?? 0;
+    const rowGap = container.rowGap ?? gap;
+    const wrapMode = container.layoutWrap ?? 'nowrap';
+
+    const highlightHeight = Math.max(6, Math.min(16, rowGap || gap || 12));
+    const groupThreshold = Math.max(12, gap || rowGap || 16);
+
+    const { columns, columnMap } = buildFlexColumnGroups(ordered, groupThreshold);
+    const defaultColumnWidth =
+        columns.length > 0
+            ? columns.reduce((acc, col) => acc + Math.max(24, col.right - col.left), 0) /
+              columns.length
+            : Math.max(40, innerRight - innerLeft);
+
+    const targetColumnFromIds = beforeId && columnMap.has(beforeId)
+        ? columnMap.get(beforeId)
+        : afterId && columnMap.has(afterId)
+            ? columnMap.get(afterId)
+            : null;
+
+    const columnCandidate = columns.find(
+        (column) =>
+            candidatePoint.x >= column.left - groupThreshold &&
+            candidatePoint.x <= column.right + groupThreshold,
+    );
+
+    let columnForPreview = targetColumnFromIds ?? columnCandidate ?? null;
+    let baseColumnWidth = columnForPreview
+        ? Math.max(24, columnForPreview.right - columnForPreview.left)
+        : defaultColumnWidth;
+
+    let tentativeLeft;
+    let tentativeRight;
+
+    if (columnForPreview) {
+        tentativeLeft = columnForPreview.left;
+        tentativeRight = columnForPreview.right;
+
+        if (wrapMode !== 'nowrap') {
+            if (candidatePoint.x < columnForPreview.left - groupThreshold) {
+                tentativeRight = columnForPreview.left - Math.max(4, gap / 2);
+                tentativeLeft = tentativeRight - baseColumnWidth;
+            } else if (candidatePoint.x > columnForPreview.right + groupThreshold) {
+                tentativeLeft = columnForPreview.right + Math.max(4, gap / 2);
+                tentativeRight = tentativeLeft + baseColumnWidth;
+            }
+        }
+    } else if (columns.length > 0) {
+        const firstColumn = columns[0];
+        const lastColumn = columns[columns.length - 1];
+        if (wrapMode === 'wrap-reverse') {
+            tentativeLeft = (firstColumn?.left ?? innerLeft) - baseColumnWidth - Math.max(4, gap / 2);
+            tentativeRight = tentativeLeft + baseColumnWidth;
+        } else {
+            tentativeLeft = (lastColumn?.right ?? innerLeft) + Math.max(4, gap / 2);
+            tentativeRight = tentativeLeft + baseColumnWidth;
+        }
+    } else {
+        tentativeLeft = innerLeft;
+        tentativeRight = innerLeft + baseColumnWidth;
+    }
+
+    const availableWidth = Math.max(1, innerRight - innerLeft);
+    const clampedWidth = Math.max(4, Math.min(Math.abs(tentativeRight - tentativeLeft), availableWidth));
+    tentativeLeft = Math.max(innerLeft, Math.min(tentativeLeft, innerRight - clampedWidth));
+    const width = clampedWidth;
+
+    let highlightY;
+    if (beforeId && columnMap.has(beforeId)) {
+        const before = ordered.find((item) => item.id === beforeId);
+        highlightY = (before?.props?.y ?? innerTop) - highlightHeight / 2;
+        if (
+            wrapMode !== 'nowrap' &&
+            candidatePoint.x > (columnMap.get(beforeId)?.right ?? candidatePoint.x) + groupThreshold
+        ) {
+            highlightY = innerTop;
+        }
+    } else if (afterId && columnMap.has(afterId)) {
+        const after = ordered.find((item) => item.id === afterId);
+        highlightY =
+            (after?.props?.y ?? innerTop) +
+            (after?.props?.height ?? 0) -
+            highlightHeight / 2;
+        if (
+            wrapMode !== 'nowrap' &&
+            candidatePoint.x > (columnMap.get(afterId)?.right ?? candidatePoint.x) + groupThreshold
+        ) {
+            highlightY = innerTop;
+        }
+    } else {
+        highlightY = candidatePoint.y - highlightHeight / 2;
+    }
+
+    const availableHeight = Math.max(1, innerBottom - innerTop);
+    const height = Math.min(Math.max(4, highlightHeight), availableHeight);
+    highlightY = Math.max(innerTop, Math.min(highlightY, innerTop + availableHeight - height));
+
+    return {
+        x: tentativeLeft,
+        y: highlightY,
+        width,
+        height,
     };
 }
 
@@ -244,6 +593,35 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
         const siblings = frameState?.elements.filter((item) => (item.parentId ?? null) === parentId) ?? [];
         const initialIndex = siblings.findIndex((item) => item.id === element.id);
 
+        const resolveContainerMeta = (sourceFrame) => {
+            if (!sourceFrame) return null;
+            if (parentId) {
+                const parentElement = sourceFrame.elements.find((item) => item.id === parentId);
+                if (!parentElement) return null;
+                const parentPadding = normalizePadding(parentElement.layoutPadding);
+                const parentProps = parentElement.props ?? {};
+                return {
+                    id: parentElement.id,
+                    layoutWrap: parentElement.layoutWrap ?? 'nowrap',
+                    gap: parentElement.layoutGap ?? 0,
+                    rowGap: parentElement.layoutRowGap ?? parentElement.layoutGap ?? 0,
+                    padding: parentPadding,
+                    width: Number.isFinite(parentProps.width) ? parentProps.width : sourceFrame.width,
+                    height: Number.isFinite(parentProps.height) ? parentProps.height : sourceFrame.height,
+                };
+            }
+            const framePadding = normalizePadding(sourceFrame.layoutPadding);
+            return {
+                id: sourceFrame.id,
+                layoutWrap: sourceFrame.layoutWrap ?? 'nowrap',
+                gap: sourceFrame.layoutGap ?? 0,
+                rowGap: sourceFrame.layoutRowGap ?? sourceFrame.layoutGap ?? 0,
+                padding: framePadding,
+                width: sourceFrame.width,
+                height: sourceFrame.height,
+            };
+        };
+
         dragStateRef.current = {
             pointerId: event.pointerId,
             startClientX: event.clientX,
@@ -281,17 +659,24 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
             current.deltaY = deltaY;
 
             const latestFrame = useCanvasStore.getState().getFrameById(frameId);
+            const containerMeta = resolveContainerMeta(latestFrame);
+            if (!containerMeta) {
+                current.targetIndex = current.initialIndex;
+                clearAutoLayoutPreview();
+                return;
+            }
             const candidatePoint = {
                 x: current.elementX + deltaX + Math.max(current.elementWidth, 1) / 2,
                 y: current.elementY + deltaY + Math.max(current.elementHeight, 1) / 2,
             };
-            const drop = computeAutoLayoutDrop(
-                latestFrame,
+            const drop = computeAutoLayoutDrop({
+                frame: latestFrame,
                 parentId,
-                element.id,
-                parentLayoutMode,
+                elementId: element.id,
+                layoutMode: parentLayoutMode,
                 candidatePoint,
-            );
+                container: containerMeta,
+            });
             current.targetIndex = drop.index;
             setAutoLayoutPreview({
                 frameId,
@@ -299,6 +684,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                 beforeId: drop.beforeId,
                 afterId: drop.afterId,
                 layoutMode: parentLayoutMode,
+                rect: drop.previewRect ?? null,
             });
 
             if (drop.index !== current.liveIndex) {
@@ -324,17 +710,23 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                 current.deltaY ?? (upEvent ? (upEvent.clientY - current.startClientY) / (scale || 1) : 0);
 
             const latestFrame = useCanvasStore.getState().getFrameById(frameId);
+            const containerMeta = resolveContainerMeta(latestFrame);
+            if (!containerMeta) {
+                dragStateRef.current = null;
+                return;
+            }
             const candidatePoint = {
                 x: current.elementX + deltaX + Math.max(current.elementWidth, 1) / 2,
                 y: current.elementY + deltaY + Math.max(current.elementHeight, 1) / 2,
             };
-            const drop = computeAutoLayoutDrop(
-                latestFrame,
+            const drop = computeAutoLayoutDrop({
+                frame: latestFrame,
                 parentId,
-                element.id,
-                parentLayoutMode,
+                elementId: element.id,
+                layoutMode: parentLayoutMode,
                 candidatePoint,
-            );
+                container: containerMeta,
+            });
 
             if (drop.index !== current.liveIndex) {
                 reorderElement(frameId, element.id, drop.index);
@@ -912,40 +1304,55 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                 autoLayoutPreview.frameId === frameId &&
                 autoLayoutPreview.parentId === element.id
             ) {
-                const highlightId = autoLayoutPreview.beforeId ?? autoLayoutPreview.afterId ?? null;
-                let highlightBounds = null;
-                if (highlightId) {
-                    const childNode = childrenNodes.find((node) => node.element.id === highlightId);
-                    const childProps = childNode?.element?.props;
-                    if (childProps) {
+                const rect = autoLayoutPreview.rect;
+                if (rect) {
+                    dropHighlight = (
+                        <div
+                            className='pointer-events-none absolute rounded-[14px] border-2 border-dashed border-[rgba(236,233,254,0.72)] bg-[rgba(139,92,246,0.14)] transition-all'
+                            style={{
+                                left: rect.x,
+                                top: rect.y,
+                                width: rect.width,
+                                height: rect.height,
+                            }}
+                        />
+                    );
+                } else {
+                    const highlightId = autoLayoutPreview.beforeId ?? autoLayoutPreview.afterId ?? null;
+                    let highlightBounds = null;
+                    if (highlightId) {
+                        const childNode = childrenNodes.find((node) => node.element.id === highlightId);
+                        const childProps = childNode?.element?.props;
+                        if (childProps) {
+                            highlightBounds = {
+                                x: childProps.x ?? layoutPadding.left,
+                                y: childProps.y ?? layoutPadding.top,
+                                width: Math.max(2, childProps.width ?? 0),
+                                height: Math.max(2, childProps.height ?? 0),
+                            };
+                        }
+                    }
+                    if (!highlightBounds) {
                         highlightBounds = {
-                            x: childProps.x ?? layoutPadding.left,
-                            y: childProps.y ?? layoutPadding.top,
-                            width: Math.max(2, childProps.width ?? 0),
-                            height: Math.max(2, childProps.height ?? 0),
+                            x: layoutPadding.left,
+                            y: layoutPadding.top,
+                            width: Math.max(0, (props.width ?? 0) - layoutPadding.left - layoutPadding.right),
+                            height: Math.max(0, (props.height ?? 0) - layoutPadding.top - layoutPadding.bottom),
                         };
                     }
-                }
-                if (!highlightBounds) {
-                    highlightBounds = {
-                        x: layoutPadding.left,
-                        y: layoutPadding.top,
-                        width: Math.max(0, (props.width ?? 0) - layoutPadding.left - layoutPadding.right),
-                        height: Math.max(0, (props.height ?? 0) - layoutPadding.top - layoutPadding.bottom),
-                    };
-                }
 
-                dropHighlight = (
-                    <div
-                        className='pointer-events-none absolute rounded-[14px] border-2 border-dashed border-[rgba(236,233,254,0.72)] bg-[rgba(139,92,246,0.14)] transition-all'
-                        style={{
-                            left: highlightBounds.x,
-                            top: highlightBounds.y,
-                            width: highlightBounds.width,
-                            height: highlightBounds.height,
-                        }}
-                    />
-                );
+                    dropHighlight = (
+                        <div
+                            className='pointer-events-none absolute rounded-[14px] border-2 border-dashed border-[rgba(236,233,254,0.72)] bg-[rgba(139,92,246,0.14)] transition-all'
+                            style={{
+                                left: highlightBounds.x,
+                                top: highlightBounds.y,
+                                width: highlightBounds.width,
+                                height: highlightBounds.height,
+                            }}
+                        />
+                    );
+                }
             }
 
             const paddingOverlay = showLayoutOverlay ? (

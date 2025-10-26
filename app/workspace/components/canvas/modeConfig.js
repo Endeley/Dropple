@@ -289,6 +289,42 @@ export const MODE_CONFIG = {
             { id: 'schedule', label: 'Schedule Post' },
         ],
     },
+    'ai-studio': {
+        label: 'AI Studio',
+        description: 'Central hub for AI-generated mockups, images, text, voices, characters, and presentations.',
+        tools: [
+            { id: 'mockup-generator', name: 'Product Mockups', description: 'Generate apparel, packaging, and product renders from prompts or brand assets.' },
+            { id: 'image-studio', name: 'Image Studio', description: 'Text-to-image, image-to-image, background removal, and style transfer.' },
+            { id: 'text-studio', name: 'Text Studio', description: 'Copywriting, scripts, translation, summarisation, and tone control.' },
+            { id: 'voice-studio', name: 'Voice Studio', description: 'AI voice generation, cloning, and multilingual dubbing with emotion control.' },
+            { id: 'character-studio', name: 'Character Builder', description: 'Create 2D/3D characters with pose, outfit, and lighting controls.' },
+            { id: 'presentation-studio', name: 'Presentation Generator', description: 'Auto-generate slide decks with content and visuals ready to edit.' },
+            { id: 'asset-library', name: 'Saved Assets', description: 'Manage generated assets and send them to other Dropple modes.' },
+        ],
+        inspectorSections: [
+            {
+                id: 'ai-controls',
+                title: 'AI Controls',
+                items: ['Creativity', 'Style', 'Tone', 'Lighting', 'Resolution'],
+            },
+            {
+                id: 'refine',
+                title: 'Refine & Enhance',
+                items: ['Regenerate', 'Enhance', 'Background removal', 'Mask editing'],
+            },
+            {
+                id: 'export',
+                title: 'Export & Routes',
+                items: ['Save to Assets', 'Send to Canvas', 'Export PNG/JPG/PSD/MP3', 'Send to other modes'],
+            },
+        ],
+        bottomActions: [
+            { id: 'generate', label: 'Generate' },
+            { id: 'refine', label: 'Refine' },
+            { id: 'save-asset', label: 'Save Asset' },
+            { id: 'export', label: 'Export' },
+        ],
+    },
 };
 
-export const MODE_LIST = ['design', 'graphics', 'ux', 'video', 'podcast', 'cartoon', 'docs', 'dev', 'classroom', 'brand'];
+export const MODE_LIST = ['design', 'ai-studio', 'graphics', 'ux', 'video', 'podcast', 'cartoon', 'docs', 'dev', 'classroom', 'brand'];

@@ -786,38 +786,53 @@ export default function FrameNode({ frame }) {
             (autoLayoutPreview.parentId ?? null) === null &&
             frame.layoutMode !== 'absolute'
         ) {
-            const highlightId = autoLayoutPreview.beforeId ?? autoLayoutPreview.afterId ?? null;
-            let highlightBounds = null;
-            if (highlightId) {
-                const targetElement = frame.elements.find((item) => item.id === highlightId);
-                if (targetElement?.props) {
+            const rect = autoLayoutPreview.rect;
+            if (rect) {
+                dropHighlight = (
+                    <div
+                        className='pointer-events-none absolute rounded-[18px] border-2 border-dashed border-[rgba(236,233,254,0.78)] bg-[rgba(139,92,246,0.15)] transition-all'
+                        style={{
+                            left: rect.x,
+                            top: rect.y,
+                            width: rect.width,
+                            height: rect.height,
+                        }}
+                    />
+                );
+            } else {
+                const highlightId = autoLayoutPreview.beforeId ?? autoLayoutPreview.afterId ?? null;
+                let highlightBounds = null;
+                if (highlightId) {
+                    const targetElement = frame.elements.find((item) => item.id === highlightId);
+                    if (targetElement?.props) {
+                        highlightBounds = {
+                            x: targetElement.props.x ?? frameLayoutPadding.left,
+                            y: targetElement.props.y ?? frameLayoutPadding.top,
+                            width: Math.max(2, targetElement.props.width ?? 0),
+                            height: Math.max(2, targetElement.props.height ?? 0),
+                        };
+                    }
+                }
+                if (!highlightBounds) {
                     highlightBounds = {
-                        x: targetElement.props.x ?? frameLayoutPadding.left,
-                        y: targetElement.props.y ?? frameLayoutPadding.top,
-                        width: Math.max(2, targetElement.props.width ?? 0),
-                        height: Math.max(2, targetElement.props.height ?? 0),
+                        x: frameLayoutPadding.left,
+                        y: frameLayoutPadding.top,
+                        width: Math.max(0, frame.width - frameLayoutPadding.left - frameLayoutPadding.right),
+                        height: Math.max(0, frame.height - frameLayoutPadding.top - frameLayoutPadding.bottom),
                     };
                 }
+                dropHighlight = (
+                    <div
+                        className='pointer-events-none absolute rounded-[18px] border-2 border-dashed border-[rgba(236,233,254,0.78)] bg-[rgba(139,92,246,0.15)] transition-all'
+                        style={{
+                            left: highlightBounds.x,
+                            top: highlightBounds.y,
+                            width: highlightBounds.width,
+                            height: highlightBounds.height,
+                        }}
+                    />
+                );
             }
-            if (!highlightBounds) {
-                highlightBounds = {
-                    x: frameLayoutPadding.left,
-                    y: frameLayoutPadding.top,
-                    width: Math.max(0, frame.width - frameLayoutPadding.left - frameLayoutPadding.right),
-                    height: Math.max(0, frame.height - frameLayoutPadding.top - frameLayoutPadding.bottom),
-                };
-            }
-            dropHighlight = (
-                <div
-                    className='pointer-events-none absolute rounded-[18px] border-2 border-dashed border-[rgba(236,233,254,0.78)] bg-[rgba(139,92,246,0.15)] transition-all'
-                    style={{
-                        left: highlightBounds.x,
-                        top: highlightBounds.y,
-                        width: highlightBounds.width,
-                        height: highlightBounds.height,
-                    }}
-                />
-            );
         }
 
         layoutOverlay = (
