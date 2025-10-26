@@ -73,6 +73,26 @@ export const useCanvasStore = create((set, get) => ({
                 };
             }),
         })),
+    updateElementProps: (frameId, elementId, propUpdates) =>
+        set((state) => ({
+            frames: state.frames.map((frame) => {
+                if (frame.id !== frameId) return frame;
+                return {
+                    ...frame,
+                    elements: frame.elements.map((el) =>
+                        el.id === elementId
+                            ? {
+                                  ...el,
+                                  props: {
+                                      ...el.props,
+                                      ...propUpdates,
+                                  },
+                              }
+                            : el,
+                    ),
+                };
+            }),
+        })),
     removeElement: (frameId, elementId) =>
         set((state) => ({
             frames: state.frames.map((frame) => {

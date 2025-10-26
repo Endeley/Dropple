@@ -1,6 +1,6 @@
 'use client';
 
-import { Group, Rect, Text } from 'react-konva';
+import clsx from 'clsx';
 import ElementNode from './ElementNode';
 import { useCanvasStore } from './context/CanvasStore';
 
@@ -12,35 +12,36 @@ export default function FrameNode({ frame }) {
 
     const isSelected = selectedFrameId === frame.id;
 
-    const handleClick = (event) => {
-        event.cancelBubble = true;
+    const handleSelect = (event) => {
+        event.stopPropagation();
         setSelectedFrame(frame.id);
     };
 
     return (
-        <Group x={frame.x} y={frame.y} draggable listening onClick={handleClick} onTap={handleClick}>
-            <Rect
-                width={frame.width}
-                height={frame.height}
-                cornerRadius={16}
-                stroke={isSelected ? 'rgba(139, 92, 246, 0.75)' : 'rgba(148, 163, 184, 0.45)'}
-                strokeWidth={isSelected ? 2 : 1}
-                fill='rgba(15, 23, 42, 0.92)'
-                shadowColor={isSelected ? 'rgba(139, 92, 246, 0.45)' : 'rgba(15, 23, 42, 0.35)'}
-                shadowBlur={isSelected ? 32 : 24}
-                shadowOpacity={0.85}
-                listening
-            />
-            <Text
-                text={frame.name}
-                fontSize={14}
-                fill={isSelected ? 'rgba(236, 233, 254, 0.85)' : 'rgba(148, 163, 184, 0.75)'}
-                y={-24}
-                fontFamily='Inter, -apple-system, BlinkMacSystemFont, sans-serif'
-            />
-            {frame.elements?.map((element) => (
-                <ElementNode key={element.id} element={element} frameId={frame.id} />
-            ))}
-        </Group>
+        <div
+            className={clsx(
+                'absolute rounded-3xl border p-8 font-sans transition-shadow',
+                'bg-[rgba(15,23,42,0.94)] text-[rgba(226,232,240,0.9)] shadow-xl',
+                isSelected
+                    ? 'border-[rgba(139,92,246,0.75)] shadow-[0_20px_60px_rgba(139,92,246,0.35)]'
+                    : 'border-[rgba(148,163,184,0.25)] shadow-[0_12px_40px_rgba(15,23,42,0.45)]',
+            )}
+            style={{
+                left: frame.x,
+                top: frame.y,
+                width: frame.width,
+                height: frame.height,
+            }}
+            onMouseDown={handleSelect}
+        >
+            <div className='absolute left-4 top-4 text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.65)]'>
+                {frame.name}
+            </div>
+            <div className='relative h-full w-full pt-6'>
+                {frame.elements?.map((element) => (
+                    <ElementNode key={element.id} element={element} frameId={frame.id} />
+                ))}
+            </div>
+        </div>
     );
 }

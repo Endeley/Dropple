@@ -1,25 +1,9 @@
 'use client';
 
-import { Rect, Text, Image as KonvaImage } from 'react-konva';
-import { useEffect, useState } from 'react';
+import clsx from 'clsx';
 import { useCanvasStore } from './context/CanvasStore';
 
-function useImage(src) {
-    const [image, setImage] = useState(null);
-
-    useEffect(() => {
-        if (!src) return undefined;
-        const img = new window.Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => setImage(img);
-        img.src = src;
-        return () => {
-            setImage(null);
-        };
-    }, [src]);
-
-    return image;
-}
+const baseClass = 'absolute select-none';
 
 export default function ElementNode({ element, frameId }) {
     const selectedFrameId = useCanvasStore((state) => state.selectedFrameId);
@@ -27,52 +11,57 @@ export default function ElementNode({ element, frameId }) {
     const setSelectedElement = useCanvasStore((state) => state.setSelectedElement);
 
     if (!element) return null;
-
     const isSelected = selectedFrameId === frameId && selectedElementId === element.id;
-    const selectElement = (event) => {
-        event.cancelBubble = true;
+
+    const handleSelect = (event) => {
+        event.stopPropagation();
         if (frameId && element.id) {
             setSelectedElement(frameId, element.id);
         }
     };
 
+    const props = element.props ?? {};
+    const style = {
+        left: props.x ?? 0,
+        top: props.y ?? 0,
+        width: props.width,
+        height: props.height,
+        transform: props.rotation ? `rotate(${props.rotation}deg)` : undefined,
+        opacity: props.opacity ?? 1,
+        background: props.fill,
+        borderRadius: props.cornerRadius,
+        border: props.stroke ? `1px solid ${props.stroke}` : undefined,
+        color: props.fill,
+        fontSize: props.fontSize,
+        fontWeight: props.fontStyle?.includes('bold') ? '600' : undefined,
+        fontStyle: props.fontStyle?.includes('italic') ? 'italic' : undefined,
+        lineHeight: props.lineHeight,
+        letterSpacing: props.letterSpacing,
+        textAlign: props.align,
+    };
+
     switch (element.type) {
-        case 'text':
-            return (
-                <Text
-                    {...element.props}
-                    draggable
-                    listening
-                    onClick={selectElement}
-                    onTap={selectElement}
-                    shadowColor={isSelected ? 'rgba(139, 92, 246, 0.55)' : undefined}
-                    shadowBlur={isSelected ? 12 : 0}
-                />
-            );
         case 'rect':
             return (
-                <Rect
-                    {...element.props}
-                    draggable
-                    listening
-                    onClick={selectElement}
-                    onTap={selectElement}
-                    stroke={isSelected ? 'rgba(139, 92, 246, 0.75)' : element.props?.stroke}
-                    strokeWidth={isSelected ? 2 : element.props?.strokeWidth}
+                <div
+                    className={clsx(baseClass, 'rounded-2xl border border-transparent transition-shadow', {
+                        'shadow-[0_0_0_2px_rgba(139,92,246,0.75)]': isSelected,
+                    })}
+                    style={style}
+                    onMouseDown={handleSelect}
                 />
             );
-        case 'image':
+        case 'text':
             return (
-                <KonvaImage
-                    {...element.props}
-                    image={useImage(element.props?.src)}
-                    draggable
-                    listening
-                    onClick={selectElement}
-                    onTap={selectElement}
-                    stroke={isSelected ? 'rgba(139, 92, 246, 0.75)' : undefined}
-                    strokeWidth={isSelected ? 2 : 0}
-                />
+                <div
+                    className={clsx(baseClass, 'whitespace-pre-wrap font-sans text-[rgba(236,233,254,0.92)]', {
+                        'shadow-[0_0_0_2px_rgba(139,92,246,0.6)]': isSelected,
+                    })}
+                    style={style}
+                    onMouseDown={handleSelect}
+                >
+                    {props.text}
+                </div>
             );
         default:
             return null;

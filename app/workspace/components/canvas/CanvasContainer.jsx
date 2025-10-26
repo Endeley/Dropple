@@ -1,98 +1,93 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Stage } from 'react-konva';
+import { useCallback, useEffect, useRef } from 'react';
 import CanvasLayer from './CanvasLayer';
 import { useCanvasStore } from './context/CanvasStore';
 
 const SCALE_STEP = 1.1;
 
 export default function CanvasContainer() {
-    const wrapperRef = useRef(null);
-    const stageRef = useRef(null);
-    const [viewport, setViewport] = useState({ width: 0, height: 0 });
+    const viewportRef = useRef(null);
+    const isPointerDown = useRef(false);
+    const lastPointer = useRef({ x: 0, y: 0 });
+
     const scale = useCanvasStore((state) => state.scale);
     const setScale = useCanvasStore((state) => state.setScale);
     const position = useCanvasStore((state) => state.position);
     const setPosition = useCanvasStore((state) => state.setPosition);
 
     useEffect(() => {
-        const node = wrapperRef.current;
-        if (!node) return;
+        const viewport = viewportRef.current;
+        if (!viewport) return undefined;
 
-        const updateSize = () => {
-            const rect = node.getBoundingClientRect();
-            setViewport({ width: rect.width, height: rect.height });
+        const handlePointerMove = (event) => {
+            if (!isPointerDown.current) return;
+            const deltaX = event.clientX - lastPointer.current.x;
+            const deltaY = event.clientY - lastPointer.current.y;
+            setPosition((prev) => ({ x: prev.x + deltaX, y: prev.y + deltaY }));
+            lastPointer.current = { x: event.clientX, y: event.clientY };
         };
 
-        updateSize();
-        const observer = new ResizeObserver(updateSize);
-        observer.observe(node);
+        const handlePointerUp = () => {
+            isPointerDown.current = false;
+        };
 
-        return () => observer.disconnect();
-    }, []);
+        viewport.addEventListener('pointermove', handlePointerMove);
+        window.addEventListener('pointerup', handlePointerUp);
+
+        return () => {
+            viewport.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', handlePointerUp);
+        };
+    }, [setPosition]);
 
     const handleWheel = useCallback(
         (event) => {
-            event.evt.preventDefault();
-            const stage = stageRef.current;
-            if (!stage) return;
+            event.preventDefault();
+            const viewport = viewportRef.current;
+            if (!viewport) return;
 
-            const oldScale = stage.scaleX();
-            const pointer = stage.getPointerPosition();
+            const rect = viewport.getBoundingClientRect();
+            const pointer = {
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top,
+            };
+            const oldScale = scale;
             const mousePointTo = {
-                x: (pointer.x - stage.x()) / oldScale,
-                y: (pointer.y - stage.y()) / oldScale,
+                x: (pointer.x - position.x) / oldScale,
+                y: (pointer.y - position.y) / oldScale,
             };
 
-            const direction = event.evt.deltaY > 0 ? -1 : 1;
+            const direction = event.deltaY > 0 ? -1 : 1;
             const newScale = direction > 0 ? oldScale * SCALE_STEP : oldScale / SCALE_STEP;
 
-            stage.scale({ x: newScale, y: newScale });
             setScale(newScale);
-
-            const newPosition = {
+            setPosition({
                 x: pointer.x - mousePointTo.x * newScale,
                 y: pointer.y - mousePointTo.y * newScale,
-            };
-
-            stage.position(newPosition);
-            setPosition(newPosition);
-            stage.batchDraw();
+            });
         },
-        [setPosition, setScale],
+        [scale, setPosition, setScale],
     );
 
-    const handleDragEnd = useCallback(
-        (event) => {
-            const stage = event.target;
-            const newPosition = { x: stage.x(), y: stage.y() };
-            setPosition(newPosition);
-        },
-        [setPosition],
-    );
-
-    if (!viewport.width || !viewport.height) {
-        return <div ref={wrapperRef} className='relative h-full w-full overflow-hidden bg-[var(--color-canvas)]' />;
-    }
+    const handlePointerDown = (event) => {
+        isPointerDown.current = true;
+        lastPointer.current = { x: event.clientX, y: event.clientY };
+    };
 
     return (
-        <div ref={wrapperRef} className='relative h-full w-full overflow-hidden bg-[var(--color-canvas)]'>
-            <Stage
-                ref={stageRef}
-                width={viewport.width}
-                height={viewport.height}
-                draggable
-                x={position.x}
-                y={position.y}
-                scaleX={scale}
-                scaleY={scale}
-                onWheel={handleWheel}
-                onDragEnd={handleDragEnd}
-                listening
+        <div
+            ref={viewportRef}
+            className='relative h-full w-full overflow-hidden bg-[var(--color-canvas)]'
+            onWheel={handleWheel}
+            onPointerDown={handlePointerDown}
+        >
+            <div
+                className='absolute left-0 top-0 origin-top-left'
+                style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})` }}
             >
                 <CanvasLayer />
-            </Stage>
+            </div>
             <div className='pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(139,92,246,0.08),_transparent_55%)]' />
         </div>
     );

@@ -1,4 +1,64 @@
 export const MODE_CONFIG = {
+    graphics: {
+        label: 'Graphics',
+        description: 'Graphic design, posters, social posts, marketing visuals.',
+        tools: [
+            { id: 'pointer', name: 'Pointer / Move', description: 'Select and move graphics.' },
+            { id: 'canvas', name: 'Canvas Resize', description: 'Change artboard size and bleed.' },
+            { id: 'shape', name: 'Shapes', description: 'Draw rectangles, ellipses, polygons, and lines.' },
+            { id: 'text', name: 'Text Tool', description: 'Add headlines, paragraphs, and stylized typography.' },
+            { id: 'image', name: 'Image Tool', description: 'Place raster or vector images onto the layout.' },
+            { id: 'gradient', name: 'Gradient & Color', description: 'Apply gradient fills and color adjustments.' },
+            { id: 'effects', name: 'Effects', description: 'Add shadow, blur, glow, or warp transforms.' },
+            { id: 'ai-generator', name: 'AI Graphic Generator', description: 'Generate new graphics or compositions from text prompts.' },
+        ],
+        inspectorSections: [
+            { id: 'appearance', title: 'Appearance', items: ['Fill', 'Stroke', 'Opacity', 'Blend mode'] },
+            { id: 'effects', title: 'Effects', items: ['Shadow', 'Blur', 'Glow', 'Distortion'] },
+            { id: 'export', title: 'Export', items: ['PNG', 'JPG', 'PDF', 'SVG'] },
+        ],
+        bottomActions: ['Zoom', 'Guides', 'Snapping', 'History', 'AI Suggest Layout'],
+    },
+    ux: {
+        label: 'UI/UX',
+        description: 'Design interfaces, link frames, prototype flows, and export code.',
+        tools: [
+            { id: 'pointer', name: 'Pointer / Move', description: 'Select artboards and components.' },
+            { id: 'frame', name: 'Frame Tool', description: 'Create pages, screens, and device frames.' },
+            { id: 'components', name: 'Component Library', description: 'Drag pre-built UI components onto the canvas.' },
+            { id: 'link', name: 'Prototype Link', description: 'Connect frames and define interactions.' },
+            { id: 'responsive', name: 'Responsive Resizer', description: 'Preview layouts across breakpoints.' },
+            { id: 'ai-layout', name: 'AI Layout', description: 'Generate UI layouts from prompts or wireframes.' },
+            { id: 'dev-export', name: 'Code Export', description: 'Preview and export HTML, React, or Vue code.' },
+        ],
+        inspectorSections: [
+            { id: 'component', title: 'Component', items: ['Variant', 'State', 'Overrides'] },
+            { id: 'layout', title: 'Layout', items: ['Constraints', 'Auto Layout', 'Spacing'] },
+            { id: 'interaction', title: 'Interaction', items: ['On click', 'Hover state', 'Transition'] },
+            { id: 'code', title: 'Code Preview', items: ['React', 'HTML', 'Tailwind', 'CSS Modules'] },
+        ],
+        bottomActions: ['Prototype viewer', 'Link hotspot list', 'Export code', 'Responsive preview'],
+    },
+    cartoon: {
+        label: 'Cartoon',
+        description: 'Storyboard, animate, and create cartoon sequences with characters and scenes.',
+        tools: [
+            { id: 'scene', name: 'Scene Frame', description: 'Add new scenes or storyboard panels.' },
+            { id: 'character', name: 'Character Builder', description: 'Design or import rigged characters.' },
+            { id: 'pose', name: 'Pose & Motion', description: 'Animate characters with key poses and interpolations.' },
+            { id: 'speech', name: 'Speech Bubble / Caption', description: 'Add dialogue and captions.' },
+            { id: 'timeline', name: 'Timeline', description: 'Control frame-by-frame or tween animations.' },
+            { id: 'ai-story', name: 'AI Story Assist', description: 'Generate scripts or scene ideas.' },
+            { id: 'fx', name: 'FX & Overlays', description: 'Add effects like speed lines, particles, or camera shakes.' },
+        ],
+        inspectorSections: [
+            { id: 'character', title: 'Character', items: ['Rig', 'Expressions', 'Body pose'] },
+            { id: 'animation', title: 'Animation', items: ['Keyframes', 'Timing', 'Easing'] },
+            { id: 'audio', title: 'Audio', items: ['Voice clip', 'Sound effects', 'Lip sync'] },
+            { id: 'export', title: 'Export', items: ['GIF', 'MP4', 'Storyboard PDF'] },
+        ],
+        bottomActions: ['Play / Pause', 'Keyframe editor', 'Storyboard view', 'AI Animate'],
+    },
     design: {
         label: 'Design',
         description: 'Graphics, layouts, posters, UI elements.',
@@ -45,11 +105,6 @@ export const MODE_CONFIG = {
             },
         ],
         inspectorSections: [
-            {
-                id: 'transform',
-                title: 'Transform',
-                items: ['Position', 'Size', 'Rotation', 'Alignment'],
-            },
             {
                 id: 'style',
                 title: 'Style',
@@ -179,4 +234,4 @@ export const MODE_CONFIG = {
     },
 };
 
-export const MODE_LIST = ['design', 'video', 'podcast', 'docs', 'dev', 'classroom', 'brand'];
+export const MODE_LIST = ['design', 'graphics', 'ux', 'video', 'podcast', 'cartoon', 'docs', 'dev', 'classroom', 'brand'];
