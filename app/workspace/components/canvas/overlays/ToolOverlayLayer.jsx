@@ -8,6 +8,7 @@ import CommentToolOverlay from './panels/CommentToolOverlay';
 import ComponentLibraryOverlay from './panels/ComponentLibraryOverlay';
 import PrototypeLinkOverlay from './panels/PrototypeLinkOverlay';
 import TimelineAssetsOverlay from './panels/TimelineAssetsOverlay';
+import CodeExportOverlay from './panels/CodeExportOverlay';
 
 const PANEL_COMPONENTS = {
     gradient: GradientToolOverlay,
@@ -17,6 +18,7 @@ const PANEL_COMPONENTS = {
     components: ComponentLibraryOverlay,
     link: PrototypeLinkOverlay,
     timeline: TimelineAssetsOverlay,
+    'code-export': CodeExportOverlay,
 };
 
 export default function ToolOverlayLayer() {

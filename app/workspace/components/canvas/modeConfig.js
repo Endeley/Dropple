@@ -48,6 +48,7 @@ export const MODE_CONFIG = {
             { id: 'hotspots', label: 'Hotspot List' },
             { id: 'export-code', label: 'Export Code' },
             { id: 'responsive-preview', label: 'Responsive Preview' },
+            { id: 'code-export', label: 'Code Export' },
         ],
     },
     cartoon: {

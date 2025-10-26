@@ -12,6 +12,99 @@ import { ELEMENT_MIN_SIZE, RESIZE_HANDLES, computeResizedBox } from './utils/res
 
 const baseClass = 'absolute select-none';
 
+const DEFAULT_LAYOUT_PADDING = { top: 64, right: 64, bottom: 64, left: 64 };
+
+function normalizePadding(padding) {
+    const base = { ...DEFAULT_LAYOUT_PADDING };
+    if (!padding) return base;
+    return {
+        top: Number.isFinite(padding.top) ? padding.top : base.top,
+        right: Number.isFinite(padding.right) ? padding.right : base.right,
+        bottom: Number.isFinite(padding.bottom) ? padding.bottom : base.bottom,
+        left: Number.isFinite(padding.left) ? padding.left : base.left,
+    };
+}
+
+function computeAutoLayoutDrop(frame, parentId, elementId, layoutMode, candidatePoint) {
+    if (!frame) return 0;
+    const siblings = frame.elements.filter((item) => (item.parentId ?? null) === parentId && item.id !== elementId);
+    if (siblings.length === 0) {
+        return {
+            index: 0,
+            beforeId: null,
+            afterId: null,
+            ordered: [],
+        };
+    }
+
+    const ordered = siblings
+        .map((item, index) => {
+            const props = item.props ?? {};
+            const width = Number.isFinite(props.width) ? props.width : 0;
+            const height = Number.isFinite(props.height) ? props.height : 0;
+            const centerX = (props.x ?? 0) + width / 2;
+            const centerY = (props.y ?? 0) + height / 2;
+            return {
+                id: item.id,
+                originalIndex: index,
+                centerX,
+                centerY,
+                width,
+                height,
+                props,
+            };
+        })
+        .sort((a, b) => {
+            if (layoutMode === 'flex-row') {
+                return a.centerX - b.centerX;
+            }
+            if (layoutMode === 'flex-column') {
+                return a.centerY - b.centerY;
+            }
+            // grid and any future layout: row-major (y, then x)
+            if (Math.abs(a.centerY - b.centerY) < 1) {
+                return a.centerX - b.centerX;
+            }
+            return a.centerY - b.centerY;
+        });
+
+    let targetIndex = ordered.length;
+    for (let index = 0; index < ordered.length; index += 1) {
+        const sibling = ordered[index];
+        if (layoutMode === 'flex-row') {
+            if (candidatePoint.x < sibling.centerX) {
+                targetIndex = index;
+                break;
+            }
+        } else if (layoutMode === 'flex-column') {
+            if (candidatePoint.y < sibling.centerY) {
+                targetIndex = index;
+                break;
+            }
+        } else {
+            const rowThreshold = Math.max(24, sibling.height / 2);
+            const sameRow = Math.abs(candidatePoint.y - sibling.centerY) <= rowThreshold;
+            if (!sameRow && candidatePoint.y < sibling.centerY) {
+                targetIndex = index;
+                break;
+            }
+            if (sameRow && candidatePoint.x < sibling.centerX) {
+                targetIndex = index;
+                break;
+            }
+        }
+    }
+
+    const beforeId = targetIndex < ordered.length ? ordered[targetIndex].id : null;
+    const afterId = targetIndex > 0 ? ordered[targetIndex - 1].id : null;
+    return {
+        index: targetIndex,
+        beforeId,
+        afterId,
+        ordered,
+    };
+}
+
 export default function ElementNode({ element, frameId, childrenNodes = [] }) {
     const selectedTool = useCanvasStore((state) => state.selectedTool);
     const selectedFrameId = useCanvasStore((state) => state.selectedFrameId);
@@ -21,9 +114,15 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
     const setSelectedElement = useCanvasStore((state) => state.setSelectedElement);
     const toggleElementSelection = useCanvasStore((state) => state.toggleElementSelection);
     const updateElementProps = useCanvasStore((state) => state.updateElementProps);
+    const reorderElement = useCanvasStore((state) => state.reorderElement);
     const comments = useCanvasStore((state) => state.comments);
     const setActiveToolOverlay = useCanvasStore((state) => state.setActiveToolOverlay);
     const setContextMenu = useCanvasStore((state) => state.setContextMenu);
+    const frame = useCanvasStore((state) => state.frames.find((item) => item.id === frameId));
+    const setElementLayout = useCanvasStore((state) => state.setElementLayout);
+    const setAutoLayoutPreview = useCanvasStore((state) => state.setAutoLayoutPreview);
+    const clearAutoLayoutPreview = useCanvasStore((state) => state.clearAutoLayoutPreview);
+    const autoLayoutPreview = useCanvasStore((state) => state.autoLayoutPreview);
 
     const dragStateRef = useRef(null);
     const resizeStateRef = useRef(null);
@@ -42,33 +141,32 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
         [comments, frameId, element.id],
     );
     const hasComments = elementComments.length > 0;
-    const canResize =
-        isSelected &&
-        isPointerTool &&
-        !prototypeMode &&
-        Number.isFinite(props.width) &&
-        Number.isFinite(props.height);
-
-    const handlePointerDown = (event) => {
-        event.stopPropagation();
-        if (!frameId || !element.id) return;
-        if (prototypeMode) return;
-
-        useCanvasStore.getState().clearActiveGuides();
-
-        const additive = event.shiftKey || event.metaKey || event.ctrlKey;
-
-        if (additive) {
-            toggleElementSelection(frameId, element.id);
-        } else {
-            setSelectedElement(frameId, element.id);
+    const parentLayoutMode = useMemo(() => {
+        if (!frame) return 'absolute';
+        if (element.parentId) {
+            const parent = frame.elements.find((item) => item.id === element.parentId);
+            return parent?.layoutMode ?? 'absolute';
         }
+        return frame.layoutMode ?? 'absolute';
+    }, [frame, element.parentId]);
 
-        if (!isPointerTool || event.button !== 0 || additive) return;
+    const isAutoLayoutParent = parentLayoutMode && parentLayoutMode !== 'absolute';
+    const isFlexParent = parentLayoutMode === 'flex-row' || parentLayoutMode === 'flex-column';
 
-        const isPrimaryButton = event.button === 0;
-        if (!isPrimaryButton) return;
+    const hasWidth = Number.isFinite(props.width);
+    const hasHeight = Number.isFinite(props.height);
 
+    let sizePermitted = hasWidth && hasHeight;
+    if (isFlexParent) {
+        sizePermitted = parentLayoutMode === 'flex-row' ? hasWidth : hasHeight;
+    } else if (isAutoLayoutParent) {
+        sizePermitted = false;
+    }
+
+    const canResize =
+        isSelected && isPointerTool && !prototypeMode && sizePermitted;
+
+    const startAbsoluteDrag = (event) => {
         dragStateRef.current = {
             startX: event.clientX,
             startY: event.clientY,
@@ -126,6 +224,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
 
         const handlePointerUp = () => {
             useCanvasStore.getState().clearActiveGuides();
+            clearAutoLayoutPreview();
             const current = dragStateRef.current;
             if (current?.pointerId != null && current?.target) {
                 current.target.releasePointerCapture?.(current.pointerId);
@@ -137,6 +236,152 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
 
         window.addEventListener('pointermove', handlePointerMove);
         window.addEventListener('pointerup', handlePointerUp);
+    };
+
+    const startAutoLayoutDrag = (event, frameState, parentId, parentLayoutMode) => {
+        const elementWidth = Number.isFinite(props.width) ? props.width : ELEMENT_MIN_SIZE;
+        const elementHeight = Number.isFinite(props.height) ? props.height : ELEMENT_MIN_SIZE;
+        const siblings = frameState?.elements.filter((item) => (item.parentId ?? null) === parentId) ?? [];
+        const initialIndex = siblings.findIndex((item) => item.id === element.id);
+
+        dragStateRef.current = {
+            pointerId: event.pointerId,
+            startClientX: event.clientX,
+            startClientY: event.clientY,
+            elementX: props.x ?? 0,
+            elementY: props.y ?? 0,
+            elementWidth,
+            elementHeight,
+            parentId,
+            parentLayoutMode,
+            initialIndex: initialIndex >= 0 ? initialIndex : 0,
+            targetIndex: initialIndex >= 0 ? initialIndex : 0,
+            target: event.currentTarget,
+            deltaX: 0,
+            deltaY: 0,
+            liveIndex: initialIndex >= 0 ? initialIndex : 0,
+        };
+
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+
+        const handlePointerMove = (moveEvent) => {
+            const current = dragStateRef.current;
+            if (!current) return;
+
+            if ((moveEvent.buttons & 1) === 0) {
+                handlePointerUp(moveEvent);
+                return;
+            }
+
+            moveEvent.preventDefault();
+
+            const deltaX = (moveEvent.clientX - current.startClientX) / (scale || 1);
+            const deltaY = (moveEvent.clientY - current.startClientY) / (scale || 1);
+            current.deltaX = deltaX;
+            current.deltaY = deltaY;
+
+            const latestFrame = useCanvasStore.getState().getFrameById(frameId);
+            const candidatePoint = {
+                x: current.elementX + deltaX + Math.max(current.elementWidth, 1) / 2,
+                y: current.elementY + deltaY + Math.max(current.elementHeight, 1) / 2,
+            };
+            const drop = computeAutoLayoutDrop(
+                latestFrame,
+                parentId,
+                element.id,
+                parentLayoutMode,
+                candidatePoint,
+            );
+            current.targetIndex = drop.index;
+            setAutoLayoutPreview({
+                frameId,
+                parentId,
+                beforeId: drop.beforeId,
+                afterId: drop.afterId,
+                layoutMode: parentLayoutMode,
+            });
+
+            if (drop.index !== current.liveIndex) {
+                reorderElement(frameId, element.id, drop.index);
+                current.liveIndex = drop.index;
+            }
+        };
+
+        const handlePointerUp = (upEvent) => {
+            useCanvasStore.getState().clearActiveGuides();
+            clearAutoLayoutPreview();
+            const current = dragStateRef.current;
+            if (current?.pointerId != null && current?.target) {
+                current.target.releasePointerCapture?.(current.pointerId);
+            }
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', handlePointerUp);
+            if (!current) return;
+
+            const deltaX =
+                current.deltaX ?? (upEvent ? (upEvent.clientX - current.startClientX) / (scale || 1) : 0);
+            const deltaY =
+                current.deltaY ?? (upEvent ? (upEvent.clientY - current.startClientY) / (scale || 1) : 0);
+
+            const latestFrame = useCanvasStore.getState().getFrameById(frameId);
+            const candidatePoint = {
+                x: current.elementX + deltaX + Math.max(current.elementWidth, 1) / 2,
+                y: current.elementY + deltaY + Math.max(current.elementHeight, 1) / 2,
+            };
+            const drop = computeAutoLayoutDrop(
+                latestFrame,
+                parentId,
+                element.id,
+                parentLayoutMode,
+                candidatePoint,
+            );
+
+            if (drop.index !== current.liveIndex) {
+                reorderElement(frameId, element.id, drop.index);
+            }
+
+            if (drop.index !== current.initialIndex) {
+                // ensure final index persisted; reorderElement handles reflow
+            }
+
+            dragStateRef.current = null;
+        };
+
+        window.addEventListener('pointermove', handlePointerMove);
+        window.addEventListener('pointerup', handlePointerUp);
+    };
+
+    const handlePointerDown = (event) => {
+        event.stopPropagation();
+        if (!frameId || !element.id) return;
+        if (prototypeMode) return;
+
+        useCanvasStore.getState().clearActiveGuides();
+        clearAutoLayoutPreview();
+
+        const additive = event.shiftKey || event.metaKey || event.ctrlKey;
+
+        if (additive) {
+            toggleElementSelection(frameId, element.id);
+        } else {
+            setSelectedElement(frameId, element.id);
+        }
+
+        if (!isPointerTool || event.button !== 0 || additive) return;
+        if (event.button !== 0) return;
+
+        const storeApi = useCanvasStore.getState();
+        const frameState = frame ?? storeApi.getFrameById(frameId);
+        if (!frameState) return;
+
+        const parentId = element.parentId ?? null;
+        const isAutoLayoutParent = parentLayoutMode && parentLayoutMode !== 'absolute';
+
+        if (isAutoLayoutParent) {
+            startAutoLayoutDrag(event, frameState, parentId, parentLayoutMode);
+        } else {
+            startAbsoluteDrag(event);
+        }
     };
 
     const handleContextMenu = (event) => {
@@ -228,6 +473,19 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
             storeApi.setActiveGuides(offsetGuides);
 
             updateElementProps(frameId, element.id, snapped.rect);
+            if (isFlexParent) {
+                if (parentLayoutMode === 'flex-row') {
+                    setElementLayout(frameId, element.id, {
+                        basis: Math.max(ELEMENT_MIN_SIZE, snapped.rect.width),
+                        grow: 0,
+                    });
+                } else if (parentLayoutMode === 'flex-column') {
+                    setElementLayout(frameId, element.id, {
+                        basis: Math.max(ELEMENT_MIN_SIZE, snapped.rect.height),
+                        grow: 0,
+                    });
+                }
+            }
         };
 
         const handlePointerUp = () => {
@@ -422,15 +680,33 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
         </button>
     ) : null;
 
+    const allowedHandles = useMemo(() => {
+        if (!canResize) return [];
+        if (!isAutoLayoutParent) return RESIZE_HANDLES;
+        if (parentLayoutMode === 'flex-row') {
+            return RESIZE_HANDLES.filter((handle) => ['e', 'w'].includes(handle.key)).map((handle) => ({
+                ...handle,
+                orientation: 'horizontal',
+            }));
+        }
+        if (parentLayoutMode === 'flex-column') {
+            return RESIZE_HANDLES.filter((handle) => ['n', 's'].includes(handle.key)).map((handle) => ({
+                ...handle,
+                orientation: 'vertical',
+            }));
+        }
+        return [];
+    }, [canResize, isAutoLayoutParent, parentLayoutMode]);
+
     const resizeHandles =
-        canResize && frameId && element.id
+        canResize && frameId && element.id && allowedHandles.length
             ? (
                 <div className='pointer-events-none absolute inset-0'>
-                    {RESIZE_HANDLES.map((handle) => (
+                    {allowedHandles.map((handle) => (
                         <div
                             key={`${element.id}-${handle.key}`}
                             className={clsx(
-                                'absolute h-3 w-3 rounded-full border border-[rgba(236,233,254,0.7)] bg-[rgba(59,130,246,0.85)] shadow-[0_0_0_2px_rgba(15,23,42,0.55)] transition-transform hover:scale-110',
+                                'absolute flex h-4 w-4 items-center justify-center rounded-full border border-[rgba(236,233,254,0.7)] bg-[rgba(59,130,246,0.9)] text-[8px] font-semibold uppercase tracking-[0.2em] text-[rgba(236,233,254,0.95)] shadow-[0_0_0_2px_rgba(15,23,42,0.55)] transition-transform hover:scale-110',
                                 handle.className,
                                 handle.cursor,
                             )}
@@ -441,6 +717,31 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                 </div>
             )
             : null;
+
+    const axisBadge = isSelected && isFlexParent && canResize
+        ? (
+              <div className='pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full border border-[rgba(139,92,246,0.35)] bg-[rgba(15,23,42,0.82)] px-2 py-[2px] text-[9px] font-semibold uppercase tracking-[0.25em] text-[rgba(236,233,254,0.9)] shadow-[0_6px_18px_rgba(15,23,42,0.5)]'>
+                  {parentLayoutMode === 'flex-row' ? 'Resize Width' : 'Resize Height'}
+              </div>
+          )
+        : null;
+
+    const basisValue = useMemo(() => {
+        if (!isFlexParent) return null;
+        const layout = element.layout ?? {};
+        if (Number.isFinite(layout.basis)) return layout.basis;
+        if (parentLayoutMode === 'flex-row') return Number.isFinite(props.width) ? props.width : null;
+        if (parentLayoutMode === 'flex-column') return Number.isFinite(props.height) ? props.height : null;
+        return null;
+    }, [element.layout, isFlexParent, parentLayoutMode, props.height, props.width]);
+
+    const showBasisBadge = isSelected && isFlexParent && element.type !== 'group';
+    const basisBadge = showBasisBadge ? (
+        <div className='pointer-events-none absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-[rgba(139,92,246,0.35)] bg-[rgba(15,23,42,0.85)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgba(236,233,254,0.92)] shadow-[0_8px_24px_rgba(15,23,42,0.5)]'>
+            <span>{parentLayoutMode === 'flex-row' ? 'Flex Width' : 'Flex Height'}</span>
+            <span>{basisValue !== null ? `${Math.round(basisValue)}px` : 'Auto'}</span>
+        </div>
+    ) : null;
 
     switch (element.type) {
         case 'rect':
@@ -462,6 +763,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                     onContextMenu={handleContextMenu}
                 >
                     {linkBadge}
+                    {basisBadge}
                     {resizeHandles}
                     {commentBadge}
                 </div>
@@ -520,12 +822,154 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                 >
                     {props.text}
                     {linkBadge}
+                    {basisBadge}
                     {resizeHandles}
                     {commentBadge}
                 </div>
             );
             }
-        case 'group':
+        case 'group': {
+            const layoutMode = element.layoutMode ?? 'absolute';
+            const layoutGap = Number.isFinite(element.layoutGap) ? element.layoutGap : 0;
+            const layoutPadding = normalizePadding(element.layoutPadding);
+            const showLayoutOverlay = isSelected && layoutMode !== 'absolute';
+            const layoutDirectionLabel = layoutMode === 'flex-row' ? 'Auto Layout · Row' : 'Auto Layout · Column';
+
+            let gapMarkers = null;
+            if (showLayoutOverlay && layoutGap > 0 && childrenNodes.length > 1) {
+                const childDescriptors = childrenNodes
+                    .map(({ element: child }) => ({
+                        id: child.id,
+                        props: child.props ?? {},
+                    }))
+                    .filter((item) => Number.isFinite(item.props.x) && Number.isFinite(item.props.y));
+
+                if (layoutMode === 'flex-column') {
+                    const sorted = [...childDescriptors].sort(
+                        (a, b) => (a.props.y ?? 0) - (b.props.y ?? 0),
+                    );
+                    const markers = [];
+                    for (let index = 0; index < sorted.length - 1; index += 1) {
+                        const current = sorted[index];
+                        const next = sorted[index + 1];
+                        const currentBottom = (current.props.y ?? 0) + (current.props.height ?? 0);
+                        const gapSize = (next.props.y ?? currentBottom) - currentBottom;
+                        if (!(gapSize > 0)) continue;
+                        markers.push(
+                            <div
+                                key={`gap-${current.id}-${next.id}`}
+                                className='pointer-events-none absolute left-0 right-0 flex items-center justify-center text-[10px] font-semibold uppercase tracking-[0.25em]'
+                                style={{
+                                    top: currentBottom,
+                                    height: gapSize,
+                                    paddingLeft: layoutPadding.left,
+                                    paddingRight: layoutPadding.right,
+                                }}
+                            >
+                                <span className='rounded-full border border-[rgba(139,92,246,0.35)] bg-[rgba(139,92,246,0.15)] px-2 py-0.5 text-[rgba(236,233,254,0.75)]'>
+                                    Gap {Math.round(gapSize)}
+                                </span>
+                            </div>,
+                        );
+                    }
+                    gapMarkers = markers;
+                } else if (layoutMode === 'flex-row') {
+                    const sorted = [...childDescriptors].sort(
+                        (a, b) => (a.props.x ?? 0) - (b.props.x ?? 0),
+                    );
+                    const markers = [];
+                    for (let index = 0; index < sorted.length - 1; index += 1) {
+                        const current = sorted[index];
+                        const next = sorted[index + 1];
+                        const currentRight = (current.props.x ?? 0) + (current.props.width ?? 0);
+                        const gapSize = (next.props.x ?? currentRight) - currentRight;
+                        if (!(gapSize > 0)) continue;
+                        markers.push(
+                            <div
+                                key={`gap-${current.id}-${next.id}`}
+                                className='pointer-events-none absolute top-0 bottom-0 flex items-center justify-center text-[10px] font-semibold uppercase tracking-[0.25em]'
+                                style={{
+                                    left: currentRight,
+                                    width: gapSize,
+                                    paddingTop: layoutPadding.top,
+                                    paddingBottom: layoutPadding.bottom,
+                                }}
+                            >
+                                <span className='rotate-90 rounded-full border border-[rgba(139,92,246,0.35)] bg-[rgba(139,92,246,0.15)] px-2 py-0.5 text-[rgba(236,233,254,0.75)]'>
+                                    Gap {Math.round(gapSize)}
+                                </span>
+                            </div>,
+                        );
+                    }
+                    gapMarkers = markers;
+                }
+            }
+
+            let dropHighlight = null;
+            if (
+                showLayoutOverlay &&
+                autoLayoutPreview &&
+                autoLayoutPreview.frameId === frameId &&
+                autoLayoutPreview.parentId === element.id
+            ) {
+                const highlightId = autoLayoutPreview.beforeId ?? autoLayoutPreview.afterId ?? null;
+                let highlightBounds = null;
+                if (highlightId) {
+                    const childNode = childrenNodes.find((node) => node.element.id === highlightId);
+                    const childProps = childNode?.element?.props;
+                    if (childProps) {
+                        highlightBounds = {
+                            x: childProps.x ?? layoutPadding.left,
+                            y: childProps.y ?? layoutPadding.top,
+                            width: Math.max(2, childProps.width ?? 0),
+                            height: Math.max(2, childProps.height ?? 0),
+                        };
+                    }
+                }
+                if (!highlightBounds) {
+                    highlightBounds = {
+                        x: layoutPadding.left,
+                        y: layoutPadding.top,
+                        width: Math.max(0, (props.width ?? 0) - layoutPadding.left - layoutPadding.right),
+                        height: Math.max(0, (props.height ?? 0) - layoutPadding.top - layoutPadding.bottom),
+                    };
+                }
+
+                dropHighlight = (
+                    <div
+                        className='pointer-events-none absolute rounded-[14px] border-2 border-dashed border-[rgba(236,233,254,0.72)] bg-[rgba(139,92,246,0.14)] transition-all'
+                        style={{
+                            left: highlightBounds.x,
+                            top: highlightBounds.y,
+                            width: highlightBounds.width,
+                            height: highlightBounds.height,
+                        }}
+                    />
+                );
+            }
+
+            const paddingOverlay = showLayoutOverlay ? (
+                <div
+                    className='pointer-events-none absolute rounded-xl border border-dashed border-[rgba(139,92,246,0.35)] bg-[rgba(139,92,246,0.1)]'
+                    style={{
+                        top: layoutPadding.top,
+                        left: layoutPadding.left,
+                        right: layoutPadding.right,
+                        bottom: layoutPadding.bottom,
+                    }}
+                >
+                    <div className='pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full border border-[rgba(139,92,246,0.3)] bg-[rgba(236,233,254,0.08)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-[rgba(236,233,254,0.7)]'>
+                        Padding T {layoutPadding.top} · R {layoutPadding.right} · B {layoutPadding.bottom} · L {layoutPadding.left}
+                    </div>
+                </div>
+            ) : null;
+
+            const layoutBadge = showLayoutOverlay ? (
+                <div className='pointer-events-none absolute right-2 top-2 rounded-full border border-[rgba(139,92,246,0.45)] bg-[rgba(15,23,42,0.8)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-[rgba(236,233,254,0.8)] shadow-[0_0_0_1px_rgba(139,92,246,0.35)]'>
+                    {layoutDirectionLabel}
+                </div>
+            ) : null;
+
             return (
                 <div
                     className={clsx(
@@ -541,6 +985,14 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                     onPointerDown={handlePointerDown}
                     onContextMenu={handleContextMenu}
                 >
+                    {showLayoutOverlay ? (
+                        <div className='pointer-events-none absolute inset-0'>
+                            {paddingOverlay}
+                            {gapMarkers}
+                            {dropHighlight}
+                            {layoutBadge}
+                        </div>
+                    ) : null}
                     {linkBadge}
                     {commentBadge}
                     {resizeHandles}
@@ -549,6 +1001,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                     ))}
                 </div>
             );
+        }
         default:
             return null;
     }

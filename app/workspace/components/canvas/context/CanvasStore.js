@@ -3,6 +3,7 @@
 import { nanoid } from 'nanoid';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { generateFrameExport } from '../utils/exportCode';
 
 const DEFAULT_FRAME_BACKGROUND = '#0F172A';
 const DEFAULT_TEXT_COLOR = '#ECE9FE';
@@ -87,6 +88,600 @@ const ELEMENT_NAME_MAP = {
 
 const getDefaultElementName = (type) => ELEMENT_NAME_MAP[type] ?? 'Layer';
 
+const DEFAULT_LAYOUT_PADDING = { top: 64, right: 64, bottom: 64, left: 64 };
+const DEFAULT_GRID_COLUMNS = 3;
+const DEFAULT_GRID_AUTO_ROWS = 240;
+const DEFAULT_GRID_TEMPLATE = 'none';
+const DEFAULT_GRID_MIN_COLUMN_WIDTH = 240;
+const AUTO_FIT_OPTIONS = ['none', 'auto-fit', 'auto-fill'];
+
+function normalizePadding(padding) {
+    const base = { ...DEFAULT_LAYOUT_PADDING };
+    if (!padding) return base;
+    return {
+        top: Number.isFinite(padding.top) ? padding.top : base.top,
+        right: Number.isFinite(padding.right) ? padding.right : base.right,
+        bottom: Number.isFinite(padding.bottom) ? padding.bottom : base.bottom,
+        left: Number.isFinite(padding.left) ? padding.left : base.left,
+    };
+}
+
+function clampValue(value, minValue, maxValue) {
+    const hasMin = Number.isFinite(minValue);
+    const hasMax = Number.isFinite(maxValue);
+    let next = Number.isFinite(value) ? value : 0;
+    if (hasMin) {
+        next = Math.max(minValue, next);
+    }
+    if (hasMax) {
+        next = Math.min(maxValue, next);
+    }
+    return next;
+}
+
+function computeFlexColumnLayout(frame) {
+    const padding = normalizePadding(frame.layoutPadding);
+    const gap = Number.isFinite(frame.layoutGap) ? frame.layoutGap : 0;
+    const availableWidth = Math.max(0, frame.width - padding.left - padding.right);
+    const availableHeight = Math.max(0, frame.height - padding.top - padding.bottom);
+    const layoutAlign = frame.layoutAlign ?? 'start';
+    const layoutCrossAlign = frame.layoutCrossAlign ?? 'stretch';
+
+    const topLevel = frame.elements.filter((element) => !element.parentId);
+    if (topLevel.length === 0) {
+        return { elements: frame.elements, changed: false };
+    }
+
+    const metrics = topLevel.map((element) => {
+        const props = element.props ?? {};
+        const layout = element.layout ?? {};
+        const basis = layout.basis;
+        const minHeight = Number.isFinite(layout.minHeight) ? layout.minHeight : undefined;
+        const maxHeight = Number.isFinite(layout.maxHeight) ? layout.maxHeight : undefined;
+        const minWidth = Number.isFinite(layout.minWidth) ? layout.minWidth : undefined;
+        const maxWidth = Number.isFinite(layout.maxWidth) ? layout.maxWidth : undefined;
+        const desiredHeight = Number.isFinite(basis)
+            ? basis
+            : Number.isFinite(props.height)
+                ? props.height
+                : 120;
+        const desiredWidth = Number.isFinite(props.width) ? props.width : availableWidth || 320;
+        const alignSelf =
+            layout.alignSelf !== null && layout.alignSelf !== undefined
+                ? layout.alignSelf
+                : layoutCrossAlign;
+        const grow = Number.isFinite(layout.grow) ? Math.max(0, layout.grow) : 0;
+        const shrink = Number.isFinite(layout.shrink) ? Math.max(0, layout.shrink) : 1;
+        return {
+            element,
+            props,
+            layout,
+            desiredWidth: Math.max(1, desiredWidth),
+            targetHeight: Math.max(1, clampValue(desiredHeight, minHeight, maxHeight)),
+            alignSelf,
+            grow,
+            shrink,
+            minHeight,
+            maxHeight,
+            minWidth,
+            maxWidth,
+        };
+    });
+
+    const gapCount = Math.max(0, metrics.length - 1);
+    let gapToUse = gap;
+    const totalContentHeight = metrics.reduce((total, item) => total + item.targetHeight, 0);
+    const baseTotalHeight = totalContentHeight + gapToUse * gapCount;
+    let freeSpace = availableHeight - baseTotalHeight;
+
+    if (freeSpace > 0) {
+        const totalGrow = metrics.reduce((sum, item) => sum + item.grow, 0);
+        if (totalGrow > 0) {
+            metrics.forEach((item) => {
+                const delta = (freeSpace * item.grow) / totalGrow;
+                const nextHeight = clampValue(item.targetHeight + delta, item.minHeight, item.maxHeight);
+                item.targetHeight = Math.max(1, nextHeight);
+            });
+            freeSpace = 0;
+        }
+    } else if (freeSpace < 0) {
+        const deficit = -freeSpace;
+        const totalShrink = metrics.reduce((sum, item) => sum + item.shrink, 0);
+        if (totalShrink > 0) {
+            metrics.forEach((item) => {
+                const delta = (deficit * item.shrink) / totalShrink;
+                const nextHeight = clampValue(item.targetHeight - delta, item.minHeight, item.maxHeight);
+                item.targetHeight = Math.max(1, nextHeight);
+            });
+            freeSpace = 0;
+        }
+    }
+
+    const adjustedContentHeight = metrics.reduce((total, item) => total + item.targetHeight, 0);
+    const totalGapSpace = gapToUse * gapCount;
+    let occupiedHeight = adjustedContentHeight + totalGapSpace;
+    let startY = padding.top;
+    let remaining = availableHeight - occupiedHeight;
+
+    if (layoutAlign === 'space-between' && gapCount > 0) {
+        const spreadable = availableHeight - adjustedContentHeight;
+        if (spreadable > 0) {
+            gapToUse = spreadable / gapCount;
+        }
+        occupiedHeight = adjustedContentHeight + gapToUse * gapCount;
+        remaining = availableHeight - occupiedHeight;
+        startY = padding.top;
+    } else if (layoutAlign === 'center') {
+        startY = padding.top + Math.max(0, remaining / 2);
+    } else if (layoutAlign === 'end') {
+        startY = padding.top + Math.max(0, remaining);
+    } else {
+        startY = padding.top;
+    }
+
+    const updates = new Map();
+    let cursorY = startY;
+
+    metrics.forEach((item) => {
+        let width = item.desiredWidth;
+        let x = padding.left;
+        const alignSelf = item.alignSelf ?? 'stretch';
+        const minWidth = item.minWidth;
+        const maxWidth = item.maxWidth;
+
+        if (alignSelf === 'start') {
+            width = clampValue(Math.min(width, availableWidth) || width, minWidth, maxWidth);
+            x = padding.left;
+        } else if (alignSelf === 'center') {
+            width = clampValue(Math.min(width, availableWidth) || width, minWidth, maxWidth);
+            x = padding.left + Math.max(0, (availableWidth - width) / 2);
+        } else if (alignSelf === 'end') {
+            width = clampValue(Math.min(width, availableWidth) || width, minWidth, maxWidth);
+            x = padding.left + Math.max(0, availableWidth - width);
+        } else {
+            const stretchedWidth = availableWidth > 0 ? availableWidth : width;
+            width = clampValue(stretchedWidth, minWidth, maxWidth);
+            x = padding.left;
+        }
+
+        const y = cursorY;
+        cursorY += item.targetHeight + gapToUse;
+
+        const { props } = item;
+        if (
+            props.x !== x ||
+            props.y !== y ||
+            props.width !== width ||
+            props.height !== item.targetHeight
+        ) {
+            updates.set(item.element.id, {
+                x,
+                y,
+                width,
+                height: item.targetHeight,
+            });
+        }
+    });
+
+    if (updates.size === 0) {
+        return { elements: frame.elements, changed: false };
+    }
+
+    const elements = frame.elements.map((element) => {
+        if (!updates.has(element.id)) return element;
+        const overrides = updates.get(element.id);
+        return {
+            ...element,
+            props: {
+                ...element.props,
+                ...overrides,
+            },
+        };
+    });
+
+    return { elements, changed: true };
+}
+
+function computeFlexRowLayout(frame) {
+    const padding = normalizePadding(frame.layoutPadding);
+    const gap = Number.isFinite(frame.layoutGap) ? frame.layoutGap : 0;
+    const availableWidth = Math.max(0, frame.width - padding.left - padding.right);
+    const availableHeight = Math.max(0, frame.height - padding.top - padding.bottom);
+    const layoutAlign = frame.layoutAlign ?? 'start';
+    const layoutCrossAlign = frame.layoutCrossAlign ?? 'stretch';
+
+    const topLevel = frame.elements.filter((element) => !element.parentId);
+    if (topLevel.length === 0) {
+        return { elements: frame.elements, changed: false };
+    }
+
+    const metrics = topLevel.map((element) => {
+        const props = element.props ?? {};
+        const layout = element.layout ?? {};
+        const basis = layout.basis;
+        const minWidth = Number.isFinite(layout.minWidth) ? layout.minWidth : undefined;
+        const maxWidth = Number.isFinite(layout.maxWidth) ? layout.maxWidth : undefined;
+        const minHeight = Number.isFinite(layout.minHeight) ? layout.minHeight : undefined;
+        const maxHeight = Number.isFinite(layout.maxHeight) ? layout.maxHeight : undefined;
+        const fallbackWidth = availableWidth > 0 ? Math.min(availableWidth, 320) : 320;
+        const desiredWidth = Number.isFinite(basis)
+            ? basis
+            : Number.isFinite(props.width)
+                ? props.width
+                : fallbackWidth;
+        const desiredHeight = Number.isFinite(props.height)
+            ? props.height
+            : availableHeight > 0
+                ? Math.min(availableHeight, 240)
+                : 240;
+        const alignSelf =
+            layout.alignSelf !== null && layout.alignSelf !== undefined
+                ? layout.alignSelf
+                : layoutCrossAlign;
+        const grow = Number.isFinite(layout.grow) ? Math.max(0, layout.grow) : 0;
+        const shrink = Number.isFinite(layout.shrink) ? Math.max(0, layout.shrink) : 1;
+        return {
+            element,
+            props,
+            layout,
+            targetWidth: Math.max(1, clampValue(desiredWidth, minWidth, maxWidth)),
+            desiredHeight: Math.max(1, clampValue(desiredHeight, minHeight, maxHeight)),
+            alignSelf,
+            grow,
+            shrink,
+            minWidth,
+            maxWidth,
+            minHeight,
+            maxHeight,
+        };
+    });
+
+    const gapCount = Math.max(0, metrics.length - 1);
+    let gapToUse = gap;
+    const totalContentWidth = metrics.reduce((total, item) => total + item.targetWidth, 0);
+    const baseTotalWidth = totalContentWidth + gapToUse * gapCount;
+    let freeSpace = availableWidth - baseTotalWidth;
+
+    if (freeSpace > 0) {
+        const totalGrow = metrics.reduce((sum, item) => sum + item.grow, 0);
+        if (totalGrow > 0) {
+            metrics.forEach((item) => {
+                const delta = (freeSpace * item.grow) / totalGrow;
+                const nextWidth = clampValue(item.targetWidth + delta, item.minWidth, item.maxWidth);
+                item.targetWidth = Math.max(1, nextWidth);
+            });
+            freeSpace = 0;
+        }
+    } else if (freeSpace < 0) {
+        const deficit = -freeSpace;
+        const totalShrink = metrics.reduce((sum, item) => sum + item.shrink, 0);
+        if (totalShrink > 0) {
+            metrics.forEach((item) => {
+                const delta = (deficit * item.shrink) / totalShrink;
+                const nextWidth = clampValue(item.targetWidth - delta, item.minWidth, item.maxWidth);
+                item.targetWidth = Math.max(1, nextWidth);
+            });
+            freeSpace = 0;
+        }
+    }
+
+    const adjustedContentWidth = metrics.reduce((total, item) => total + item.targetWidth, 0);
+    const gapSpace = gapToUse * gapCount;
+    let occupiedWidth = adjustedContentWidth + gapSpace;
+    let startX = padding.left;
+    let remaining = availableWidth - occupiedWidth;
+
+    if (layoutAlign === 'space-between' && gapCount > 0) {
+        const spreadable = availableWidth - adjustedContentWidth;
+        if (spreadable > 0) {
+            gapToUse = spreadable / gapCount;
+        }
+        occupiedWidth = adjustedContentWidth + gapToUse * gapCount;
+        remaining = availableWidth - occupiedWidth;
+        startX = padding.left;
+    } else if (layoutAlign === 'center') {
+        startX = padding.left + Math.max(0, remaining / 2);
+    } else if (layoutAlign === 'end') {
+        startX = padding.left + Math.max(0, remaining);
+    } else {
+        startX = padding.left;
+    }
+
+    const updates = new Map();
+    let cursorX = startX;
+
+    metrics.forEach((item) => {
+        let width = item.targetWidth;
+        let height = item.desiredHeight;
+        const alignSelf = item.alignSelf ?? 'stretch';
+        let y = padding.top;
+        const minHeight = item.minHeight;
+        const maxHeight = item.maxHeight;
+
+        if (alignSelf === 'start') {
+            height = clampValue(Math.min(height, availableHeight || height), minHeight, maxHeight);
+            y = padding.top;
+        } else if (alignSelf === 'center') {
+            height = clampValue(Math.min(height, availableHeight || height), minHeight, maxHeight);
+            y = padding.top + Math.max(0, (availableHeight - height) / 2);
+        } else if (alignSelf === 'end') {
+            height = clampValue(Math.min(height, availableHeight || height), minHeight, maxHeight);
+            y = padding.top + Math.max(0, availableHeight - height);
+        } else {
+            const stretchedHeight = availableHeight > 0 ? availableHeight : height;
+            height = clampValue(stretchedHeight, minHeight, maxHeight);
+            y = padding.top;
+        }
+
+        const x = cursorX;
+        cursorX += width + gapToUse;
+
+        const { props } = item;
+        if (
+            props.x !== x ||
+            props.y !== y ||
+            props.width !== width ||
+            props.height !== height
+        ) {
+            updates.set(item.element.id, {
+                x,
+                y,
+                width,
+                height,
+            });
+        }
+    });
+
+    if (updates.size === 0) {
+        return { elements: frame.elements, changed: false };
+    }
+
+    const elements = frame.elements.map((element) => {
+        if (!updates.has(element.id)) return element;
+        const overrides = updates.get(element.id);
+        return {
+            ...element,
+            props: {
+                ...element.props,
+                ...overrides,
+            },
+        };
+    });
+
+    return { elements, changed: true };
+}
+
+function computeGridLayout(frame) {
+    const padding = normalizePadding(frame.layoutPadding);
+    const columnGap = Number.isFinite(frame.layoutGap) ? frame.layoutGap : 0;
+    const rowGap = Number.isFinite(frame.layoutRowGap) ? frame.layoutRowGap : columnGap;
+    const hasAutoFit = frame.layoutGridAutoFit && frame.layoutGridAutoFit !== 'none';
+    const minColumnWidth = Number.isFinite(frame.layoutGridMinColumnWidth)
+        ? frame.layoutGridMinColumnWidth
+        : DEFAULT_GRID_MIN_COLUMN_WIDTH;
+    const autoRowHeight = Number.isFinite(frame.layoutGridAutoRows) ? frame.layoutGridAutoRows : DEFAULT_GRID_AUTO_ROWS;
+    const availableWidth = Math.max(0, frame.width - padding.left - padding.right);
+    const availableHeight = Math.max(0, frame.height - padding.top - padding.bottom);
+
+    const explicitColumns = Math.max(
+        1,
+        Number.isFinite(frame.layoutGridColumns) ? Math.floor(frame.layoutGridColumns) : DEFAULT_GRID_COLUMNS,
+    );
+
+    let columns = explicitColumns;
+    if (hasAutoFit) {
+        const unit = minColumnWidth + columnGap;
+        if (unit > 0) {
+            const possible = Math.floor((availableWidth + columnGap) / unit);
+            if (Number.isFinite(possible) && possible > 0) {
+                columns = possible;
+            } else {
+                columns = 1;
+            }
+        }
+    }
+    if (columns < 1) {
+        columns = 1;
+    }
+
+    const baseColumnWidth =
+        columns > 0 ? Math.max(0, (availableWidth - columnGap * (columns - 1)) / columns) : availableWidth;
+    const columnWidth = hasAutoFit
+        ? Math.max(baseColumnWidth, Math.min(minColumnWidth, availableWidth || minColumnWidth))
+        : baseColumnWidth;
+
+    const topLevel = frame.elements.filter((element) => !element.parentId);
+    if (topLevel.length === 0) {
+        return { elements: frame.elements, changed: false };
+    }
+
+    const sorted = topLevel
+        .map((element, index) => ({ element, index }))
+        .sort((a, b) => {
+            const orderA = Number.isFinite(a.element.layout?.order) ? a.element.layout.order : a.index;
+            const orderB = Number.isFinite(b.element.layout?.order) ? b.element.layout.order : b.index;
+            if (orderA === orderB) return a.index - b.index;
+            return orderA - orderB;
+        });
+
+    const occupied = new Map();
+    const placements = [];
+
+    const ensureRow = (rowIndex) => {
+        if (!occupied.has(rowIndex)) {
+            occupied.set(rowIndex, Array.from({ length: columns }, () => false));
+        }
+    };
+
+    const isFree = (rowIndex, colIndex, colSpan, rowSpan) => {
+        const maxColumn = columns - 1;
+        for (let r = 0; r < rowSpan; r += 1) {
+            const targetRow = rowIndex + r;
+            ensureRow(targetRow);
+            const row = occupied.get(targetRow);
+            for (let c = 0; c < colSpan; c += 1) {
+                const targetCol = colIndex + c - 1;
+                if (targetCol > maxColumn || targetCol < 0 || row[targetCol]) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    };
+
+    const reserve = (rowIndex, colIndex, colSpan, rowSpan) => {
+        for (let r = 0; r < rowSpan; r += 1) {
+            const targetRow = rowIndex + r;
+            ensureRow(targetRow);
+            const row = occupied.get(targetRow);
+            for (let c = 0; c < colSpan; c += 1) {
+                const targetCol = colIndex + c - 1;
+                if (targetCol >= 0 && targetCol < row.length) {
+                    row[targetCol] = true;
+                }
+            }
+        }
+    };
+
+    const findSlot = (colSpan, rowSpan, preferredRow = 1, preferredCol = 1) => {
+        let rowIndex = Math.max(1, preferredRow);
+        let attempts = 0;
+        const maxColStart = Math.max(1, columns - colSpan + 1);
+        let colStart = Math.max(1, Math.min(preferredCol, maxColStart));
+
+        while (attempts < 1000) {
+            const limit = Math.max(1, columns - colSpan + 1);
+            let colIndex = colStart;
+            while (colIndex <= limit) {
+                if (isFree(rowIndex, colIndex, colSpan, rowSpan)) {
+                    return { row: rowIndex, col: colIndex };
+                }
+                colIndex += 1;
+            }
+            rowIndex += 1;
+            colStart = 1;
+            attempts += 1;
+        }
+
+        return { row: rowIndex, col: 1 };
+    };
+
+    sorted.forEach(({ element }) => {
+        const props = element.props ?? {};
+        const layout = element.layout ?? {};
+        const span = Math.max(1, Number.isFinite(layout.gridColumnSpan) ? Math.floor(layout.gridColumnSpan) : 1);
+        const colSpan = Math.min(span, columns);
+        const rowSpan = Math.max(1, Number.isFinite(layout.gridRowSpan) ? Math.floor(layout.gridRowSpan) : 1);
+        const preferredCol =
+            layout.gridColumnStart !== null && layout.gridColumnStart !== undefined
+                ? Math.max(1, Math.floor(layout.gridColumnStart))
+                : null;
+        const preferredRow =
+            layout.gridRowStart !== null && layout.gridRowStart !== undefined
+                ? Math.max(1, Math.floor(layout.gridRowStart))
+                : null;
+
+        const slot = findSlot(colSpan, rowSpan, preferredRow ?? 1, preferredCol ?? 1);
+        reserve(slot.row, slot.col, colSpan, rowSpan);
+
+        const width = colSpan * columnWidth + columnGap * (colSpan - 1);
+        const definedHeight = Number.isFinite(props.height) ? props.height : null;
+        const contentHeight = definedHeight ?? autoRowHeight * rowSpan;
+
+        placements.push({
+            element,
+            colSpan,
+            rowSpan,
+            rowStart: slot.row,
+            colStart: slot.col,
+            width,
+            contentHeight,
+            explicitHeight: definedHeight,
+        });
+    });
+
+    if (placements.length === 0) {
+        return { elements: frame.elements, changed: false };
+    }
+
+    const rowHeights = new Map();
+    placements.forEach((item) => {
+        const perRowHeight = item.contentHeight > 0 ? item.contentHeight / item.rowSpan : autoRowHeight;
+        for (let offset = 0; offset < item.rowSpan; offset += 1) {
+            const rowIndex = item.rowStart + offset;
+            const current = rowHeights.get(rowIndex) ?? 0;
+            rowHeights.set(rowIndex, Math.max(current, perRowHeight, autoRowHeight));
+        }
+    });
+
+    const sortedRows = Array.from(rowHeights.keys()).sort((a, b) => a - b);
+    const rowOffsets = new Map();
+    let currentY = padding.top;
+    let lastRowIndex = 0;
+
+    sortedRows.forEach((rowIndex) => {
+        if (rowIndex > lastRowIndex + 1) {
+            const gapRows = rowIndex - lastRowIndex - 1;
+            currentY += gapRows * (autoRowHeight + rowGap);
+        }
+        rowOffsets.set(rowIndex, currentY);
+        const rowHeight = rowHeights.get(rowIndex) ?? autoRowHeight;
+        currentY += rowHeight + rowGap;
+        lastRowIndex = rowIndex;
+    });
+
+    const updates = new Map();
+    placements.forEach((item) => {
+        const props = item.element.props ?? {};
+        const x = padding.left + (item.colStart - 1) * (columnWidth + columnGap);
+        const y =
+            rowOffsets.get(item.rowStart) ??
+            padding.top + (item.rowStart - 1) * (autoRowHeight + rowGap);
+
+        let computedHeight = 0;
+        for (let offset = 0; offset < item.rowSpan; offset += 1) {
+            const rowIndex = item.rowStart + offset;
+            const rowHeight = rowHeights.get(rowIndex) ?? autoRowHeight;
+            computedHeight += rowHeight;
+            if (offset < item.rowSpan - 1) {
+                computedHeight += rowGap;
+            }
+        }
+
+        const finalHeight = Number.isFinite(props.height) ? props.height : computedHeight;
+        updates.set(item.element.id, {
+            x,
+            y,
+            width: item.width,
+            height: finalHeight,
+        });
+    });
+
+    const totalContentHeight =
+        placements.length === 0
+            ? padding.top + padding.bottom
+            : currentY - rowGap - padding.top + padding.bottom;
+    const heightChanged = availableHeight > 0 && totalContentHeight > availableHeight;
+
+    if (updates.size === 0) {
+        return { elements: frame.elements, changed: heightChanged };
+    }
+
+    const elements = frame.elements.map((element) => {
+        const overrides = updates.get(element.id);
+        if (!overrides) return element;
+        return {
+            ...element,
+            props: {
+                ...element.props,
+                ...overrides,
+            },
+        };
+    });
+
+    return { elements, changed: true };
+}
+
 function withElementDefaults(element) {
     if (!element) return element;
     if (element.type === 'group') {
@@ -102,6 +697,37 @@ function withElementDefaults(element) {
                 skewY: element.props?.skewY ?? 0,
                 visible: element.props?.visible ?? true,
                 ...(element.props ?? {}),
+            },
+            layoutMode: element.layoutMode ?? 'absolute',
+            layoutGap: element.layoutGap ?? 24,
+            layoutAlign: element.layoutAlign ?? 'start',
+            layoutCrossAlign: element.layoutCrossAlign ?? 'stretch',
+            layoutPadding: element.layoutPadding
+                ? normalizePadding(element.layoutPadding)
+                : { ...DEFAULT_LAYOUT_PADDING },
+            layoutRowGap: element.layoutRowGap ?? element.layoutGap ?? 24,
+            layoutGridColumns: element.layoutGridColumns ?? DEFAULT_GRID_COLUMNS,
+            layoutGridAutoRows: element.layoutGridAutoRows ?? DEFAULT_GRID_AUTO_ROWS,
+            layoutGridAutoFit: AUTO_FIT_OPTIONS.includes(element.layoutGridAutoFit)
+                ? element.layoutGridAutoFit
+                : 'none',
+            layoutGridMinColumnWidth: Number.isFinite(element.layoutGridMinColumnWidth)
+                ? element.layoutGridMinColumnWidth
+                : DEFAULT_GRID_MIN_COLUMN_WIDTH,
+            layout: {
+                order: element.layout?.order ?? null,
+                basis: element.layout?.basis ?? null,
+                grow: element.layout?.grow ?? 0,
+                shrink: element.layout?.shrink ?? 1,
+                minWidth: element.layout?.minWidth ?? null,
+                maxWidth: element.layout?.maxWidth ?? null,
+                minHeight: element.layout?.minHeight ?? null,
+                maxHeight: element.layout?.maxHeight ?? null,
+                alignSelf: element.layout?.alignSelf ?? null,
+                gridColumnSpan: element.layout?.gridColumnSpan ?? 1,
+                gridRowSpan: element.layout?.gridRowSpan ?? 1,
+                gridColumnStart: element.layout?.gridColumnStart ?? null,
+                gridRowStart: element.layout?.gridRowStart ?? null,
             },
         };
     }
@@ -123,6 +749,21 @@ function withElementDefaults(element) {
             ...typeDefaults,
             ...(element.props ?? {}),
         },
+            layout: {
+                order: element.layout?.order ?? null,
+                basis: element.layout?.basis ?? null,
+                grow: element.layout?.grow ?? 0,
+                shrink: element.layout?.shrink ?? 1,
+                minWidth: element.layout?.minWidth ?? null,
+                maxWidth: element.layout?.maxWidth ?? null,
+                minHeight: element.layout?.minHeight ?? null,
+                maxHeight: element.layout?.maxHeight ?? null,
+                alignSelf: element.layout?.alignSelf ?? null,
+                gridColumnSpan: element.layout?.gridColumnSpan ?? 1,
+                gridRowSpan: element.layout?.gridRowSpan ?? 1,
+                gridColumnStart: element.layout?.gridColumnStart ?? null,
+                gridRowStart: element.layout?.gridRowStart ?? null,
+            },
     };
 }
 
@@ -147,6 +788,16 @@ const initialFrame = {
     backgroundPatternOffsetY: 0,
     backgroundPatternRepeat: 'repeat',
     backgroundBlendMode: 'normal',
+    layoutMode: 'absolute',
+    layoutGap: 32,
+    layoutAlign: 'start',
+    layoutCrossAlign: 'start',
+    layoutPadding: { ...DEFAULT_LAYOUT_PADDING },
+    layoutRowGap: 32,
+    layoutGridColumns: DEFAULT_GRID_COLUMNS,
+    layoutGridAutoRows: DEFAULT_GRID_AUTO_ROWS,
+    layoutGridAutoFit: 'none',
+    layoutGridMinColumnWidth: DEFAULT_GRID_MIN_COLUMN_WIDTH,
     timelineDuration: 20,
     elements: [
         withElementDefaults({
@@ -240,6 +891,7 @@ export const useCanvasStore = create(
     activePrototypeFrameId: initialFrame.id,
     frameLinks: [],
             activeGuides: [],
+            autoLayoutPreview: null,
             activeToolOverlay: null,
             comments: [],
             timelineAssets: [],
@@ -249,16 +901,18 @@ export const useCanvasStore = create(
             clipboard: null,
             contextMenu: null,
 
-            setMode: (mode) => set({ mode }),
-            setScale: (value) =>
-                set((state) => ({ scale: typeof value === 'function' ? value(state.scale) : value })),
-            setPosition: (value) =>
-                set((state) => ({ position: typeof value === 'function' ? value(state.position) : value })),
-            setGridVisible: (visible) => set({ gridVisible: Boolean(visible) }),
-            toggleGrid: () => set((state) => ({ gridVisible: !state.gridVisible })),
-            setGridSize: (size) => set({ gridSize: Math.max(4, Number(size) || 4) }),
+    setMode: (mode) => set({ mode }),
+    setScale: (value) =>
+        set((state) => ({ scale: typeof value === 'function' ? value(state.scale) : value })),
+    setPosition: (value) =>
+        set((state) => ({ position: typeof value === 'function' ? value(state.position) : value })),
+    setGridVisible: (visible) => set({ gridVisible: Boolean(visible) }),
+    toggleGrid: () => set((state) => ({ gridVisible: !state.gridVisible })),
+    setGridSize: (size) => set({ gridSize: Math.max(4, Number(size) || 4) }),
     setSelectedTool: (tool) => set({ selectedTool: tool }),
     setActiveGuides: (guides) => set({ activeGuides: Array.isArray(guides) ? guides : [] }),
+    setAutoLayoutPreview: (preview) => set({ autoLayoutPreview: preview }),
+    clearAutoLayoutPreview: () => set({ autoLayoutPreview: null }),
     clearActiveGuides: () => set({ activeGuides: [] }),
     setActiveToolOverlay: (overlay) => set({ activeToolOverlay: overlay }),
 
@@ -356,6 +1010,16 @@ export const useCanvasStore = create(
                 backgroundPatternOffsetY: overrides.backgroundPatternOffsetY ?? 0,
                 backgroundPatternRepeat: overrides.backgroundPatternRepeat ?? 'repeat',
                 backgroundBlendMode: overrides.backgroundBlendMode ?? 'normal',
+                layoutMode: overrides.layoutMode ?? 'absolute',
+                layoutGap: overrides.layoutGap ?? 32,
+                layoutAlign: overrides.layoutAlign ?? 'start',
+                layoutCrossAlign: overrides.layoutCrossAlign ?? 'start',
+                layoutPadding: overrides.layoutPadding
+                    ? { ...DEFAULT_LAYOUT_PADDING, ...overrides.layoutPadding }
+                    : { ...DEFAULT_LAYOUT_PADDING },
+                layoutRowGap: overrides.layoutRowGap ?? 32,
+                layoutGridColumns: overrides.layoutGridColumns ?? DEFAULT_GRID_COLUMNS,
+                layoutGridAutoRows: overrides.layoutGridAutoRows ?? DEFAULT_GRID_AUTO_ROWS,
                 timelineDuration: overrides.timelineDuration ?? 20,
                 elements: [],
             };
@@ -370,10 +1034,426 @@ export const useCanvasStore = create(
         return createdFrame;
     },
 
-    updateFrame: (id, updates) =>
+    updateFrame: (id, updates) => {
+        let shouldReflow = false;
         set((state) => ({
-            frames: state.frames.map((frame) => (frame.id === id ? { ...frame, ...updates } : frame)),
-        })),
+            frames: state.frames.map((frame) => {
+                if (frame.id !== id) return frame;
+                const next = {
+                    ...frame,
+                    ...updates,
+                };
+
+                if (updates.layoutPadding) {
+                    next.layoutPadding = {
+                        ...normalizePadding(frame.layoutPadding),
+                        ...updates.layoutPadding,
+                    };
+                }
+
+                if (updates.layoutRowGap !== undefined) {
+                    next.layoutRowGap = Number.isFinite(updates.layoutRowGap)
+                        ? updates.layoutRowGap
+                        : frame.layoutRowGap ?? 0;
+                    shouldReflow = true;
+                }
+
+                if (updates.layoutGridColumns !== undefined) {
+                    next.layoutGridColumns = Number.isFinite(updates.layoutGridColumns)
+                        ? updates.layoutGridColumns
+                        : frame.layoutGridColumns ?? DEFAULT_GRID_COLUMNS;
+                    shouldReflow = true;
+                }
+
+                if (updates.layoutGridAutoRows !== undefined) {
+                    next.layoutGridAutoRows = Number.isFinite(updates.layoutGridAutoRows)
+                        ? updates.layoutGridAutoRows
+                        : frame.layoutGridAutoRows ?? DEFAULT_GRID_AUTO_ROWS;
+                    shouldReflow = true;
+                }
+
+                if (frame.layoutMode !== 'absolute' || next.layoutMode !== 'absolute') {
+                    if (updates.width !== undefined || updates.height !== undefined) {
+                        shouldReflow = true;
+                    }
+                }
+
+                if (
+                    updates.layoutMode !== undefined ||
+                    updates.layoutGap !== undefined ||
+                    updates.layoutAlign !== undefined ||
+                    updates.layoutCrossAlign !== undefined ||
+                    updates.layoutPadding !== undefined ||
+                    updates.layoutRowGap !== undefined ||
+                    updates.layoutGridColumns !== undefined ||
+                    updates.layoutGridAutoRows !== undefined ||
+                    updates.layoutGridAutoFit !== undefined ||
+                    updates.layoutGridMinColumnWidth !== undefined
+                ) {
+                    shouldReflow = true;
+                }
+
+                return next;
+            }),
+        }));
+
+        if (shouldReflow) {
+            const latest = get().frames.find((frame) => frame.id === id);
+            if (latest && latest.layoutMode && latest.layoutMode !== 'absolute') {
+                get().reflowFrame(id);
+            }
+        }
+    },
+
+    setFrameLayout: (frameId, updates) => {
+        if (!frameId || !updates) return;
+        set((state) => ({
+            frames: state.frames.map((frame) => {
+                if (frame.id !== frameId) return frame;
+                const currentPadding = normalizePadding(frame.layoutPadding);
+                const nextPadding = updates.layoutPadding
+                    ? { ...currentPadding, ...updates.layoutPadding }
+                    : currentPadding;
+                return {
+                    ...frame,
+                    layoutMode: updates.layoutMode ?? frame.layoutMode ?? 'absolute',
+                    layoutGap: updates.layoutGap ?? frame.layoutGap ?? 0,
+                    layoutAlign: updates.layoutAlign ?? frame.layoutAlign ?? 'start',
+                    layoutCrossAlign: updates.layoutCrossAlign ?? frame.layoutCrossAlign ?? 'start',
+                    layoutPadding: nextPadding,
+                    layoutRowGap: updates.layoutRowGap ?? frame.layoutRowGap ?? 0,
+                    layoutGridColumns: updates.layoutGridColumns ?? frame.layoutGridColumns ?? DEFAULT_GRID_COLUMNS,
+                    layoutGridAutoRows: updates.layoutGridAutoRows ?? frame.layoutGridAutoRows ?? DEFAULT_GRID_AUTO_ROWS,
+                    layoutGridAutoFit: updates.layoutGridAutoFit ?? frame.layoutGridAutoFit ?? 'none',
+                    layoutGridMinColumnWidth:
+                        updates.layoutGridMinColumnWidth ?? frame.layoutGridMinColumnWidth ?? DEFAULT_GRID_MIN_COLUMN_WIDTH,
+                };
+            }),
+        }));
+        const latest = get().frames.find((frame) => frame.id === frameId);
+        if (latest && latest.layoutMode && latest.layoutMode !== 'absolute') {
+            get().reflowFrame(frameId);
+        }
+    },
+
+    setGroupLayout: (frameId, groupId, updates) => {
+        if (!frameId || !groupId || !updates) return;
+        let shouldReflow = false;
+        set((state) => ({
+            frames: state.frames.map((frame) => {
+                if (frame.id !== frameId) return frame;
+                let changed = false;
+                const elements = frame.elements.map((element) => {
+                    if (element.id !== groupId || element.type !== 'group') return element;
+                    const currentPadding = normalizePadding(element.layoutPadding);
+                    const nextPadding = updates.layoutPadding
+                        ? { ...currentPadding, ...updates.layoutPadding }
+                        : currentPadding;
+                    const nextLayoutMode = updates.layoutMode ?? element.layoutMode ?? 'absolute';
+                    const nextGap = updates.layoutGap ?? element.layoutGap ?? 0;
+                    const nextAlign = updates.layoutAlign ?? element.layoutAlign ?? 'start';
+                    const nextCrossAlign = updates.layoutCrossAlign ?? element.layoutCrossAlign ?? 'stretch';
+                    const nextRowGap = updates.layoutRowGap ?? element.layoutRowGap ?? 0;
+                    const nextColumns = updates.layoutGridColumns ?? element.layoutGridColumns ?? DEFAULT_GRID_COLUMNS;
+                    const nextAutoRows = updates.layoutGridAutoRows ?? element.layoutGridAutoRows ?? DEFAULT_GRID_AUTO_ROWS;
+                    const nextAutoFit = updates.layoutGridAutoFit ?? element.layoutGridAutoFit ?? 'none';
+                    const nextMinColumnWidth =
+                        updates.layoutGridMinColumnWidth ?? element.layoutGridMinColumnWidth ?? DEFAULT_GRID_MIN_COLUMN_WIDTH;
+                    if (
+                        element.layoutMode !== nextLayoutMode ||
+                        element.layoutGap !== nextGap ||
+                        element.layoutAlign !== nextAlign ||
+                        element.layoutCrossAlign !== nextCrossAlign ||
+                        element.layoutRowGap !== nextRowGap ||
+                        element.layoutGridColumns !== nextColumns ||
+                        element.layoutGridAutoRows !== nextAutoRows ||
+                        element.layoutGridAutoFit !== nextAutoFit ||
+                        element.layoutGridMinColumnWidth !== nextMinColumnWidth ||
+                        JSON.stringify(element.layoutPadding) !== JSON.stringify(nextPadding)
+                    ) {
+                        shouldReflow = true;
+                    }
+                    changed = true;
+                    return {
+                        ...element,
+                        layoutMode: nextLayoutMode,
+                        layoutGap: nextGap,
+                        layoutAlign: nextAlign,
+                        layoutCrossAlign: nextCrossAlign,
+                        layoutPadding: nextPadding,
+                        layoutRowGap: nextRowGap,
+                        layoutGridColumns: nextColumns,
+                        layoutGridAutoRows: nextAutoRows,
+                        layoutGridAutoFit: nextAutoFit,
+                        layoutGridMinColumnWidth: nextMinColumnWidth,
+                    };
+                });
+                return changed ? { ...frame, elements } : frame;
+            }),
+        }));
+
+        if (shouldReflow) {
+            const latest = get().frames.find((frame) => frame.id === frameId);
+            if (!latest) return;
+            const target = latest.elements.find((element) => element.id === groupId && element.type === 'group');
+            if (!target) return;
+            get().reflowGroup(frameId, groupId);
+            if (target.parentId) {
+                get().reflowGroup(frameId, target.parentId);
+            } else if (latest.layoutMode && latest.layoutMode !== 'absolute') {
+                get().reflowFrame(frameId);
+            }
+        }
+    },
+
+    setElementLayout: (frameId, elementId, updates) => {
+        if (!frameId || !elementId || !updates) return;
+        let changed = false;
+        set((state) => ({
+            frames: state.frames.map((frame) => {
+                if (frame.id !== frameId) return frame;
+                const elements = frame.elements.map((element) => {
+                    if (element.id !== elementId) return element;
+                    const currentLayout = element.layout ?? {};
+                    const nextLayout = {
+                        ...currentLayout,
+                        ...updates,
+                    };
+                    let localChanged = false;
+                    const keys = new Set([
+                        ...Object.keys(currentLayout),
+                        ...Object.keys(updates),
+                    ]);
+                    keys.forEach((key) => {
+                        if (currentLayout[key] !== nextLayout[key]) {
+                            localChanged = true;
+                        }
+                    });
+                    if (!localChanged) {
+                        return element;
+                    }
+                    changed = true;
+                    return {
+                        ...element,
+                        layout: nextLayout,
+                    };
+                });
+                return {
+                    ...frame,
+                    elements,
+                };
+            }),
+        }));
+        const latest = get().frames.find((frame) => frame.id === frameId);
+        if (changed && latest && latest.layoutMode && latest.layoutMode !== 'absolute') {
+            get().reflowFrame(frameId);
+        }
+    },
+    reflowFrame: (frameId) => {
+        const state = get();
+        const frame = state.frames.find((item) => item.id === frameId);
+        if (!frame) return;
+        if (frame.layoutMode && frame.layoutMode !== 'absolute') {
+            if (frame.layoutMode === 'flex-column') {
+                const { elements, changed } = computeFlexColumnLayout(frame);
+                if (changed) {
+                    set((innerState) => ({
+                        frames: innerState.frames.map((item) =>
+                            item.id === frameId
+                                ? {
+                                      ...item,
+                                      elements,
+                                  }
+                                : item,
+                        ),
+                    }));
+                }
+            }
+
+            if (frame.layoutMode === 'flex-row') {
+                const { elements, changed } = computeFlexRowLayout(frame);
+                if (changed) {
+                    set((innerState) => ({
+                        frames: innerState.frames.map((item) =>
+                            item.id === frameId
+                                ? {
+                                      ...item,
+                                      elements,
+                                  }
+                                : item,
+                        ),
+                    }));
+                }
+            }
+            if (frame.layoutMode === 'grid') {
+                const { elements, changed } = computeGridLayout(frame);
+                if (changed) {
+                    set((innerState) => ({
+                        frames: innerState.frames.map((item) =>
+                            item.id === frameId
+                                ? {
+                                      ...item,
+                                      elements,
+                                  }
+                                : item,
+                        ),
+                    }));
+                }
+            }
+        }
+        get().reflowGroupsWithinFrame(frameId);
+    },
+
+    reflowGroup: (frameId, groupId) => {
+        const state = get();
+        const frame = state.frames.find((item) => item.id === frameId);
+        if (!frame) return;
+        const group = frame.elements.find((element) => element.id === groupId && element.type === 'group');
+        if (!group) return;
+        if (!group.layoutMode || group.layoutMode === 'absolute') return;
+
+        const children = frame.elements.filter((element) => element.parentId === groupId);
+        if (children.length === 0) return;
+
+        const padding = normalizePadding(group.layoutPadding);
+        const sandboxChildren = children.map((child) => ({
+            ...child,
+            parentId: null,
+        }));
+
+        const containerWidth = Number.isFinite(group.props?.width) ? group.props.width : frame.width;
+        const containerHeight = Number.isFinite(group.props?.height) ? group.props.height : frame.height;
+
+        const syntheticFrame = {
+            id: `${group.id}-layout`,
+            width: containerWidth ?? frame.width ?? 0,
+            height: containerHeight ?? frame.height ?? 0,
+            layoutMode: group.layoutMode,
+            layoutGap: group.layoutGap ?? 0,
+            layoutAlign: group.layoutAlign ?? 'start',
+            layoutCrossAlign: group.layoutCrossAlign ?? 'stretch',
+            layoutPadding: padding,
+            layoutRowGap: group.layoutRowGap ?? group.layoutGap ?? 0,
+            layoutGridColumns: group.layoutGridColumns ?? DEFAULT_GRID_COLUMNS,
+            layoutGridAutoRows: group.layoutGridAutoRows ?? DEFAULT_GRID_AUTO_ROWS,
+            layoutGridAutoFit: AUTO_FIT_OPTIONS.includes(group.layoutGridAutoFit) ? group.layoutGridAutoFit : 'none',
+            layoutGridMinColumnWidth: Number.isFinite(group.layoutGridMinColumnWidth)
+                ? group.layoutGridMinColumnWidth
+                : DEFAULT_GRID_MIN_COLUMN_WIDTH,
+            elements: sandboxChildren,
+        };
+
+        let layoutResult;
+        if (group.layoutMode === 'flex-row') {
+            layoutResult = computeFlexRowLayout(syntheticFrame);
+        } else if (group.layoutMode === 'flex-column') {
+            layoutResult = computeFlexColumnLayout(syntheticFrame);
+        } else if (group.layoutMode === 'grid') {
+            layoutResult = computeGridLayout(syntheticFrame);
+        } else {
+            return;
+        }
+
+        if (!layoutResult.changed) {
+            return;
+        }
+
+        const updates = new Map();
+        layoutResult.elements.forEach((child) => {
+            updates.set(child.id, child.props ?? {});
+        });
+
+        const bounding = computeBoundingBox(
+            layoutResult.elements.map((element) => ({
+                props: element.props,
+            })),
+        );
+
+        const desiredGroupWidth =
+            bounding && Number.isFinite(bounding.width)
+                ? bounding.width + padding.left + padding.right
+                : group.props?.width;
+        const desiredGroupHeight =
+            bounding && Number.isFinite(bounding.height)
+                ? bounding.height + padding.top + padding.bottom
+                : group.props?.height;
+        const widthChanged =
+            Number.isFinite(desiredGroupWidth) && desiredGroupWidth !== group.props?.width;
+        const heightChanged =
+            Number.isFinite(desiredGroupHeight) && desiredGroupHeight !== group.props?.height;
+
+        set((innerState) => ({
+            frames: innerState.frames.map((item) => {
+                if (item.id !== frameId) return item;
+                let changed = false;
+                const elements = item.elements.map((element) => {
+                    if (updates.has(element.id)) {
+                        changed = true;
+                        const nextProps = {
+                            ...element.props,
+                            ...updates.get(element.id),
+                        };
+                        return {
+                            ...element,
+                            props: nextProps,
+                        };
+                    }
+                    if (element.id === groupId) {
+                        const nextProps = { ...(element.props ?? {}) };
+                        let updated = false;
+                        if (Number.isFinite(desiredGroupWidth) && desiredGroupWidth !== nextProps.width) {
+                            nextProps.width = desiredGroupWidth;
+                            updated = true;
+                        }
+                        if (Number.isFinite(desiredGroupHeight) && desiredGroupHeight !== nextProps.height) {
+                            nextProps.height = desiredGroupHeight;
+                            updated = true;
+                        }
+                        if (updated) {
+                            changed = true;
+                            return {
+                                ...element,
+                                props: nextProps,
+                            };
+                        }
+                    }
+                    return element;
+                });
+                return changed ? { ...item, elements } : item;
+            }),
+        }));
+
+        if (group.parentId) {
+            const latestFrame = get().frames.find((item) => item.id === frameId);
+            const parent = latestFrame?.elements.find(
+                (element) => element.id === group.parentId && element.type === 'group',
+            );
+            if (
+                parent &&
+                parent.layoutMode &&
+                parent.layoutMode !== 'absolute' &&
+                (widthChanged || heightChanged)
+            ) {
+                get().reflowGroup(frameId, parent.id);
+            }
+        } else if ((widthChanged || heightChanged) && frame.layoutMode && frame.layoutMode !== 'absolute') {
+            get().reflowFrame(frameId);
+        }
+    },
+
+    reflowGroupsWithinFrame: (frameId, parentId = null) => {
+        const state = get();
+        const frame = state.frames.find((item) => item.id === frameId);
+        if (!frame) return;
+        const groups = frame.elements.filter(
+            (element) => element.type === 'group' && (parentId ? element.parentId === parentId : !element.parentId),
+        );
+
+        groups.forEach((group) => {
+            get().reflowGroupsWithinFrame(frameId, group.id);
+            get().reflowGroup(frameId, group.id);
+        });
+    },
 
     setFrameBackground: (frameId, updates) =>
         set((state) => ({
@@ -407,7 +1487,7 @@ export const useCanvasStore = create(
             }),
         })),
 
-    addElementToFrame: (frameId, element, parentId = null) =>
+    addElementToFrame: (frameId, element, parentId = null) => {
         set((state) => ({
             frames: state.frames.map((frame) => {
                 if (frame.id !== frameId) return frame;
@@ -418,7 +1498,22 @@ export const useCanvasStore = create(
                 });
                 return { ...frame, elements: [...frame.elements, newElement] };
             }),
-        })),
+        }));
+
+        const latestFrame = get().frames.find((item) => item.id === frameId);
+        if (!latestFrame) return;
+        if (parentId) {
+            const parent = latestFrame.elements.find((item) => item.id === parentId && item.type === 'group');
+            if (parent && parent.layoutMode && parent.layoutMode !== 'absolute') {
+                get().reflowGroup(frameId, parentId);
+                if (parent.parentId) {
+                    get().reflowGroup(frameId, parent.parentId);
+                }
+            }
+        } else if (latestFrame.layoutMode && latestFrame.layoutMode !== 'absolute') {
+            get().reflowFrame(frameId);
+        }
+    },
 
     updateElement: (frameId, elementId, updates) =>
         set((state) => ({
@@ -434,25 +1529,124 @@ export const useCanvasStore = create(
             }),
         })),
 
-    updateElementProps: (frameId, elementId, propUpdates) =>
-        set((state) => ({
-            frames: state.frames.map((frame) => {
-                if (frame.id !== frameId) return frame;
+    updateElementProps: (frameId, elementId, propUpdates) => {
+        if (!frameId || !elementId || !propUpdates) return;
+
+        const state = get();
+        const frame = state.frames.find((item) => item.id === frameId);
+        if (!frame) return;
+
+        const element = frame.elements.find((item) => item.id === elementId);
+        if (!element) return;
+
+        const hasWidth = Object.prototype.hasOwnProperty.call(propUpdates, 'width');
+        const hasHeight = Object.prototype.hasOwnProperty.call(propUpdates, 'height');
+
+        const frameAutoLayout = frame.layoutMode && frame.layoutMode !== 'absolute';
+
+        const ancestorGroupIds = [];
+        let currentParentId = element.parentId;
+        while (currentParentId) {
+            const parent = frame.elements.find((item) => item.id === currentParentId && item.type === 'group');
+            if (!parent) break;
+            if (parent.layoutMode && parent.layoutMode !== 'absolute') {
+                ancestorGroupIds.push(parent.id);
+            }
+            currentParentId = parent.parentId;
+        }
+
+        let frameNeedsReflow = false;
+        let selfNeedsReflow = false;
+
+        set((innerState) => {
+            let frameChanged = false;
+            const frames = innerState.frames.map((currentFrame) => {
+                if (currentFrame.id !== frameId) return currentFrame;
+
                 let changed = false;
-                const elements = frame.elements.map((element) => {
-                    if (element.id !== elementId) return element;
+                const elements = currentFrame.elements.map((currentElement) => {
+                    if (currentElement.id !== elementId) return currentElement;
                     changed = true;
-                    return {
-                        ...element,
-                        props: {
-                            ...element.props,
-                            ...propUpdates,
-                        },
+
+                    const nextProps = {
+                        ...currentElement.props,
+                        ...propUpdates,
                     };
+
+                    let nextElement = {
+                        ...currentElement,
+                        props: nextProps,
+                    };
+
+                    const elementLayout = currentElement.layout ?? {};
+
+                    if (frameAutoLayout) {
+                        const columnTrigger = frame.layoutMode === 'flex-column' && (hasHeight || hasWidth);
+                        const rowTrigger = frame.layoutMode === 'flex-row' && (hasWidth || hasHeight);
+
+                        if (columnTrigger || rowTrigger) {
+                            frameNeedsReflow = true;
+                            let nextLayout = elementLayout;
+                            let layoutChanged = false;
+
+                            if (frame.layoutMode === 'flex-column' && hasHeight && Number.isFinite(propUpdates.height)) {
+                                const basis = propUpdates.height;
+                                if (elementLayout.basis !== basis) {
+                                    nextLayout = { ...elementLayout, basis };
+                                    layoutChanged = true;
+                                }
+                            }
+
+                            if (frame.layoutMode === 'flex-row' && hasWidth && Number.isFinite(propUpdates.width)) {
+                                const basis = propUpdates.width;
+                                if (elementLayout.basis !== basis) {
+                                    nextLayout = { ...elementLayout, basis };
+                                    layoutChanged = true;
+                                }
+                            }
+
+                            if (layoutChanged) {
+                                nextElement = {
+                                    ...nextElement,
+                                    layout: nextLayout,
+                                };
+                            }
+                        }
+                    }
+
+                    if (currentElement.type === 'group' && currentElement.layoutMode && currentElement.layoutMode !== 'absolute') {
+                        if (hasWidth || hasHeight) {
+                            selfNeedsReflow = true;
+                        }
+                    }
+
+                    return nextElement;
                 });
-                return changed ? { ...frame, elements } : frame;
-            }),
-        })),
+
+                if (!changed) return currentFrame;
+                frameChanged = true;
+                return { ...currentFrame, elements };
+            });
+
+            return frameChanged ? { frames } : {};
+        });
+
+        if (selfNeedsReflow) {
+            get().reflowGroup(frameId, elementId);
+        }
+
+        if (ancestorGroupIds.length > 0 && (hasWidth || hasHeight)) {
+            // Reflow nearest ancestors first so outer containers see updated sizes.
+            for (let index = 0; index < ancestorGroupIds.length; index += 1) {
+                const groupId = ancestorGroupIds[index];
+                get().reflowGroup(frameId, groupId);
+            }
+        }
+
+        if (frameNeedsReflow) {
+            get().reflowFrame(frameId);
+        }
+    },
 
     setElementLink: (frameId, elementId, targetFrameId) => {
         const sanitized = targetFrameId || null;
@@ -472,17 +1666,49 @@ export const useCanvasStore = create(
             }),
         })),
 
-    removeElement: (frameId, elementId) =>
+    removeElement: (frameId, elementId) => {
+        let removedElement = null;
+        let parentId = null;
         set((state) => ({
             frames: state.frames.map((frame) => {
                 if (frame.id !== frameId) return frame;
+                const existing = frame.elements.find((element) => element.id === elementId);
+                if (existing) {
+                    removedElement = existing;
+                    parentId = existing.parentId ?? null;
+                }
                 return {
                     ...frame,
                     elements: frame.elements.filter((element) => element.id !== elementId),
                 };
             }),
             comments: state.comments.filter((comment) => comment.elementId !== elementId),
-        })),
+        }));
+
+        const frame = get().frames.find((item) => item.id === frameId);
+        if (!frame) return;
+
+        if (parentId) {
+            const parent = frame.elements.find((element) => element.id === parentId && element.type === 'group');
+            if (parent && parent.layoutMode && parent.layoutMode !== 'absolute') {
+                get().reflowGroup(frameId, parentId);
+                if (parent.parentId) {
+                    get().reflowGroup(frameId, parent.parentId);
+                }
+            }
+        } else if (frame.layoutMode && frame.layoutMode !== 'absolute') {
+            get().reflowFrame(frameId);
+        }
+
+        if (removedElement?.type === 'group') {
+            const childIds = new Set(frame?.elements.filter((element) => element.parentId === elementId).map((item) => item.id));
+            if (childIds.size > 0) {
+                childIds.forEach((childId) => {
+                    get().removeElement(frameId, childId);
+                });
+            }
+        }
+    },
     removeFrame: (frameId) => {
         const state = get();
         const remainingFrames = state.frames.filter((frame) => frame.id !== frameId);
@@ -618,6 +1844,17 @@ export const useCanvasStore = create(
             selectedElementId: groupId,
             selectedElementIds: [groupId],
         });
+
+        const latestFrame = get().frames.find((item) => item.id === frame.id);
+        if (!latestFrame) return;
+        if (parentId) {
+            const parent = latestFrame.elements.find((element) => element.id === parentId && element.type === 'group');
+            if (parent && parent.layoutMode && parent.layoutMode !== 'absolute') {
+                get().reflowGroup(frame.id, parentId);
+            }
+        } else if (latestFrame.layoutMode && latestFrame.layoutMode !== 'absolute') {
+            get().reflowFrame(frame.id);
+        }
     },
 
     ungroupElement: (frameId, groupId) => {
@@ -659,6 +1896,18 @@ export const useCanvasStore = create(
             selectedElementId: childElements[0]?.id ?? null,
             selectedElementIds: childElements.length ? [childElements[0].id] : [],
         });
+
+        const latestFrame = get().frames.find((item) => item.id === frame.id);
+        if (!latestFrame) return;
+        const parentId = group.parentId ?? null;
+        if (parentId) {
+            const parent = latestFrame.elements.find((element) => element.id === parentId && element.type === 'group');
+            if (parent && parent.layoutMode && parent.layoutMode !== 'absolute') {
+                get().reflowGroup(frame.id, parentId);
+            }
+        } else if (latestFrame.layoutMode && latestFrame.layoutMode !== 'absolute') {
+            get().reflowFrame(frame.id);
+        }
     },
 
             liftElementOutOfGroup: (frameId, elementId) => {
@@ -701,6 +1950,28 @@ export const useCanvasStore = create(
             selectedElementIds: [elementId],
             selectedElementId: elementId,
         });
+
+        const latestFrame = get().frames.find((item) => item.id === frame.id);
+        if (!latestFrame) return;
+        if (parent) {
+            const updatedParent = latestFrame.elements.find((element) => element.id === parent.id);
+            if (updatedParent && updatedParent.layoutMode && updatedParent.layoutMode !== 'absolute') {
+                get().reflowGroup(frame.id, parent.id);
+            }
+            const ancestorId = parent.parentId ?? null;
+            if (ancestorId) {
+                const ancestor = latestFrame.elements.find(
+                    (element) => element.id === ancestorId && element.type === 'group',
+                );
+                if (ancestor && ancestor.layoutMode && ancestor.layoutMode !== 'absolute') {
+                    get().reflowGroup(frame.id, ancestor.id);
+                }
+            } else if (latestFrame.layoutMode && latestFrame.layoutMode !== 'absolute') {
+                get().reflowFrame(frame.id);
+            }
+        } else if (latestFrame.layoutMode && latestFrame.layoutMode !== 'absolute') {
+            get().reflowFrame(frame.id);
+        }
     },
 
             renameElement: (frameId, elementId, name) => {
@@ -954,12 +2225,95 @@ export const useCanvasStore = create(
             activePrototypeFrameId: initialFrame.id,
             frameLinks: [],
             activeGuides: [],
+            autoLayoutPreview: null,
             activeToolOverlay: null,
             comments: [],
             timelineAssets: [],
         }),
 
     getFrameById: (id) => get().frames.find((frame) => frame.id === id),
+    reorderElement: (frameId, elementId, targetIndex) => {
+        if (!frameId || !elementId || targetIndex === undefined || targetIndex === null) return;
+
+        const state = get();
+        const frame = state.getFrameById(frameId);
+        if (!frame) return;
+
+        const element = frame.elements.find((item) => item.id === elementId);
+        if (!element) return;
+
+        const parentId = element.parentId ?? null;
+        const siblings = frame.elements.filter((item) => (item.parentId ?? null) === parentId);
+        if (siblings.length <= 1) return;
+
+        const existingIndex = siblings.findIndex((item) => item.id === elementId);
+        const maxIndex = siblings.length - 1;
+        const clampedIndex = Math.max(0, Math.min(targetIndex, maxIndex));
+        if (existingIndex === clampedIndex) return;
+
+        const siblingOrder = siblings
+            .map((item) => item.id)
+            .filter((id) => id !== elementId);
+        siblingOrder.splice(clampedIndex, 0, elementId);
+
+        const siblingLookup = new Map();
+        frame.elements.forEach((item) => {
+            if ((item.parentId ?? null) === parentId) {
+                siblingLookup.set(item.id, item);
+            }
+        });
+
+        const reorderedMap = new Map();
+        siblingOrder.forEach((id, orderIndex) => {
+            const original = siblingLookup.get(id);
+            if (!original) return;
+            reorderedMap.set(id, {
+                ...original,
+                layout: {
+                    ...original.layout,
+                    order: orderIndex,
+                },
+            });
+        });
+
+        set((currentState) => ({
+            frames: currentState.frames.map((item) => {
+                if (item.id !== frameId) return item;
+                let siblingPointer = 0;
+                const elements = item.elements.map((elementItem) => {
+                    if ((elementItem.parentId ?? null) !== parentId) {
+                        return elementItem;
+                    }
+                    const nextId = siblingOrder[siblingPointer++];
+                    const updated = reorderedMap.get(nextId);
+                    return updated ?? elementItem;
+                });
+                return {
+                    ...item,
+                    elements,
+                };
+            }),
+        }));
+
+        if (parentId) {
+            get().reflowGroup(frameId, parentId);
+            const parentElement = get().getElementById(frameId, parentId);
+            if (parentElement?.parentId) {
+                get().reflowGroup(frameId, parentElement.parentId);
+            }
+        } else {
+            get().reflowFrame(frameId);
+        }
+    },
+    exportFrameCode: (frameId, options = {}) => {
+        const frame = get().getFrameById(frameId);
+        if (!frame) return null;
+        return generateFrameExport(frame, options);
+    },
+    exportAllFramesCode: (options = {}) => {
+        const frames = get().frames ?? [];
+        return frames.map((frame) => generateFrameExport(frame, options)).filter(Boolean);
+    },
     getElementById: (frameId, elementId) => {
         const frame = get().getFrameById(frameId);
         if (!frame) return null;

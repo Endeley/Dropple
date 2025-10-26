@@ -43,6 +43,50 @@ function SliderRow({ label, min = 0, max = 100, step = 1, value = 0, onChange })
     );
 }
 
+function NumberInputRow({ label, value = 0, min, max, step = 1, suffix, onChange, disabled = false }) {
+    const handleChange = (event) => {
+        if (disabled) return;
+        const next = Number(event.target.value);
+        if (Number.isNaN(next)) return;
+        if (Number.isFinite(min) && next < min) {
+            onChange?.(min);
+            return;
+        }
+        if (Number.isFinite(max) && next > max) {
+            onChange?.(max);
+            return;
+        }
+        onChange?.(next);
+    };
+
+    return (
+        <label
+            className={clsx(
+                'flex items-center justify-between gap-3 text-xs text-[rgba(226,232,240,0.7)]',
+                disabled && 'opacity-60',
+            )}
+        >
+            <span className='uppercase tracking-[0.2em]'>{label}</span>
+            <div className='flex items-center gap-2'>
+                <input
+                    type='number'
+                    value={Number.isFinite(value) ? value : ''}
+                    min={min}
+                    max={max}
+                    step={step}
+                    onChange={handleChange}
+                    disabled={disabled}
+                    className={clsx(
+                        'w-20 rounded-md border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.65)] px-2 py-1 text-right text-[rgba(236,233,254,0.9)]',
+                        disabled && 'cursor-not-allowed',
+                    )}
+                />
+                {suffix ? <span className='text-[rgba(148,163,184,0.8)]'>{suffix}</span> : null}
+            </div>
+        </label>
+    );
+}
+
 function ColorRow({ label, value = '#ffffff', onChange }) {
     const safeValue = typeof value === 'string' && value.startsWith('#') ? value : '#ffffff';
 
@@ -159,6 +203,10 @@ function SegmentedControl({ label, value, options = [], onChange }) {
     );
 }
 
+const DEFAULT_GRID_COLUMNS = 3;
+const DEFAULT_GRID_AUTO_ROWS = 240;
+const DEFAULT_GRID_MIN_COLUMN_WIDTH = 240;
+
 const FILL_TYPE_OPTIONS = [
     { value: 'solid', label: 'Solid' },
     { value: 'gradient', label: 'Gradient' },
@@ -229,6 +277,13 @@ const TEXT_ALIGN_OPTIONS = [
     { value: 'justify', label: 'Justify', icon: '☰' },
 ];
 
+const GRID_AUTO_FIT_OPTIONS = [
+    { value: 'none', label: 'Fixed Columns' },
+    { value: 'auto-fit', label: 'Auto Fit' },
+    { value: 'auto-fill', label: 'Auto Fill' },
+];
+const GRID_AUTO_FIT_VALUES = GRID_AUTO_FIT_OPTIONS.map((option) => option.value);
+
 export default function InspectorPanel() {
     const mode = useCanvasStore((state) => state.mode);
     const frames = useCanvasStore((state) => state.frames);
@@ -248,6 +303,9 @@ export default function InspectorPanel() {
     const sendElementToBack = useCanvasStore((state) => state.sendElementToBack);
     const alignElements = useCanvasStore((state) => state.alignSelectedElements);
     const distributeElements = useCanvasStore((state) => state.distributeSelectedElements);
+    const setFrameLayout = useCanvasStore((state) => state.setFrameLayout);
+    const setElementLayout = useCanvasStore((state) => state.setElementLayout);
+    const setGroupLayout = useCanvasStore((state) => state.setGroupLayout);
 
     const [showCornerDetails, setShowCornerDetails] = useState(false);
     const [showShadowDetails, setShowShadowDetails] = useState(false);
@@ -848,8 +906,59 @@ export default function InspectorPanel() {
             return <p className='text-xs text-[rgba(148,163,184,0.7)]'>Select a frame and elements to align.</p>;
         }
 
+        const isGroupContainer = activeElement?.type === 'group';
+        const containerLayoutMode = isGroupContainer
+            ? activeElement.layoutMode ?? 'absolute'
+            : activeFrame.layoutMode ?? 'absolute';
+        const rawGap = isGroupContainer ? activeElement.layoutGap : activeFrame.layoutGap;
+        const rawRowGap = isGroupContainer ? activeElement.layoutRowGap : activeFrame.layoutRowGap;
+        const rawColumns = isGroupContainer ? activeElement.layoutGridColumns : activeFrame.layoutGridColumns;
+        const rawAutoRows = isGroupContainer ? activeElement.layoutGridAutoRows : activeFrame.layoutGridAutoRows;
+        const rawAlign = isGroupContainer ? activeElement.layoutAlign : activeFrame.layoutAlign;
+        const rawCrossAlign = isGroupContainer ? activeElement.layoutCrossAlign : activeFrame.layoutCrossAlign;
+        const rawPadding = isGroupContainer ? activeElement.layoutPadding : activeFrame.layoutPadding;
+        const rawAutoFit = isGroupContainer ? activeElement.layoutGridAutoFit : activeFrame.layoutGridAutoFit;
+        const rawMinColumnWidth = isGroupContainer
+            ? activeElement.layoutGridMinColumnWidth
+            : activeFrame.layoutGridMinColumnWidth;
+        const layoutGap = Number.isFinite(rawGap) ? rawGap : 0;
+        const layoutRowGap = Number.isFinite(rawRowGap) ? rawRowGap : layoutGap;
+        const layoutGridColumns = Number.isFinite(rawColumns) ? rawColumns : DEFAULT_GRID_COLUMNS;
+        const layoutGridAutoRows = Number.isFinite(rawAutoRows) ? rawAutoRows : DEFAULT_GRID_AUTO_ROWS;
+        const layoutAlign = rawAlign ?? 'start';
+        const layoutCrossAlign = rawCrossAlign ?? 'stretch';
+        const padding = rawPadding ?? {};
+        const layoutGridAutoFit = GRID_AUTO_FIT_VALUES.includes(rawAutoFit) ? rawAutoFit : 'none';
+        const layoutGridMinColumnWidth = Number.isFinite(rawMinColumnWidth)
+            ? rawMinColumnWidth
+            : DEFAULT_GRID_MIN_COLUMN_WIDTH;
         const disableAlign = selectionCount === 0;
         const disableDistribute = selectionCount < 3;
+        const isFlexRow = containerLayoutMode === 'flex-row';
+        const isFlexLayout = containerLayoutMode === 'flex-row' || containerLayoutMode === 'flex-column';
+        const isGridLayout = containerLayoutMode === 'grid';
+        const isAutoLayout = containerLayoutMode !== 'absolute';
+        const mainAxisLabel = isFlexRow ? 'Horizontal Align' : 'Vertical Align';
+        const crossAxisLabel = isFlexRow ? 'Vertical Align' : 'Horizontal Align';
+        const basisLabel = isFlexRow ? 'Basis (Width)' : 'Basis (Height)';
+        const basisFallback = isFlexRow
+            ? Number.isFinite(activeElementProps.width)
+                ? activeElementProps.width
+                : 0
+            : Number.isFinite(activeElementProps.height)
+                ? activeElementProps.height
+                : 0;
+        const hasAutoFit = layoutGridAutoFit !== 'none';
+        const showFixedColumnCount = !hasAutoFit;
+        const layoutSectionLabel = isGroupContainer ? 'Group Layout' : 'Frame Layout';
+        const updateContainerLayout = (payload) => {
+            if (!activeFrame) return;
+            if (isGroupContainer && activeElement) {
+                setGroupLayout(activeFrame.id, activeElement.id, payload);
+            } else {
+                setFrameLayout(activeFrame.id, payload);
+            }
+        };
 
         const alignButtonClass = (disabled) =>
             clsx(
@@ -859,45 +968,424 @@ export default function InspectorPanel() {
                     : 'border-[rgba(148,163,184,0.25)] hover:border-[rgba(236,233,254,0.65)]',
             );
 
+        const frameLayoutOptions = [
+            { value: 'absolute', label: 'Free' },
+            { value: 'flex-column', label: 'Stack (Flex Column)' },
+            { value: 'flex-row', label: 'Row (Flex Row)' },
+            { value: 'grid', label: 'Grid' },
+        ];
+
+        const axisAlignOptions = [
+            { value: 'start', label: 'Start' },
+            { value: 'center', label: 'Center' },
+            { value: 'end', label: 'End' },
+            { value: 'space-between', label: 'Space Between' },
+        ];
+
+        const crossAlignOptions = [
+            { value: 'stretch', label: 'Stretch' },
+            { value: 'start', label: 'Start' },
+            { value: 'center', label: 'Center' },
+            { value: 'end', label: 'End' },
+        ];
+
+        const currentElementLayout = activeElement?.layout ?? {};
+        const applyLayoutToSelection = (updates) => {
+            if (!activeFrame) return;
+            const targets =
+                selectionCount > 1
+                    ? selectedElements
+                    : activeElement
+                        ? [activeElement]
+                        : [];
+            targets.forEach((target) => {
+                setElementLayout(activeFrame.id, target.id, updates);
+            });
+        };
+        const deriveAlignSelf = () => {
+            if (selectionCount > 1 && selectedElements.length > 1) {
+                const first = selectedElements[0]?.layout?.alignSelf ?? null;
+                const consistent = selectedElements.every(
+                    (item) => (item.layout?.alignSelf ?? null) === first,
+                );
+                if (!consistent) return 'mixed';
+                return first ?? 'auto';
+            }
+            return currentElementLayout.alignSelf !== null && currentElementLayout.alignSelf !== undefined
+                ? currentElementLayout.alignSelf
+                : 'auto';
+        };
+        const currentAlignSelf = deriveAlignSelf();
+
         return (
-            <div className='space-y-4'>
-                <div className='space-y-2'>
-                    <p className='text-[11px] font-semibold uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>Align to frame</p>
-                    <div className='grid grid-cols-3 gap-2'>
-                        <button type='button' disabled={disableAlign} onClick={() => alignElements('left')} className={alignButtonClass(disableAlign)}>
-                            Align Left
-                        </button>
-                        <button type='button' disabled={disableAlign} onClick={() => alignElements('center')} className={alignButtonClass(disableAlign)}>
-                            Align Center
-                        </button>
-                        <button type='button' disabled={disableAlign} onClick={() => alignElements('right')} className={alignButtonClass(disableAlign)}>
-                            Align Right
-                        </button>
-                        <button type='button' disabled={disableAlign} onClick={() => alignElements('top')} className={alignButtonClass(disableAlign)}>
-                            Align Top
-                        </button>
-                        <button type='button' disabled={disableAlign} onClick={() => alignElements('middle')} className={alignButtonClass(disableAlign)}>
-                            Align Middle
-                        </button>
-                        <button type='button' disabled={disableAlign} onClick={() => alignElements('bottom')} className={alignButtonClass(disableAlign)}>
-                            Align Bottom
-                        </button>
-                    </div>
-                </div>
-                <div className='space-y-2'>
-                    <p className='text-[11px] font-semibold uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>Distribute spacing</p>
-                    <div className='grid grid-cols-2 gap-2'>
-                        <button type='button' disabled={disableDistribute} onClick={() => distributeElements('horizontal')} className={alignButtonClass(disableDistribute)}>
-                            Horizontal
-                        </button>
-                        <button type='button' disabled={disableDistribute} onClick={() => distributeElements('vertical')} className={alignButtonClass(disableDistribute)}>
-                            Vertical
-                        </button>
-                    </div>
-                    {disableDistribute ? (
-                        <p className='text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.55)]'>Select three or more elements to distribute.</p>
+            <div className='space-y-6'>
+                <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.45)] px-3 py-3'>
+                    <h4 className='text-[11px] font-semibold uppercase tracking-[0.25em] text-[rgba(148,163,184,0.75)]'>{layoutSectionLabel}</h4>
+                    <SegmentedControl
+                        value={containerLayoutMode}
+                        options={frameLayoutOptions}
+                        onChange={(next) => updateContainerLayout({ layoutMode: next })}
+                    />
+                    {isAutoLayout ? (
+                        <div className='space-y-4'>
+                            <SliderRow
+                                label={isGridLayout ? 'Column Gap' : 'Gap'}
+                                min={0}
+                                max={320}
+                                step={4}
+                                value={layoutGap}
+                                onChange={(next) => updateContainerLayout({ layoutGap: next })}
+                            />
+                            <SegmentedControl
+                                label={mainAxisLabel}
+                                value={layoutAlign}
+                                options={axisAlignOptions}
+                                onChange={(next) => updateContainerLayout({ layoutAlign: next })}
+                            />
+                            <SegmentedControl
+                                label={crossAxisLabel}
+                                value={layoutCrossAlign}
+                                options={crossAlignOptions}
+                                onChange={(next) => updateContainerLayout({ layoutCrossAlign: next })}
+                            />
+                            {isGridLayout ? (
+                                <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
+                                    <SelectRow
+                                        label='Column Behavior'
+                                        value={layoutGridAutoFit}
+                                        options={GRID_AUTO_FIT_OPTIONS}
+                                        onChange={(next) => updateContainerLayout({ layoutGridAutoFit: next })}
+                                    />
+                                    <NumberInputRow
+                                        label='Min Column Width'
+                                        suffix='px'
+                                        min={64}
+                                        value={layoutGridMinColumnWidth}
+                                        disabled={!hasAutoFit}
+                                        onChange={(next) =>
+                                            updateContainerLayout({
+                                                layoutGridMinColumnWidth: Math.max(32, next),
+                                            })
+                                        }
+                                    />
+                                    <NumberInputRow
+                                        label='Columns'
+                                        min={1}
+                                        value={Math.max(1, Math.floor(layoutGridColumns))}
+                                        disabled={!showFixedColumnCount}
+                                        onChange={(next) =>
+                                            updateContainerLayout({
+                                                layoutGridColumns: Math.max(1, Math.floor(next)),
+                                            })
+                                        }
+                                    />
+                                    <NumberInputRow
+                                        label='Row Gap'
+                                        suffix='px'
+                                        min={0}
+                                        value={layoutRowGap}
+                                        onChange={(next) => updateContainerLayout({ layoutRowGap: Math.max(0, next) })}
+                                    />
+                                    <NumberInputRow
+                                        label='Auto Row Height'
+                                        suffix='px'
+                                        min={16}
+                                        value={layoutGridAutoRows}
+                                        onChange={(next) =>
+                                            updateContainerLayout({
+                                                layoutGridAutoRows: Math.max(16, next),
+                                            })
+                                        }
+                                    />
+                                </div>
+                            ) : null}
+                            <div className='space-y-2'>
+                                <p className='text-[10px] font-semibold uppercase tracking-[0.32em] text-[rgba(148,163,184,0.65)]'>Padding</p>
+                                <div className='grid grid-cols-2 gap-2'>
+                                    <NumberInputRow
+                                        label='Top'
+                                        suffix='px'
+                                        value={Number.isFinite(padding.top) ? padding.top : 0}
+                                        onChange={(next) => updateContainerLayout({ layoutPadding: { top: next } })}
+                                    />
+                                    <NumberInputRow
+                                        label='Right'
+                                        suffix='px'
+                                        value={Number.isFinite(padding.right) ? padding.right : 0}
+                                        onChange={(next) => updateContainerLayout({ layoutPadding: { right: next } })}
+                                    />
+                                    <NumberInputRow
+                                        label='Bottom'
+                                        suffix='px'
+                                        value={Number.isFinite(padding.bottom) ? padding.bottom : 0}
+                                        onChange={(next) => updateContainerLayout({ layoutPadding: { bottom: next } })}
+                                    />
+                                    <NumberInputRow
+                                        label='Left'
+                                        suffix='px'
+                                        value={Number.isFinite(padding.left) ? padding.left : 0}
+                                        onChange={(next) => updateContainerLayout({ layoutPadding: { left: next } })}
+                                    />
+                                </div>
+                            </div>
+                        </div>
                     ) : null}
                 </div>
+
+                {selectionCount > 0 && isAutoLayout ? (
+                    <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.45)] px-3 py-3'>
+                        <h4 className='text-[11px] font-semibold uppercase tracking-[0.25em] text-[rgba(148,163,184,0.75)]'>
+                            Auto Layout (Selected)
+                        </h4>
+                        {selectionCount > 1 ? (
+                            <p className='text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.6)]'>
+                                Applying changes to {selectionCount} elements.
+                            </p>
+                        ) : null}
+                        {activeElement ? (
+                            <div className='space-y-3'>
+                                {selectionCount === 1 ? (
+                                    <NumberInputRow
+                                        label='Order'
+                                        value={Number.isFinite(currentElementLayout.order) ? currentElementLayout.order : 0}
+                                        onChange={(next) => setElementLayout(activeFrame.id, activeElement.id, { order: next })}
+                                    />
+                                ) : null}
+                                {isFlexLayout ? (
+                                    <>
+                                        <NumberInputRow
+                                            label={basisLabel}
+                                            suffix='px'
+                                            min={0}
+                                            value={
+                                                selectionCount > 1
+                                                    ? ''
+                                                    : Number.isFinite(currentElementLayout.basis)
+                                                        ? currentElementLayout.basis
+                                                        : basisFallback
+                                            }
+                                            onChange={(next) => applyLayoutToSelection({ basis: next })}
+                                        />
+                                        <NumberInputRow
+                                            label='Grow'
+                                            min={0}
+                                            step={0.1}
+                                            value={
+                                                selectionCount > 1
+                                                    ? ''
+                                                    : Number.isFinite(currentElementLayout.grow)
+                                                        ? currentElementLayout.grow
+                                                        : 0
+                                            }
+                                            onChange={(next) => applyLayoutToSelection({ grow: next })}
+                                        />
+                                        <NumberInputRow
+                                            label='Shrink'
+                                            min={0}
+                                            step={0.1}
+                                            value={
+                                                selectionCount > 1
+                                                    ? ''
+                                                    : Number.isFinite(currentElementLayout.shrink)
+                                                        ? currentElementLayout.shrink
+                                                        : 1
+                                            }
+                                            onChange={(next) => applyLayoutToSelection({ shrink: next })}
+                                        />
+                                    </>
+                                ) : null}
+                                {isGridLayout ? (
+                                    <>
+                                        <NumberInputRow
+                                            label='Column Span'
+                                            min={1}
+                                            value={
+                                                selectionCount > 1
+                                                    ? ''
+                                                    : Number.isFinite(currentElementLayout.gridColumnSpan)
+                                                        ? currentElementLayout.gridColumnSpan
+                                                        : 1
+                                            }
+                                            onChange={(next) =>
+                                                applyLayoutToSelection({
+                                                    gridColumnSpan: Math.max(1, Math.floor(next)),
+                                                })
+                                            }
+                                        />
+                                        <NumberInputRow
+                                            label='Row Span'
+                                            min={1}
+                                            value={
+                                                selectionCount > 1
+                                                    ? ''
+                                                    : Number.isFinite(currentElementLayout.gridRowSpan)
+                                                        ? currentElementLayout.gridRowSpan
+                                                        : 1
+                                            }
+                                            onChange={(next) =>
+                                                applyLayoutToSelection({
+                                                    gridRowSpan: Math.max(1, Math.floor(next)),
+                                                })
+                                            }
+                                        />
+                                        <div className='grid grid-cols-2 gap-3'>
+                                            <div className='flex flex-col gap-1 text-xs text-[rgba(226,232,240,0.7)]'>
+                                                <span className='uppercase tracking-[0.2em]'>Column Start</span>
+                                                <div className='flex items-center gap-2'>
+                                                    <input
+                                                        type='number'
+                                                        min={1}
+                                                        value={
+                                                            selectionCount > 1
+                                                                ? ''
+                                                                : Number.isFinite(currentElementLayout.gridColumnStart)
+                                                                    ? currentElementLayout.gridColumnStart
+                                                                    : ''
+                                                        }
+                                                        placeholder='Auto'
+                                                        onChange={(event) => {
+                                                            const rawValue = event.target.value;
+                                                            if (rawValue === '') {
+                                                                applyLayoutToSelection({
+                                                                    gridColumnStart: null,
+                                                                });
+                                                                return;
+                                                            }
+                                                            const parsed = Number(rawValue);
+                                                            if (Number.isNaN(parsed)) return;
+                                                            applyLayoutToSelection({
+                                                                gridColumnStart: Math.max(1, Math.floor(parsed)),
+                                                            });
+                                                        }}
+                                                        className='w-full rounded-md border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.65)] px-2 py-1 text-right text-[rgba(236,233,254,0.9)]'
+                                                    />
+                                                    <button
+                                                        type='button'
+                                                        onClick={() =>
+                                                            applyLayoutToSelection({
+                                                                gridColumnStart: null,
+                                                            })
+                                                        }
+                                                        className='rounded-md border border-[rgba(148,163,184,0.35)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(226,232,240,0.75)] transition-colors hover:border-[rgba(236,233,254,0.6)]'
+                                                    >
+                                                        Auto
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div className='flex flex-col gap-1 text-xs text-[rgba(226,232,240,0.7)]'>
+                                                <span className='uppercase tracking-[0.2em]'>Row Start</span>
+                                                <div className='flex items-center gap-2'>
+                                                    <input
+                                                        type='number'
+                                                        min={1}
+                                                        value={
+                                                            selectionCount > 1
+                                                                ? ''
+                                                                : Number.isFinite(currentElementLayout.gridRowStart)
+                                                                    ? currentElementLayout.gridRowStart
+                                                                    : ''
+                                                        }
+                                                        placeholder='Auto'
+                                                        onChange={(event) => {
+                                                            const rawValue = event.target.value;
+                                                            if (rawValue === '') {
+                                                                applyLayoutToSelection({
+                                                                    gridRowStart: null,
+                                                                });
+                                                                return;
+                                                            }
+                                                            const parsed = Number(rawValue);
+                                                            if (Number.isNaN(parsed)) return;
+                                                            applyLayoutToSelection({
+                                                                gridRowStart: Math.max(1, Math.floor(parsed)),
+                                                            });
+                                                        }}
+                                                        className='w-full rounded-md border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.65)] px-2 py-1 text-right text-[rgba(236,233,254,0.9)]'
+                                                    />
+                                                    <button
+                                                        type='button'
+                                                        onClick={() =>
+                                                            applyLayoutToSelection({
+                                                                gridRowStart: null,
+                                                            })
+                                                        }
+                                                        className='rounded-md border border-[rgba(148,163,184,0.35)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(226,232,240,0.75)] transition-colors hover:border-[rgba(236,233,254,0.6)]'
+                                                    >
+                                                        Auto
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : null}
+                                <SegmentedControl
+                                    label='Align Self'
+                                    value={currentAlignSelf === 'mixed' ? 'auto' : currentAlignSelf}
+                                    options={[
+                                        { value: 'auto', label: 'Auto' },
+                                        { value: 'stretch', label: 'Stretch' },
+                                        { value: 'start', label: 'Start' },
+                                        { value: 'center', label: 'Center' },
+                                        { value: 'end', label: 'End' },
+                                    ]}
+                                    onChange={(next) =>
+                                        applyLayoutToSelection({
+                                            alignSelf: next === 'auto' ? null : next,
+                                        })
+                                    }
+                                />
+                                {currentAlignSelf === 'mixed' ? (
+                                    <p className='text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.6)]'>
+                                        Mixed values — choose an option to unify.
+                                    </p>
+                                ) : null}
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
+
+                {!isGroupContainer ? (
+                    <>
+                        <div className='space-y-2'>
+                            <p className='text-[11px] font-semibold uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>Quick Align</p>
+                            <div className='grid grid-cols-3 gap-2'>
+                                <button type='button' disabled={disableAlign} onClick={() => alignElements('left')} className={alignButtonClass(disableAlign)}>
+                                    Align Left
+                                </button>
+                                <button type='button' disabled={disableAlign} onClick={() => alignElements('center')} className={alignButtonClass(disableAlign)}>
+                                    Align Center
+                                </button>
+                                <button type='button' disabled={disableAlign} onClick={() => alignElements('right')} className={alignButtonClass(disableAlign)}>
+                                    Align Right
+                                </button>
+                                <button type='button' disabled={disableAlign} onClick={() => alignElements('top')} className={alignButtonClass(disableAlign)}>
+                                    Align Top
+                                </button>
+                                <button type='button' disabled={disableAlign} onClick={() => alignElements('middle')} className={alignButtonClass(disableAlign)}>
+                                    Align Middle
+                                </button>
+                                <button type='button' disabled={disableAlign} onClick={() => alignElements('bottom')} className={alignButtonClass(disableAlign)}>
+                                    Align Bottom
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className='space-y-2'>
+                            <p className='text-[11px] font-semibold uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>Distribute</p>
+                            <div className='grid grid-cols-2 gap-2'>
+                                <button type='button' disabled={disableDistribute} onClick={() => distributeElements('horizontal')} className={alignButtonClass(disableDistribute)}>
+                                    Horizontal
+                                </button>
+                                <button type='button' disabled={disableDistribute} onClick={() => distributeElements('vertical')} className={alignButtonClass(disableDistribute)}>
+                                    Vertical
+                                </button>
+                            </div>
+                            {disableDistribute ? (
+                                <p className='text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.55)]'>Select three or more elements to distribute.</p>
+                            ) : null}
+                        </div>
+                    </>
+                ) : null}
             </div>
         );
     };
