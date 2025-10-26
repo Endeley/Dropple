@@ -1,11 +1,15 @@
 'use client';
 
+import clsx from 'clsx';
 import { nanoid } from 'nanoid';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CanvasLayer from './CanvasLayer';
+import CanvasContextMenu from './CanvasContextMenu';
 import { useCanvasStore } from './context/CanvasStore';
 
 const SCALE_STEP = 1.1;
+const MIN_SCALE = 0.25;
+const MAX_SCALE = 4;
 
 const TOOL_BEHAVIORS = {
     pointer: { type: 'pointer' },
@@ -50,6 +54,39 @@ function findFrameAtPoint(frames, point) {
     return null;
 }
 
+function findElementAtPoint(frame, point) {
+    if (!frame?.elements) return null;
+    for (let index = frame.elements.length - 1; index >= 0; index -= 1) {
+        const element = frame.elements[index];
+        const props = element?.props ?? {};
+        const elementX = frame.x + (props.x ?? 0);
+        const elementY = frame.y + (props.y ?? 0);
+        const width = props.width ?? 0;
+        const height = props.height ?? 0;
+        if (
+            point.x >= elementX &&
+            point.x <= elementX + width &&
+            point.y >= elementY &&
+            point.y <= elementY + height
+        ) {
+            return element;
+        }
+    }
+    return null;
+}
+
+const ELEMENT_LABELS = {
+    rect: 'Rectangle',
+    shape: 'Rectangle',
+    overlay: 'Overlay',
+    clip: 'Clip',
+    text: 'Text',
+    script: 'Script',
+    image: 'Image',
+    component: 'Component',
+    character: 'Character',
+};
+
 function createElement(elementType, frame, point) {
     const defaults = {
         rect: {
@@ -92,6 +129,7 @@ function createElement(elementType, frame, point) {
         id: `el-${nanoid(6)}`,
         type: elementType,
         parentId: null,
+        name: ELEMENT_LABELS[elementType] ?? 'Layer',
         props: {
             x: localX,
             y: localY,
@@ -113,6 +151,15 @@ export default function CanvasContainer() {
     const setScale = useCanvasStore((state) => state.setScale);
     const position = useCanvasStore((state) => state.position);
     const setPosition = useCanvasStore((state) => state.setPosition);
+    const selectedTool = useCanvasStore((state) => state.selectedTool);
+
+    const creationCursor = useMemo(
+        () =>
+            ['shape', 'rect', 'text', 'image', 'ai-generator', 'component', 'overlay', 'clip', 'script', 'comment', 'frame', 'canvas', 'scene', 'segment'].includes(
+                selectedTool,
+            ),
+        [selectedTool],
+    );
 
     useEffect(() => {
         const viewport = viewportRef.current;
@@ -138,6 +185,18 @@ export default function CanvasContainer() {
             window.removeEventListener('pointerup', handlePointerUp);
         };
     }, [setPosition]);
+
+    useEffect(() => {
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                const store = useCanvasStore.getState();
+                store.setSelectedTool('pointer');
+                store.setActiveToolOverlay(null);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
     useEffect(() => {
         if (!pendingImageElement) return;
         const input = fileInputRef.current;
@@ -204,9 +263,9 @@ export default function CanvasContainer() {
                 };
 
                 const direction = event.deltaY > 0 ? -1 : 1;
-                const newScale = direction > 0 ? oldScale * SCALE_STEP : oldScale / SCALE_STEP;
+                const nextScale = direction > 0 ? oldScale * SCALE_STEP : oldScale / SCALE_STEP;
+                const clampedScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, nextScale));
 
-                const clampedScale = Math.max(0.1, Math.min(10, newScale));
                 setScale(clampedScale);
                 setPosition({
                     x: pointer.x - mousePointTo.x * clampedScale,
@@ -224,7 +283,7 @@ export default function CanvasContainer() {
 
     const handlePointerDown = (event) => {
         const store = useCanvasStore.getState();
-        const selectedTool = store.selectedTool || 'pointer';
+        const currentTool = store.selectedTool || 'pointer';
         const viewport = viewportRef.current;
         if (!viewport) return;
 
@@ -234,7 +293,21 @@ export default function CanvasContainer() {
             y: (event.clientY - rect.top - store.position.y) / store.scale,
         };
 
-        const action = resolveTool(selectedTool);
+        if (currentTool === 'comment') {
+            const targetFrame = findFrameAtPoint(store.frames, canvasPoint);
+            if (targetFrame) {
+                const targetElement = findElementAtPoint(targetFrame, canvasPoint);
+                if (targetElement) {
+                    store.setSelectedElement(targetFrame.id, targetElement.id);
+                } else {
+                    store.setSelectedFrame(targetFrame.id);
+                }
+                store.setActiveToolOverlay('comment');
+            }
+            return;
+        }
+
+        const action = resolveTool(currentTool);
         const primaryButton = event.button === 0;
 
         if (primaryButton && action.type !== 'pointer') {
@@ -253,7 +326,6 @@ export default function CanvasContainer() {
                 if (newFrame) {
                     store.setSelectedFrame(newFrame.id);
                 }
-                store.setSelectedTool('pointer');
                 return;
             }
 
@@ -327,8 +399,6 @@ export default function CanvasContainer() {
                         }, 0);
                     }
                 }
-
-                store.setSelectedTool('pointer');
                 return;
             }
         }
@@ -342,28 +412,53 @@ export default function CanvasContainer() {
         }
     };
 
+    const handleCanvasContextMenu = useCallback((event) => {
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+        event.preventDefault();
+        const storeState = useCanvasStore.getState();
+        const rect = viewport.getBoundingClientRect();
+        const canvasPoint = {
+            x: (event.clientX - rect.left - storeState.position.x) / storeState.scale,
+            y: (event.clientY - rect.top - storeState.position.y) / storeState.scale,
+        };
+        storeState.setContextMenu({
+            type: 'canvas',
+            position: { x: event.clientX, y: event.clientY },
+            canvasPoint,
+        });
+    }, []);
+
     return (
-        <div
-            ref={viewportRef}
-            className='relative h-full w-full overflow-hidden bg-[var(--color-canvas)]'
-            onWheel={handleWheel}
-            onPointerDown={handlePointerDown}
-        >
+        <>
             <div
-                className='absolute left-0 top-0 origin-top-left'
-                style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})` }}
+                ref={viewportRef}
+                data-canvas-viewport
+                className={clsx(
+                    'relative h-full w-full overflow-hidden bg-[var(--color-canvas)]',
+                    creationCursor ? 'cursor-crosshair' : 'cursor-default',
+                )}
+                onWheel={handleWheel}
+                onPointerDown={handlePointerDown}
+                onContextMenu={handleCanvasContextMenu}
             >
-                <CanvasLayer />
+                <div
+                    className='absolute left-0 top-0 origin-top-left'
+                    style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})` }}
+                >
+                    <CanvasLayer />
+                </div>
+                <div className='pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(139,92,246,0.08),_transparent_55%)]' />
+                <input
+                    ref={fileInputRef}
+                    type='file'
+                    accept='image/*'
+                    className='hidden'
+                    onChange={handleImageFileChange}
+                    aria-hidden='true'
+                />
             </div>
-            <div className='pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(139,92,246,0.08),_transparent_55%)]' />
-            <input
-                ref={fileInputRef}
-                type='file'
-                accept='image/*'
-                className='hidden'
-                onChange={handleImageFileChange}
-                aria-hidden='true'
-            />
-        </div>
+            <CanvasContextMenu />
+        </>
     );
 }

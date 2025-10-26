@@ -29,6 +29,7 @@ export default function FrameNode({ frame }) {
     const updateFrame = useCanvasStore((state) => state.updateFrame);
     const comments = useCanvasStore((state) => state.comments);
     const setActiveToolOverlay = useCanvasStore((state) => state.setActiveToolOverlay);
+    const setContextMenu = useCanvasStore((state) => state.setContextMenu);
 
     const dragStateRef = useRef(null);
     const resizeStateRef = useRef(null);
@@ -227,6 +228,25 @@ export default function FrameNode({ frame }) {
         window.addEventListener('pointerup', handlePointerUp);
     };
 
+    const handleFrameContextMenu = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const viewport = event.currentTarget.closest('[data-canvas-viewport]');
+        if (!viewport) return;
+        const storeState = useCanvasStore.getState();
+        const rect = viewport.getBoundingClientRect();
+        const canvasPoint = {
+            x: (event.clientX - rect.left - storeState.position.x) / storeState.scale,
+            y: (event.clientY - rect.top - storeState.position.y) / storeState.scale,
+        };
+        setContextMenu({
+            type: 'frame',
+            frameId: frame.id,
+            position: { x: event.clientX, y: event.clientY },
+            canvasPoint,
+        });
+    };
+
     const handleResizePointerDown = (event, handleKey) => {
         event.stopPropagation();
         if (!isPointerTool || prototypeMode) return;
@@ -316,6 +336,7 @@ export default function FrameNode({ frame }) {
                 ...frameBackgroundStyle,
             }}
             onPointerDown={handlePointerDown}
+            onContextMenu={handleFrameContextMenu}
         >
             <div className='absolute left-4 top-4 text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.65)]'>
                 {frame.name}

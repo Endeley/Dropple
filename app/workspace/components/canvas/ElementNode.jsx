@@ -23,6 +23,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
     const updateElementProps = useCanvasStore((state) => state.updateElementProps);
     const comments = useCanvasStore((state) => state.comments);
     const setActiveToolOverlay = useCanvasStore((state) => state.setActiveToolOverlay);
+    const setContextMenu = useCanvasStore((state) => state.setContextMenu);
 
     const dragStateRef = useRef(null);
     const resizeStateRef = useRef(null);
@@ -136,6 +137,26 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
 
         window.addEventListener('pointermove', handlePointerMove);
         window.addEventListener('pointerup', handlePointerUp);
+    };
+
+    const handleContextMenu = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const viewport = event.currentTarget.closest('[data-canvas-viewport]');
+        if (!viewport) return;
+        const rect = viewport.getBoundingClientRect();
+        const storeState = useCanvasStore.getState();
+        const canvasPoint = {
+            x: (event.clientX - rect.left - storeState.position.x) / storeState.scale,
+            y: (event.clientY - rect.top - storeState.position.y) / storeState.scale,
+        };
+        storeState.setContextMenu({
+            type: 'element',
+            frameId,
+            elementId: element.id,
+            position: { x: event.clientX, y: event.clientY },
+            canvasPoint,
+        });
     };
 
     const handleResizePointerDown = (event, handleKey) => {
@@ -438,6 +459,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                         ...commonStyle,
                     }}
                     onPointerDown={handlePointerDown}
+                    onContextMenu={handleContextMenu}
                 >
                     {linkBadge}
                     {resizeHandles}
@@ -494,6 +516,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                     )}
                     style={textStyle}
                     onPointerDown={handlePointerDown}
+                    onContextMenu={handleContextMenu}
                 >
                     {props.text}
                     {linkBadge}
@@ -516,6 +539,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                     )}
                     style={commonStyle}
                     onPointerDown={handlePointerDown}
+                    onContextMenu={handleContextMenu}
                 >
                     {linkBadge}
                     {commentBadge}

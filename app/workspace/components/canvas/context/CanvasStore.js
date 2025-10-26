@@ -2,6 +2,7 @@
 
 import { nanoid } from 'nanoid';
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 const DEFAULT_FRAME_BACKGROUND = '#0F172A';
 const DEFAULT_TEXT_COLOR = '#ECE9FE';
@@ -71,11 +72,27 @@ const IMAGE_ELEMENT_DEFAULTS = {
     preserveAspectRatio: true,
 };
 
+const ELEMENT_NAME_MAP = {
+    rect: 'Rectangle',
+    shape: 'Rectangle',
+    overlay: 'Overlay',
+    clip: 'Clip',
+    text: 'Text',
+    script: 'Script',
+    image: 'Image',
+    component: 'Component',
+    character: 'Character',
+    group: 'Group',
+};
+
+const getDefaultElementName = (type) => ELEMENT_NAME_MAP[type] ?? 'Layer';
+
 function withElementDefaults(element) {
     if (!element) return element;
     if (element.type === 'group') {
         return {
             ...element,
+            name: element.name ?? getDefaultElementName('group'),
             props: {
                 opacity: element.props?.opacity ?? 1,
                 rotation: element.props?.rotation ?? 0,
@@ -100,6 +117,7 @@ function withElementDefaults(element) {
 
     return {
         ...element,
+        name: element.name ?? getDefaultElementName(element.type),
         props: {
             ...SHARED_ELEMENT_DEFAULTS,
             ...typeDefaults,
@@ -135,6 +153,7 @@ const initialFrame = {
             id: 'text-hero',
             type: 'text',
             parentId: null,
+            name: 'Hero Text',
             props: {
                 text: 'Welcome to Dropple',
                 fontSize: 48,
@@ -153,6 +172,7 @@ const initialFrame = {
             id: 'rect-card',
             type: 'rect',
             parentId: null,
+            name: 'Hero Card',
             props: {
                 x: 120,
                 y: 260,
@@ -205,9 +225,11 @@ function computeBoundingBox(elements) {
     };
 }
 
-export const useCanvasStore = create((set, get) => ({
-    mode: 'design',
-    scale: 1,
+export const useCanvasStore = create(
+    persist(
+        (set, get) => ({
+            mode: 'design',
+            scale: 1,
     position: { x: 0, y: 0 },
     frames: [initialFrame],
     selectedFrameId: initialFrame.id,
@@ -217,16 +239,18 @@ export const useCanvasStore = create((set, get) => ({
     prototypeMode: false,
     activePrototypeFrameId: initialFrame.id,
     frameLinks: [],
-    activeGuides: [],
-    activeToolOverlay: null,
-    comments: [],
-    timelineAssets: [],
-    timelineActions: [],
+            activeGuides: [],
+            activeToolOverlay: null,
+            comments: [],
+            timelineAssets: [],
+            timelineActions: [],
+            clipboard: null,
+            contextMenu: null,
 
-    setMode: (mode) => set({ mode }),
-    setScale: (value) =>
-        set((state) => ({ scale: typeof value === 'function' ? value(state.scale) : value })),
-    setPosition: (value) =>
+            setMode: (mode) => set({ mode }),
+            setScale: (value) =>
+                set((state) => ({ scale: typeof value === 'function' ? value(state.scale) : value })),
+            setPosition: (value) =>
         set((state) => ({ position: typeof value === 'function' ? value(state.position) : value })),
     setSelectedTool: (tool) => set({ selectedTool: tool }),
     setActiveGuides: (guides) => set({ activeGuides: Array.isArray(guides) ? guides : [] }),
@@ -384,6 +408,7 @@ export const useCanvasStore = create((set, get) => ({
                 if (frame.id !== frameId) return frame;
                 const newElement = withElementDefaults({
                     ...element,
+                    name: element?.name ?? getDefaultElementName(element?.type),
                     parentId: parentId ?? element.parentId ?? null,
                 });
                 return { ...frame, elements: [...frame.elements, newElement] };
@@ -453,6 +478,23 @@ export const useCanvasStore = create((set, get) => ({
             }),
             comments: state.comments.filter((comment) => comment.elementId !== elementId),
         })),
+    removeFrame: (frameId) => {
+        const state = get();
+        const remainingFrames = state.frames.filter((frame) => frame.id !== frameId);
+        if (remainingFrames.length === state.frames.length) return;
+
+        const nextFrame = state.selectedFrameId === frameId ? remainingFrames[0]?.id ?? null : state.selectedFrameId;
+
+        set({
+            frames: remainingFrames,
+            selectedFrameId: nextFrame,
+            selectedElementId: null,
+            selectedElementIds: [],
+            comments: state.comments.filter((comment) => comment.frameId !== frameId),
+            timelineAssets: state.timelineAssets.filter((asset) => asset.frameId !== frameId),
+            frameLinks: state.frameLinks.filter((link) => link.from !== frameId && link.to !== frameId),
+        });
+    },
 
     bringElementForward: (frameId, elementId) =>
         set((state) => ({
@@ -528,6 +570,7 @@ export const useCanvasStore = create((set, get) => ({
             id: groupId,
             type: 'group',
             parentId,
+            name: 'Group',
             props: {
                 x: bounds.x,
                 y: bounds.y,
@@ -613,11 +656,11 @@ export const useCanvasStore = create((set, get) => ({
         });
     },
 
-    liftElementOutOfGroup: (frameId, elementId) => {
-        const state = get();
-        const frame = state.getFrameById(frameId);
-        if (!frame) return;
-        const element = frame.elements.find((item) => item.id === elementId);
+            liftElementOutOfGroup: (frameId, elementId) => {
+                const state = get();
+                const frame = state.getFrameById(frameId);
+                if (!frame) return;
+                const element = frame.elements.find((item) => item.id === elementId);
         if (!element || !element.parentId) return;
         const parent = frame.elements.find((item) => item.id === element.parentId);
         const parentProps = parent?.props ?? {};
@@ -653,6 +696,27 @@ export const useCanvasStore = create((set, get) => ({
             selectedElementIds: [elementId],
             selectedElementId: elementId,
         });
+    },
+
+            renameElement: (frameId, elementId, name) => {
+                if (!frameId || !elementId) return;
+                const trimmed = (name ?? '').trim();
+                set((state) => ({
+                    frames: state.frames.map((frame) => {
+                if (frame.id !== frameId) return frame;
+                return {
+                    ...frame,
+                    elements: frame.elements.map((element) =>
+                        element.id === elementId
+                            ? {
+                                  ...element,
+                                  name: trimmed || getDefaultElementName(element.type),
+                              }
+                            : element,
+                    ),
+                };
+            }),
+        }));
     },
 
     alignSelectedElements: (alignment) => {
@@ -711,12 +775,12 @@ export const useCanvasStore = create((set, get) => ({
         });
     },
 
-    distributeSelectedElements: (axis) => {
-        const state = get();
-        const { selectedFrameId, selectedElementIds } = state;
-        if (!selectedFrameId || selectedElementIds.length < 3) return;
+            distributeSelectedElements: (axis) => {
+                const state = get();
+                const { selectedFrameId, selectedElementIds } = state;
+                if (!selectedFrameId || selectedElementIds.length < 3) return;
 
-        set((currentState) => {
+                set((currentState) => {
             const frame = currentState.frames.find((item) => item.id === selectedFrameId);
             if (!frame) return {};
 
@@ -1019,11 +1083,11 @@ export const useCanvasStore = create((set, get) => ({
             });
         }
     },
-    chainFrames: (frameIds) => {
-        const uniqueIds = Array.from(new Set(Array.isArray(frameIds) ? frameIds : [])).filter(Boolean);
-        if (uniqueIds.length < 2) return;
+            chainFrames: (frameIds) => {
+                const uniqueIds = Array.from(new Set(Array.isArray(frameIds) ? frameIds : [])).filter(Boolean);
+                if (uniqueIds.length < 2) return;
 
-        set((state) => {
+                set((state) => {
             const filteredLinks = state.frameLinks.filter((link) => !uniqueIds.includes(link.from));
             const generatedLinks = uniqueIds.slice(0, -1).map((fromId, index) => ({
                 id: `link-${nanoid(6)}`,
@@ -1033,6 +1097,182 @@ export const useCanvasStore = create((set, get) => ({
             return {
                 frameLinks: [...filteredLinks, ...generatedLinks],
             };
-        });
-    },
-}));
+                });
+            },
+            setContextMenu: (contextMenu) => set({ contextMenu }),
+            closeContextMenu: () => set({ contextMenu: null }),
+            copyElement: (frameId, elementId) => {
+                const frame = get().getFrameById(frameId);
+                if (!frame) return;
+                const element = frame.elements.find((item) => item.id === elementId);
+                if (!element) return;
+                const elementCopy = {
+                    ...element,
+                    props: { ...element.props },
+                    id: undefined,
+                    parentId: null,
+                };
+                set({
+                    clipboard: {
+                        type: 'element',
+                        frameId,
+                        element: elementCopy,
+                    },
+                });
+            },
+            duplicateElement: (frameId, elementId) => {
+                const state = get();
+                const frame = state.getFrameById(frameId);
+                if (!frame) return;
+                const element = frame.elements.find((item) => item.id === elementId);
+                if (!element) return;
+                const nextProps = {
+                    ...element.props,
+                    x: (element.props?.x ?? 0) + 32,
+                    y: (element.props?.y ?? 0) + 32,
+                };
+                const newElement = {
+                    ...element,
+                    id: `el-${nanoid(6)}`,
+                    name: `${element.name ?? getDefaultElementName(element.type)} Copy`,
+                    parentId: null,
+                    props: nextProps,
+                };
+                set({
+                    frames: state.frames.map((item) =>
+                        item.id === frameId ? { ...item, elements: [...item.elements, newElement] } : item,
+                    ),
+                    selectedElementId: newElement.id,
+                    selectedElementIds: [newElement.id],
+                });
+            },
+            pasteElement: (targetFrameId = null, position = null) => {
+                const state = get();
+                const { clipboard } = state;
+                if (!clipboard || clipboard.type !== 'element') return;
+
+                const frameId = targetFrameId ?? clipboard.frameId ?? state.selectedFrameId ?? state.frames[0]?.id;
+                if (!frameId) return;
+
+                const frame = state.getFrameById(frameId);
+                if (!frame) return;
+
+                const baseElement = clipboard.element;
+                const baseProps = baseElement.props ?? {};
+                const newElement = {
+                    ...baseElement,
+                    id: `el-${nanoid(6)}`,
+                    name: `${baseElement.name ?? getDefaultElementName(baseElement.type)} Copy`,
+                    parentId: null,
+                    props: {
+                        ...baseElement.props,
+                        x:
+                            position?.x !== null && position?.x !== undefined
+                                ? position.x - frame.x
+                                : (baseProps.x ?? 0) + 40,
+                        y:
+                            position?.y !== null && position?.y !== undefined
+                                ? position.y - frame.y
+                                : (baseProps.y ?? 0) + 40,
+                    },
+                };
+
+                set({
+                    frames: state.frames.map((item) =>
+                        item.id === frameId ? { ...item, elements: [...item.elements, newElement] } : item,
+                    ),
+                    selectedFrameId: frameId,
+                    selectedElementId: newElement.id,
+                    selectedElementIds: [newElement.id],
+                });
+            },
+            copyFrame: (frameId) => {
+                const frame = get().getFrameById(frameId);
+                if (!frame) return;
+                const frameCopy = {
+                    ...frame,
+                    id: undefined,
+                    elements: frame.elements.map((element) => ({
+                        ...element,
+                        id: undefined,
+                        props: { ...element.props },
+                    })),
+                };
+                set({
+                    clipboard: {
+                        type: 'frame',
+                        frame: frameCopy,
+                    },
+                });
+            },
+            duplicateFrame: (frameId) => {
+                const state = get();
+                const frame = state.getFrameById(frameId);
+                if (!frame) return;
+                const newFrame = {
+                    ...frame,
+                    id: `frame-${nanoid(6)}`,
+                    name: `${frame.name ?? 'Frame'} Copy`,
+                    x: frame.x + 80,
+                    y: frame.y + 80,
+                    elements: frame.elements.map((element) => ({
+                        ...element,
+                        id: `el-${nanoid(6)}`,
+                        props: {
+                            ...element.props,
+                        },
+                    })),
+                };
+                set({
+                    frames: [...state.frames, newFrame],
+                    selectedFrameId: newFrame.id,
+                    selectedElementIds: [],
+                    selectedElementId: null,
+                });
+            },
+            pasteFrame: (position = null) => {
+                const state = get();
+                const { clipboard } = state;
+                if (!clipboard || clipboard.type !== 'frame') return;
+                const baseFrame = clipboard.frame;
+                const newFrameId = `frame-${nanoid(6)}`;
+                const newFrame = {
+                    ...baseFrame,
+                    id: newFrameId,
+                    name: `${baseFrame.name ?? 'Frame'} Copy`,
+                    x: position?.x ?? (baseFrame.x ?? 0) + 120,
+                    y: position?.y ?? (baseFrame.y ?? 0) + 120,
+                    elements: (baseFrame.elements ?? []).map((element) => ({
+                        ...element,
+                        id: `el-${nanoid(6)}`,
+                        props: {
+                            ...element.props,
+                        },
+                    })),
+                };
+                set({
+                    frames: [...state.frames, newFrame],
+                    selectedFrameId: newFrameId,
+                    selectedElementIds: [],
+                    selectedElementId: null,
+                });
+            },
+        }),
+        {
+            name: 'dropple-canvas-state',
+            version: 1,
+            partialize: (state) => ({
+                mode: state.mode,
+                scale: state.scale,
+                position: state.position,
+                frames: state.frames,
+                selectedFrameId: state.selectedFrameId,
+                frameLinks: state.frameLinks,
+                comments: state.comments,
+                timelineAssets: state.timelineAssets,
+                prototypeMode: state.prototypeMode,
+                activePrototypeFrameId: state.activePrototypeFrameId,
+            }),
+        },
+    ),
+);
