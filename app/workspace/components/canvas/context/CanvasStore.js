@@ -775,10 +775,10 @@ export const useCanvasStore = create(
         });
     },
 
-            distributeSelectedElements: (axis) => {
-                const state = get();
-                const { selectedFrameId, selectedElementIds } = state;
-                if (!selectedFrameId || selectedElementIds.length < 3) return;
+    distributeSelectedElements: (axis) => {
+        const state = get();
+        const { selectedFrameId, selectedElementIds } = state;
+        if (!selectedFrameId || selectedElementIds.length < 3) return;
 
                 set((currentState) => {
             const frame = currentState.frames.find((item) => item.id === selectedFrameId);
@@ -854,6 +854,51 @@ export const useCanvasStore = create(
                 frames: currentState.frames.map((item) =>
                     item.id === frame.id ? updatedFrame : item,
                 ),
+            };
+        });
+    },
+    selectElementsInRect: (frameId, rect, options = {}) => {
+        const { additive = false } = options;
+        if (!frameId || !rect) return;
+        const normalized = {
+            x: rect.width >= 0 ? rect.x : rect.x + rect.width,
+            y: rect.height >= 0 ? rect.y : rect.y + rect.height,
+            width: Math.abs(rect.width ?? 0),
+            height: Math.abs(rect.height ?? 0),
+        };
+        if (normalized.width === 0 && normalized.height === 0) return;
+
+        set((state) => {
+            const frame = state.frames.find((item) => item.id === frameId);
+            if (!frame) return {};
+            const intersects = (elementRect, selectionRect) =>
+                elementRect.x < selectionRect.x + selectionRect.width &&
+                elementRect.x + elementRect.width > selectionRect.x &&
+                elementRect.y < selectionRect.y + selectionRect.height &&
+                elementRect.y + elementRect.height > selectionRect.y;
+
+            const selectionIds = frame.elements
+                .filter((element) => (element.parentId ?? null) === null)
+                .filter((element) => {
+                    const props = element.props ?? {};
+                    const rectElement = {
+                        x: props.x ?? 0,
+                        y: props.y ?? 0,
+                        width: Math.max(props.width ?? 0, 0),
+                        height: Math.max(props.height ?? 0, 0),
+                    };
+                    return intersects(rectElement, normalized);
+                })
+                .map((element) => element.id);
+
+            const baseSet = new Set(additive ? state.selectedElementIds : []);
+            selectionIds.forEach((id) => baseSet.add(id));
+            const selectedIds = Array.from(baseSet);
+
+            return {
+                selectedFrameId: frameId,
+                selectedElementId: selectedIds[0] ?? null,
+                selectedElementIds: selectedIds,
             };
         });
     },
@@ -1083,11 +1128,11 @@ export const useCanvasStore = create(
             });
         }
     },
-            chainFrames: (frameIds) => {
-                const uniqueIds = Array.from(new Set(Array.isArray(frameIds) ? frameIds : [])).filter(Boolean);
-                if (uniqueIds.length < 2) return;
+    chainFrames: (frameIds) => {
+        const uniqueIds = Array.from(new Set(Array.isArray(frameIds) ? frameIds : [])).filter(Boolean);
+        if (uniqueIds.length < 2) return;
 
-                set((state) => {
+        set((state) => {
             const filteredLinks = state.frameLinks.filter((link) => !uniqueIds.includes(link.from));
             const generatedLinks = uniqueIds.slice(0, -1).map((fromId, index) => ({
                 id: `link-${nanoid(6)}`,
@@ -1097,166 +1142,166 @@ export const useCanvasStore = create(
             return {
                 frameLinks: [...filteredLinks, ...generatedLinks],
             };
-                });
+        });
+    },
+    setContextMenu: (contextMenu) => set({ contextMenu }),
+    closeContextMenu: () => set({ contextMenu: null }),
+    copyElement: (frameId, elementId) => {
+        const frame = get().getFrameById(frameId);
+        if (!frame) return;
+        const element = frame.elements.find((item) => item.id === elementId);
+        if (!element) return;
+        const elementCopy = {
+            ...element,
+            props: { ...element.props },
+            id: undefined,
+            parentId: null,
+        };
+        set({
+            clipboard: {
+                type: 'element',
+                frameId,
+                element: elementCopy,
             },
-            setContextMenu: (contextMenu) => set({ contextMenu }),
-            closeContextMenu: () => set({ contextMenu: null }),
-            copyElement: (frameId, elementId) => {
-                const frame = get().getFrameById(frameId);
-                if (!frame) return;
-                const element = frame.elements.find((item) => item.id === elementId);
-                if (!element) return;
-                const elementCopy = {
-                    ...element,
-                    props: { ...element.props },
-                    id: undefined,
-                    parentId: null,
-                };
-                set({
-                    clipboard: {
-                        type: 'element',
-                        frameId,
-                        element: elementCopy,
-                    },
-                });
+        });
+    },
+    duplicateElement: (frameId, elementId) => {
+        const state = get();
+        const frame = state.getFrameById(frameId);
+        if (!frame) return;
+        const element = frame.elements.find((item) => item.id === elementId);
+        if (!element) return;
+        const nextProps = {
+            ...element.props,
+            x: (element.props?.x ?? 0) + 32,
+            y: (element.props?.y ?? 0) + 32,
+        };
+        const newElement = {
+            ...element,
+            id: `el-${nanoid(6)}`,
+            name: `${element.name ?? getDefaultElementName(element.type)} Copy`,
+            parentId: null,
+            props: nextProps,
+        };
+        set({
+            frames: state.frames.map((item) =>
+                item.id === frameId ? { ...item, elements: [...item.elements, newElement] } : item,
+            ),
+            selectedElementId: newElement.id,
+            selectedElementIds: [newElement.id],
+        });
+    },
+    pasteElement: (targetFrameId = null, position = null) => {
+        const state = get();
+        const { clipboard } = state;
+        if (!clipboard || clipboard.type !== 'element') return;
+
+        const frameId = targetFrameId ?? clipboard.frameId ?? state.selectedFrameId ?? state.frames[0]?.id;
+        if (!frameId) return;
+
+        const frame = state.getFrameById(frameId);
+        if (!frame) return;
+
+        const baseElement = clipboard.element;
+        const baseProps = baseElement.props ?? {};
+        const newElement = {
+            ...baseElement,
+            id: `el-${nanoid(6)}`,
+            name: `${baseElement.name ?? getDefaultElementName(baseElement.type)} Copy`,
+            parentId: null,
+            props: {
+                ...baseElement.props,
+                x:
+                    position?.x !== null && position?.x !== undefined
+                        ? position.x - frame.x
+                        : (baseProps.x ?? 0) + 40,
+                y:
+                    position?.y !== null && position?.y !== undefined
+                        ? position.y - frame.y
+                        : (baseProps.y ?? 0) + 40,
             },
-            duplicateElement: (frameId, elementId) => {
-                const state = get();
-                const frame = state.getFrameById(frameId);
-                if (!frame) return;
-                const element = frame.elements.find((item) => item.id === elementId);
-                if (!element) return;
-                const nextProps = {
+        };
+
+        set({
+            frames: state.frames.map((item) =>
+                item.id === frameId ? { ...item, elements: [...item.elements, newElement] } : item,
+            ),
+            selectedFrameId: frameId,
+            selectedElementId: newElement.id,
+            selectedElementIds: [newElement.id],
+        });
+    },
+    copyFrame: (frameId) => {
+        const frame = get().getFrameById(frameId);
+        if (!frame) return;
+        const frameCopy = {
+            ...frame,
+            id: undefined,
+            elements: frame.elements.map((element) => ({
+                ...element,
+                id: undefined,
+                props: { ...element.props },
+            })),
+        };
+        set({
+            clipboard: {
+                type: 'frame',
+                frame: frameCopy,
+            },
+        });
+    },
+    duplicateFrame: (frameId) => {
+        const state = get();
+        const frame = state.getFrameById(frameId);
+        if (!frame) return;
+        const newFrame = {
+            ...frame,
+            id: `frame-${nanoid(6)}`,
+            name: `${frame.name ?? 'Frame'} Copy`,
+            x: frame.x + 80,
+            y: frame.y + 80,
+            elements: frame.elements.map((element) => ({
+                ...element,
+                id: `el-${nanoid(6)}`,
+                props: {
                     ...element.props,
-                    x: (element.props?.x ?? 0) + 32,
-                    y: (element.props?.y ?? 0) + 32,
-                };
-                const newElement = {
-                    ...element,
-                    id: `el-${nanoid(6)}`,
-                    name: `${element.name ?? getDefaultElementName(element.type)} Copy`,
-                    parentId: null,
-                    props: nextProps,
-                };
-                set({
-                    frames: state.frames.map((item) =>
-                        item.id === frameId ? { ...item, elements: [...item.elements, newElement] } : item,
-                    ),
-                    selectedElementId: newElement.id,
-                    selectedElementIds: [newElement.id],
-                });
-            },
-            pasteElement: (targetFrameId = null, position = null) => {
-                const state = get();
-                const { clipboard } = state;
-                if (!clipboard || clipboard.type !== 'element') return;
-
-                const frameId = targetFrameId ?? clipboard.frameId ?? state.selectedFrameId ?? state.frames[0]?.id;
-                if (!frameId) return;
-
-                const frame = state.getFrameById(frameId);
-                if (!frame) return;
-
-                const baseElement = clipboard.element;
-                const baseProps = baseElement.props ?? {};
-                const newElement = {
-                    ...baseElement,
-                    id: `el-${nanoid(6)}`,
-                    name: `${baseElement.name ?? getDefaultElementName(baseElement.type)} Copy`,
-                    parentId: null,
-                    props: {
-                        ...baseElement.props,
-                        x:
-                            position?.x !== null && position?.x !== undefined
-                                ? position.x - frame.x
-                                : (baseProps.x ?? 0) + 40,
-                        y:
-                            position?.y !== null && position?.y !== undefined
-                                ? position.y - frame.y
-                                : (baseProps.y ?? 0) + 40,
-                    },
-                };
-
-                set({
-                    frames: state.frames.map((item) =>
-                        item.id === frameId ? { ...item, elements: [...item.elements, newElement] } : item,
-                    ),
-                    selectedFrameId: frameId,
-                    selectedElementId: newElement.id,
-                    selectedElementIds: [newElement.id],
-                });
-            },
-            copyFrame: (frameId) => {
-                const frame = get().getFrameById(frameId);
-                if (!frame) return;
-                const frameCopy = {
-                    ...frame,
-                    id: undefined,
-                    elements: frame.elements.map((element) => ({
-                        ...element,
-                        id: undefined,
-                        props: { ...element.props },
-                    })),
-                };
-                set({
-                    clipboard: {
-                        type: 'frame',
-                        frame: frameCopy,
-                    },
-                });
-            },
-            duplicateFrame: (frameId) => {
-                const state = get();
-                const frame = state.getFrameById(frameId);
-                if (!frame) return;
-                const newFrame = {
-                    ...frame,
-                    id: `frame-${nanoid(6)}`,
-                    name: `${frame.name ?? 'Frame'} Copy`,
-                    x: frame.x + 80,
-                    y: frame.y + 80,
-                    elements: frame.elements.map((element) => ({
-                        ...element,
-                        id: `el-${nanoid(6)}`,
-                        props: {
-                            ...element.props,
-                        },
-                    })),
-                };
-                set({
-                    frames: [...state.frames, newFrame],
-                    selectedFrameId: newFrame.id,
-                    selectedElementIds: [],
-                    selectedElementId: null,
-                });
-            },
-            pasteFrame: (position = null) => {
-                const state = get();
-                const { clipboard } = state;
-                if (!clipboard || clipboard.type !== 'frame') return;
-                const baseFrame = clipboard.frame;
-                const newFrameId = `frame-${nanoid(6)}`;
-                const newFrame = {
-                    ...baseFrame,
-                    id: newFrameId,
-                    name: `${baseFrame.name ?? 'Frame'} Copy`,
-                    x: position?.x ?? (baseFrame.x ?? 0) + 120,
-                    y: position?.y ?? (baseFrame.y ?? 0) + 120,
-                    elements: (baseFrame.elements ?? []).map((element) => ({
-                        ...element,
-                        id: `el-${nanoid(6)}`,
-                        props: {
-                            ...element.props,
-                        },
-                    })),
-                };
-                set({
-                    frames: [...state.frames, newFrame],
-                    selectedFrameId: newFrameId,
-                    selectedElementIds: [],
-                    selectedElementId: null,
-                });
-            },
+                },
+            })),
+        };
+        set({
+            frames: [...state.frames, newFrame],
+            selectedFrameId: newFrame.id,
+            selectedElementIds: [],
+            selectedElementId: null,
+        });
+    },
+    pasteFrame: (position = null) => {
+        const state = get();
+        const { clipboard } = state;
+        if (!clipboard || clipboard.type !== 'frame') return;
+        const baseFrame = clipboard.frame;
+        const newFrameId = `frame-${nanoid(6)}`;
+        const newFrame = {
+            ...baseFrame,
+            id: newFrameId,
+            name: `${baseFrame.name ?? 'Frame'} Copy`,
+            x: position?.x ?? (baseFrame.x ?? 0) + 120,
+            y: position?.y ?? (baseFrame.y ?? 0) + 120,
+            elements: (baseFrame.elements ?? []).map((element) => ({
+                ...element,
+                id: `el-${nanoid(6)}`,
+                props: {
+                    ...element.props,
+                },
+            })),
+        };
+        set({
+            frames: [...state.frames, newFrame],
+            selectedFrameId: newFrameId,
+            selectedElementIds: [],
+            selectedElementId: null,
+        });
+    },
         }),
         {
             name: 'dropple-canvas-state',

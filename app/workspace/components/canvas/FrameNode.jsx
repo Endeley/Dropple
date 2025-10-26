@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import ElementNode from './ElementNode';
 import TimelineBar from './TimelineBar';
 import { useCanvasStore } from './context/CanvasStore';
@@ -29,10 +29,13 @@ export default function FrameNode({ frame }) {
     const updateFrame = useCanvasStore((state) => state.updateFrame);
     const comments = useCanvasStore((state) => state.comments);
     const setActiveToolOverlay = useCanvasStore((state) => state.setActiveToolOverlay);
+    const selectElementsInRect = useCanvasStore((state) => state.selectElementsInRect);
     const setContextMenu = useCanvasStore((state) => state.setContextMenu);
 
     const dragStateRef = useRef(null);
     const resizeStateRef = useRef(null);
+    const marqueeStateRef = useRef(null);
+    const [marqueeRect, setMarqueeRect] = useState(null);
 
     if (!frame) return null;
 
@@ -165,6 +168,73 @@ export default function FrameNode({ frame }) {
         event.stopPropagation();
         if (prototypeMode) return;
 
+        const target = event.currentTarget;
+
+        if (isPointerTool && !prototypeMode && event.button === 0 && event.shiftKey) {
+            event.preventDefault();
+            useCanvasStore.getState().clearActiveGuides();
+            setSelectedFrame(frame.id);
+
+            const frameRect = target.getBoundingClientRect();
+            const startX = (event.clientX - frameRect.left) / (scale || 1);
+            const startY = (event.clientY - frameRect.top) / (scale || 1);
+
+            marqueeStateRef.current = {
+                startX,
+                startY,
+                frameRect,
+                pointerId: event.pointerId,
+                target,
+                additive: event.metaKey || event.ctrlKey,
+            };
+
+            setMarqueeRect({ x: startX, y: startY, width: 0, height: 0 });
+            target.setPointerCapture?.(event.pointerId);
+
+            const handleMarqueeMove = (moveEvent) => {
+                const current = marqueeStateRef.current;
+                if (!current) return;
+                if ((moveEvent.buttons & 1) === 0) {
+                    handleMarqueeUp(moveEvent);
+                    return;
+                }
+                const currentX = (moveEvent.clientX - current.frameRect.left) / (scale || 1);
+                const currentY = (moveEvent.clientY - current.frameRect.top) / (scale || 1);
+                const x = Math.min(current.startX, currentX);
+                const y = Math.min(current.startY, currentY);
+                const width = Math.abs(currentX - current.startX);
+                const height = Math.abs(currentY - current.startY);
+                setMarqueeRect({ x, y, width, height });
+            };
+
+            const handleMarqueeUp = (upEvent) => {
+                const current = marqueeStateRef.current;
+                if (!current) return;
+                window.removeEventListener('pointermove', handleMarqueeMove);
+                window.removeEventListener('pointerup', handleMarqueeUp);
+                current.target.releasePointerCapture?.(current.pointerId);
+
+                const endX = (upEvent.clientX - current.frameRect.left) / (scale || 1);
+                const endY = (upEvent.clientY - current.frameRect.top) / (scale || 1);
+                const x = Math.min(current.startX, endX);
+                const y = Math.min(current.startY, endY);
+                const width = Math.abs(endX - current.startX);
+                const height = Math.abs(endY - current.startY);
+
+                const additive = current.additive || upEvent.metaKey || upEvent.ctrlKey;
+                if (width > 4 && height > 4) {
+                    selectElementsInRect(frame.id, { x, y, width, height }, { additive });
+                }
+
+                setMarqueeRect(null);
+                marqueeStateRef.current = null;
+            };
+
+            window.addEventListener('pointermove', handleMarqueeMove);
+            window.addEventListener('pointerup', handleMarqueeUp);
+            return;
+        }
+
         useCanvasStore.getState().clearActiveGuides();
         setSelectedFrame(frame.id);
 
@@ -177,10 +247,10 @@ export default function FrameNode({ frame }) {
             frameX: frame.x,
             frameY: frame.y,
             pointerId: event.pointerId,
-            target: event.currentTarget,
+            target,
         };
 
-        event.currentTarget.setPointerCapture?.(event.pointerId);
+        target.setPointerCapture?.(event.pointerId);
 
         const handlePointerMove = (moveEvent) => {
             if (!dragStateRef.current) return;
@@ -228,24 +298,27 @@ export default function FrameNode({ frame }) {
         window.addEventListener('pointerup', handlePointerUp);
     };
 
-    const handleFrameContextMenu = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const viewport = event.currentTarget.closest('[data-canvas-viewport]');
-        if (!viewport) return;
-        const storeState = useCanvasStore.getState();
-        const rect = viewport.getBoundingClientRect();
-        const canvasPoint = {
-            x: (event.clientX - rect.left - storeState.position.x) / storeState.scale,
-            y: (event.clientY - rect.top - storeState.position.y) / storeState.scale,
-        };
-        setContextMenu({
-            type: 'frame',
-            frameId: frame.id,
-            position: { x: event.clientX, y: event.clientY },
-            canvasPoint,
-        });
-    };
+    const handleFrameContextMenu = useCallback(
+        (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const viewport = event.currentTarget.closest('[data-canvas-viewport]');
+            if (!viewport) return;
+            const storeState = useCanvasStore.getState();
+            const rect = viewport.getBoundingClientRect();
+            const canvasPoint = {
+                x: (event.clientX - rect.left - storeState.position.x) / storeState.scale,
+                y: (event.clientY - rect.top - storeState.position.y) / storeState.scale,
+            };
+            setContextMenu({
+                type: 'frame',
+                frameId: frame.id,
+                position: { x: event.clientX, y: event.clientY },
+                canvasPoint,
+            });
+        },
+        [frame.id, setContextMenu],
+    );
 
     const handleResizePointerDown = (event, handleKey) => {
         event.stopPropagation();
@@ -386,6 +459,17 @@ export default function FrameNode({ frame }) {
                         />
                     ))}
                 </div>
+            ) : null}
+            {marqueeRect ? (
+                <div
+                    className='pointer-events-none absolute rounded-lg border border-[rgba(139,92,246,0.6)] bg-[rgba(139,92,246,0.2)]'
+                    style={{
+                        left: marqueeRect.x,
+                        top: marqueeRect.y,
+                        width: marqueeRect.width,
+                        height: marqueeRect.height,
+                    }}
+                />
             ) : null}
         </div>
     );
