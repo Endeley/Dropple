@@ -984,7 +984,7 @@ export default function InspectorPanel() {
         : activeFrame?.name ?? 'Nothing selected';
 
     return (
-        <aside className='pointer-events-auto hidden h-full w-80 flex-col border-l border-[rgba(148,163,184,0.15)] bg-[rgba(15,23,42,0.78)] px-5 py-6 text-sm text-[rgba(226,232,240,0.8)] backdrop-blur lg:flex'>
+        <aside className='pointer-events-auto hidden h-full max-h-screen w-80 overflow-y-auto border-l border-[rgba(148,163,184,0.15)] bg-[rgba(15,23,42,0.78)] px-5 py-6 text-sm text-[rgba(226,232,240,0.8)] backdrop-blur lg:flex lg:flex-col'>
             <header className='mb-6 space-y-2'>
                 <div>
                     <p className='text-xs font-semibold uppercase tracking-[0.25em] text-[rgba(148,163,184,0.65)]'>Inspector</p>
@@ -998,7 +998,7 @@ export default function InspectorPanel() {
                 {renderGroupingActions()}
             </header>
 
-            <div className='flex-1 space-y-4 overflow-y-auto pr-2'>
+            <div className='space-y-4 pr-2'>
                 <section className='rounded-xl border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.55)] p-4'>
                     <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.7)]'>Transform</h3>
                     <div className='mt-3 space-y-4'>{renderTransformControls()}</div>

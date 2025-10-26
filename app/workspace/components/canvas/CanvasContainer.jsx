@@ -187,31 +187,39 @@ export default function CanvasContainer() {
 
     const handleWheel = useCallback(
         (event) => {
-            event.preventDefault();
             const viewport = viewportRef.current;
             if (!viewport) return;
+            event.preventDefault();
 
-            const rect = viewport.getBoundingClientRect();
-            const pointer = {
-                x: event.clientX - rect.left,
-                y: event.clientY - rect.top,
-            };
-            const oldScale = scale;
-            const mousePointTo = {
-                x: (pointer.x - position.x) / oldScale,
-                y: (pointer.y - position.y) / oldScale,
-            };
+            if (event.ctrlKey || event.metaKey) {
+                const rect = viewport.getBoundingClientRect();
+                const pointer = {
+                    x: event.clientX - rect.left,
+                    y: event.clientY - rect.top,
+                };
+                const oldScale = scale;
+                const mousePointTo = {
+                    x: (pointer.x - position.x) / oldScale,
+                    y: (pointer.y - position.y) / oldScale,
+                };
 
-            const direction = event.deltaY > 0 ? -1 : 1;
-            const newScale = direction > 0 ? oldScale * SCALE_STEP : oldScale / SCALE_STEP;
+                const direction = event.deltaY > 0 ? -1 : 1;
+                const newScale = direction > 0 ? oldScale * SCALE_STEP : oldScale / SCALE_STEP;
 
-            setScale(newScale);
-            setPosition({
-                x: pointer.x - mousePointTo.x * newScale,
-                y: pointer.y - mousePointTo.y * newScale,
-            });
+                const clampedScale = Math.max(0.1, Math.min(10, newScale));
+                setScale(clampedScale);
+                setPosition({
+                    x: pointer.x - mousePointTo.x * clampedScale,
+                    y: pointer.y - mousePointTo.y * clampedScale,
+                });
+            } else {
+                setPosition((prev) => ({
+                    x: prev.x - event.deltaX,
+                    y: prev.y - event.deltaY,
+                }));
+            }
         },
-        [scale, setPosition, setScale],
+        [position, scale, setPosition, setScale],
     );
 
     const handlePointerDown = (event) => {

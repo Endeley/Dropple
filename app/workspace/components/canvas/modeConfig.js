@@ -17,7 +17,13 @@ export const MODE_CONFIG = {
             { id: 'effects', title: 'Effects', items: ['Shadow', 'Blur', 'Glow', 'Distortion'] },
             { id: 'export', title: 'Export', items: ['PNG', 'JPG', 'PDF', 'SVG'] },
         ],
-        bottomActions: ['Zoom', 'Guides', 'Snapping', 'History', 'AI Suggest Layout'],
+        bottomActions: [
+            { id: 'zoom', label: 'Zoom' },
+            { id: 'guides', label: 'Guides' },
+            { id: 'snapping', label: 'Snapping' },
+            { id: 'history', label: 'History' },
+            { id: 'ai-layout', label: 'AI Suggest Layout' },
+        ],
     },
     ux: {
         label: 'UI/UX',
@@ -37,7 +43,12 @@ export const MODE_CONFIG = {
             { id: 'interaction', title: 'Interaction', items: ['On click', 'Hover state', 'Transition'] },
             { id: 'code', title: 'Code Preview', items: ['React', 'HTML', 'Tailwind', 'CSS Modules'] },
         ],
-        bottomActions: ['Prototype viewer', 'Link hotspot list', 'Export code', 'Responsive preview'],
+        bottomActions: [
+            { id: 'prototype-viewer', label: 'Prototype Viewer' },
+            { id: 'hotspots', label: 'Hotspot List' },
+            { id: 'export-code', label: 'Export Code' },
+            { id: 'responsive-preview', label: 'Responsive Preview' },
+        ],
     },
     cartoon: {
         label: 'Cartoon',
@@ -57,7 +68,12 @@ export const MODE_CONFIG = {
             { id: 'audio', title: 'Audio', items: ['Voice clip', 'Sound effects', 'Lip sync'] },
             { id: 'export', title: 'Export', items: ['GIF', 'MP4', 'Storyboard PDF'] },
         ],
-        bottomActions: ['Play / Pause', 'Keyframe editor', 'Storyboard view', 'AI Animate'],
+        bottomActions: [
+            { id: 'play', label: 'Play / Pause' },
+            { id: 'keyframes', label: 'Keyframe Editor' },
+            { id: 'storyboard', label: 'Storyboard View' },
+            { id: 'ai-animate', label: 'AI Animate' },
+        ],
     },
     design: {
         label: 'Design',
@@ -126,7 +142,14 @@ export const MODE_CONFIG = {
                 items: ['PNG', 'SVG', 'PDF', 'React component'],
             },
         ],
-        bottomActions: ['Zoom', 'Grid', 'Snapping', 'Undo', 'Redo', 'AI Suggestions'],
+        bottomActions: [
+            { id: 'zoom', label: 'Zoom' },
+            { id: 'grid', label: 'Grid' },
+            { id: 'snapping', label: 'Snapping' },
+            { id: 'undo', label: 'Undo' },
+            { id: 'redo', label: 'Redo' },
+            { id: 'ai-suggest', label: 'AI Suggestions' },
+        ],
     },
     video: {
         label: 'Video',
@@ -145,7 +168,12 @@ export const MODE_CONFIG = {
             { id: 'audio', title: 'Audio Track', items: ['Gain', 'Filters', 'Mix'] },
             { id: 'export', title: 'Export', items: ['Resolution', 'FPS', 'Format'] },
         ],
-        bottomActions: ['Timeline tracks', 'Keyframes', 'Play / Pause', 'Render Preview'],
+        bottomActions: [
+            { id: 'tracks', label: 'Timeline Tracks' },
+            { id: 'keyframes', label: 'Keyframes' },
+            { id: 'play', label: 'Play / Pause' },
+            { id: 'render', label: 'Render Preview' },
+        ],
     },
     podcast: {
         label: 'Podcast',
@@ -164,7 +192,13 @@ export const MODE_CONFIG = {
             { id: 'background', title: 'Background Music', items: ['Track', 'Volume', 'Fade in/out'] },
             { id: 'export', title: 'Export', items: ['MP3', 'WAV', 'Video Podcast'] },
         ],
-        bottomActions: ['Waveform timeline', 'Play / Pause', 'Split clip', 'AI Enhance Voice', 'Export'],
+        bottomActions: [
+            { id: 'waveform', label: 'Waveform Timeline' },
+            { id: 'play', label: 'Play / Pause' },
+            { id: 'split', label: 'Split Clip' },
+            { id: 'ai-enhance', label: 'AI Enhance Voice' },
+            { id: 'export', label: 'Export' },
+        ],
     },
     docs: {
         label: 'Docs',
@@ -183,7 +217,11 @@ export const MODE_CONFIG = {
             { id: 'pagination', title: 'Pagination', items: ['Page numbers', 'Headers', 'Footers'] },
             { id: 'export', title: 'Export', items: ['PDF', 'EPUB', 'Slides'] },
         ],
-        bottomActions: ['Page navigator', 'Word count', 'Grammar suggestions'],
+        bottomActions: [
+            { id: 'pages', label: 'Page Navigator' },
+            { id: 'word-count', label: 'Word Count' },
+            { id: 'grammar', label: 'Grammar Suggestions' },
+        ],
     },
     dev: {
         label: 'Dev',
@@ -201,7 +239,12 @@ export const MODE_CONFIG = {
             { id: 'responsive', title: 'Responsive', items: ['Breakpoint styles', 'Layout modes'] },
             { id: 'export', title: 'Export Targets', items: ['React', 'HTML', 'Vue', 'Tailwind'] },
         ],
-        bottomActions: ['Live preview', 'Run in sandbox', 'Push to GitHub', 'Console log'],
+        bottomActions: [
+            { id: 'live-preview', label: 'Live Preview' },
+            { id: 'sandbox', label: 'Run Sandbox' },
+            { id: 'push', label: 'Push to GitHub' },
+            { id: 'console', label: 'Console Log' },
+        ],
     },
     classroom: {
         label: 'Classroom',
@@ -218,7 +261,11 @@ export const MODE_CONFIG = {
             { id: 'progress', title: 'Progress Tracking', items: ['Submission status', 'AI feedback'] },
             { id: 'permissions', title: 'Permissions', items: ['View', 'Comment', 'Edit rights'] },
         ],
-        bottomActions: ['Start class', 'Record session', 'Enable live sync'],
+        bottomActions: [
+            { id: 'start-class', label: 'Start Class' },
+            { id: 'record', label: 'Record Session' },
+            { id: 'live-sync', label: 'Live Sync' },
+        ],
     },
     brand: {
         label: 'Brand',
@@ -235,7 +282,11 @@ export const MODE_CONFIG = {
             { id: 'export', title: 'Export Kit', items: ['ZIP bundle', 'JSON', 'Brand book PDF'] },
             { id: 'license', title: 'License Info', items: ['Usage rights', 'Expiry', 'Distribution'] },
         ],
-        bottomActions: ['Publish campaign', 'Share link', 'Schedule post'],
+        bottomActions: [
+            { id: 'publish', label: 'Publish Campaign' },
+            { id: 'share', label: 'Share Link' },
+            { id: 'schedule', label: 'Schedule Post' },
+        ],
     },
 };
 
