@@ -94,6 +94,7 @@ const DEFAULT_GRID_AUTO_ROWS = 240;
 const DEFAULT_GRID_TEMPLATE = 'none';
 const DEFAULT_GRID_MIN_COLUMN_WIDTH = 240;
 const AUTO_FIT_OPTIONS = ['none', 'auto-fit', 'auto-fill'];
+const DEFAULT_FLEX_WRAP = 'nowrap';
 
 function normalizePadding(padding) {
     const base = { ...DEFAULT_LAYOUT_PADDING };
@@ -126,6 +127,7 @@ function computeFlexColumnLayout(frame) {
     const availableHeight = Math.max(0, frame.height - padding.top - padding.bottom);
     const layoutAlign = frame.layoutAlign ?? 'start';
     const layoutCrossAlign = frame.layoutCrossAlign ?? 'stretch';
+    const layoutWrap = frame.layoutWrap ?? DEFAULT_FLEX_WRAP;
 
     const topLevel = frame.elements.filter((element) => !element.parentId);
     if (topLevel.length === 0) {
@@ -167,6 +169,20 @@ function computeFlexColumnLayout(frame) {
             maxWidth,
         };
     });
+
+    if (layoutWrap !== 'nowrap' && availableHeight > 0) {
+        return layoutFlexColumnWithWrap({
+            frame,
+            metrics,
+            padding,
+            gap,
+            availableWidth,
+            availableHeight,
+            layoutAlign,
+            layoutCrossAlign,
+            layoutWrap,
+        });
+    }
 
     const gapCount = Math.max(0, metrics.length - 1);
     let gapToUse = gap;
@@ -289,6 +305,7 @@ function computeFlexRowLayout(frame) {
     const availableHeight = Math.max(0, frame.height - padding.top - padding.bottom);
     const layoutAlign = frame.layoutAlign ?? 'start';
     const layoutCrossAlign = frame.layoutCrossAlign ?? 'stretch';
+    const layoutWrap = frame.layoutWrap ?? DEFAULT_FLEX_WRAP;
 
     const topLevel = frame.elements.filter((element) => !element.parentId);
     if (topLevel.length === 0) {
@@ -335,6 +352,20 @@ function computeFlexRowLayout(frame) {
             maxHeight,
         };
     });
+
+    if (layoutWrap !== 'nowrap' && availableWidth > 0) {
+        return layoutFlexRowWithWrap({
+            frame,
+            metrics,
+            padding,
+            gap,
+            availableWidth,
+            availableHeight,
+            layoutAlign,
+            layoutCrossAlign,
+            layoutWrap,
+        });
+    }
 
     const gapCount = Math.max(0, metrics.length - 1);
     let gapToUse = gap;
@@ -439,6 +470,311 @@ function computeFlexRowLayout(frame) {
     const elements = frame.elements.map((element) => {
         if (!updates.has(element.id)) return element;
         const overrides = updates.get(element.id);
+        return {
+            ...element,
+            props: {
+                ...element.props,
+                ...overrides,
+            },
+        };
+    });
+
+    return { elements, changed: true };
+}
+
+function layoutFlexRowWithWrap({
+    metrics,
+    padding,
+    gap,
+    availableWidth,
+    availableHeight,
+    layoutAlign,
+    layoutCrossAlign,
+    layoutWrap,
+    frame,
+}) {
+    const maxLineWidth = availableWidth > 0 ? availableWidth : Number.POSITIVE_INFINITY;
+    const lines = [];
+    let currentLine = {
+        items: [],
+        widthNoGap: 0,
+        count: 0,
+        maxHeight: 0,
+    };
+
+    metrics.forEach((item) => {
+        const itemWidth = Math.max(1, item.targetWidth);
+        const prospectiveCount = currentLine.count + 1;
+        const prospectiveWidthNoGap = currentLine.widthNoGap + itemWidth;
+        const prospectiveWidthWithGap =
+            prospectiveWidthNoGap + gap * Math.max(0, prospectiveCount - 1);
+        if (
+            layoutWrap !== 'nowrap' &&
+            currentLine.count > 0 &&
+            prospectiveWidthWithGap > maxLineWidth + 0.01
+        ) {
+            lines.push({ ...currentLine });
+            currentLine = {
+                items: [],
+                widthNoGap: 0,
+                count: 0,
+                maxHeight: 0,
+            };
+        }
+        currentLine.items.push(item);
+        currentLine.count += 1;
+        currentLine.widthNoGap += itemWidth;
+        currentLine.maxHeight = Math.max(currentLine.maxHeight, item.desiredHeight);
+    });
+    if (currentLine.count > 0) {
+        lines.push({ ...currentLine });
+    }
+
+    if (lines.length === 0) {
+        return { elements: frame.elements, changed: false };
+    }
+
+    const totalHeight =
+        lines.reduce((sum, line) => sum + line.maxHeight, 0) + gap * Math.max(0, lines.length - 1);
+
+    const linesToRender =
+        layoutWrap === 'wrap-reverse' ? [...lines].reverse() : lines;
+
+    let currentY = padding.top;
+    if (layoutWrap === 'wrap-reverse' && availableHeight > 0) {
+        currentY = padding.top + Math.max(0, availableHeight - totalHeight);
+    }
+
+    const updates = new Map();
+
+    linesToRender.forEach((line, index) => {
+        const count = line.count;
+        const lineWidthNoGap = line.widthNoGap;
+        let gapSpacing = gap;
+        let startX = padding.left;
+
+        if (availableWidth > 0) {
+            if (layoutAlign === 'space-between' && count > 1) {
+                gapSpacing = Math.max(0, (availableWidth - lineWidthNoGap) / (count - 1));
+            } else {
+                const baseGapTotal = gapSpacing * Math.max(0, count - 1);
+                const freeSpace = Math.max(0, availableWidth - lineWidthNoGap - baseGapTotal);
+                if (layoutAlign === 'center') {
+                    startX += freeSpace / 2;
+                } else if (layoutAlign === 'end') {
+                    startX += freeSpace;
+                }
+            }
+        }
+
+        let cursorX = startX;
+        line.items.forEach((item, itemIndex) => {
+            let width = Math.max(1, clampValue(item.targetWidth, item.minWidth, item.maxWidth));
+            let height = Math.max(1, clampValue(item.desiredHeight, item.minHeight, item.maxHeight));
+            const alignSelf = item.alignSelf ?? layoutCrossAlign;
+            let offsetY = 0;
+
+            if (alignSelf === 'stretch') {
+                height = Math.max(1, clampValue(line.maxHeight, item.minHeight, item.maxHeight));
+            } else if (alignSelf === 'center') {
+                offsetY = Math.max(0, (line.maxHeight - height) / 2);
+            } else if (alignSelf === 'end') {
+                offsetY = Math.max(0, line.maxHeight - height);
+            }
+
+            const x = cursorX;
+            const y = currentY + offsetY;
+
+            const { props } = item;
+            if (
+                props.x !== x ||
+                props.y !== y ||
+                props.width !== width ||
+                props.height !== height
+            ) {
+                updates.set(item.element.id, {
+                    x,
+                    y,
+                    width,
+                    height,
+                });
+            }
+
+            cursorX += width;
+            if (itemIndex < count - 1) {
+                cursorX += gapSpacing;
+            }
+        });
+
+        currentY += line.maxHeight;
+        if (index < linesToRender.length - 1) {
+            currentY += gap;
+        }
+    });
+
+    if (updates.size === 0) {
+        return { elements: frame.elements, changed: false };
+    }
+
+    const elements = frame.elements.map((element) => {
+        const overrides = updates.get(element.id);
+        if (!overrides) return element;
+        return {
+            ...element,
+            props: {
+                ...element.props,
+                ...overrides,
+            },
+        };
+    });
+
+    return { elements, changed: true };
+}
+
+function layoutFlexColumnWithWrap({
+    metrics,
+    padding,
+    gap,
+    availableWidth,
+    availableHeight,
+    layoutAlign,
+    layoutCrossAlign,
+    layoutWrap,
+    frame,
+}) {
+    const maxColumnHeight = availableHeight > 0 ? availableHeight : Number.POSITIVE_INFINITY;
+    const columns = [];
+    let currentColumn = {
+        items: [],
+        heightNoGap: 0,
+        count: 0,
+        maxWidth: 0,
+    };
+
+    metrics.forEach((item) => {
+        const itemHeight = Math.max(1, item.targetHeight ?? item.targetWidth ?? 0);
+        const prospectiveCount = currentColumn.count + 1;
+        const prospectiveHeightNoGap = currentColumn.heightNoGap + itemHeight;
+        const prospectiveHeightWithGap =
+            prospectiveHeightNoGap + gap * Math.max(0, prospectiveCount - 1);
+        if (
+            layoutWrap !== 'nowrap' &&
+            currentColumn.count > 0 &&
+            prospectiveHeightWithGap > maxColumnHeight + 0.01
+        ) {
+            columns.push({ ...currentColumn });
+            currentColumn = {
+                items: [],
+                heightNoGap: 0,
+                count: 0,
+                maxWidth: 0,
+            };
+        }
+        currentColumn.items.push(item);
+        currentColumn.count += 1;
+        currentColumn.heightNoGap += itemHeight;
+        const desiredWidth = Math.max(1, clampValue(item.desiredWidth, item.minWidth, item.maxWidth));
+        currentColumn.maxWidth = Math.max(currentColumn.maxWidth, desiredWidth);
+    });
+    if (currentColumn.count > 0) {
+        columns.push({ ...currentColumn });
+    }
+
+    if (columns.length === 0) {
+        return { elements: frame.elements, changed: false };
+    }
+
+    const totalWidth =
+        columns.reduce((sum, column) => sum + column.maxWidth, 0) +
+        gap * Math.max(0, columns.length - 1);
+
+    const columnsToRender =
+        layoutWrap === 'wrap-reverse' ? [...columns].reverse() : columns;
+
+    let currentX = padding.left;
+    if (layoutWrap === 'wrap-reverse' && availableWidth > 0) {
+        currentX = padding.left + Math.max(0, availableWidth - totalWidth);
+    }
+
+    const updates = new Map();
+
+    columnsToRender.forEach((column, columnIndex) => {
+        const columnWidth = column.maxWidth;
+
+        let columnGapSpacing = gap;
+        const count = column.count;
+        const columnHeightNoGap = column.heightNoGap;
+        let columnStartY = padding.top;
+
+        if (availableHeight > 0) {
+            if (layoutAlign === 'space-between' && count > 1) {
+                columnGapSpacing = Math.max(
+                    0,
+                    (availableHeight - columnHeightNoGap) / (count - 1),
+                );
+            } else {
+                const baseGapTotal = columnGapSpacing * Math.max(0, count - 1);
+                const freeSpace = Math.max(0, availableHeight - columnHeightNoGap - baseGapTotal);
+                if (layoutAlign === 'center') {
+                    columnStartY += freeSpace / 2;
+                } else if (layoutAlign === 'end') {
+                    columnStartY += freeSpace;
+                }
+            }
+        }
+
+        let cursorY = columnStartY;
+        column.items.forEach((item, itemIndex) => {
+            let height = Math.max(1, clampValue(item.targetHeight, item.minHeight, item.maxHeight));
+            let width = Math.max(1, clampValue(item.desiredWidth, item.minWidth, item.maxWidth));
+            const alignSelf = item.alignSelf ?? layoutCrossAlign;
+            let offsetX = 0;
+
+            if (alignSelf === 'stretch') {
+                width = Math.max(1, clampValue(columnWidth, item.minWidth, item.maxWidth));
+            } else if (alignSelf === 'center') {
+                offsetX = Math.max(0, (columnWidth - width) / 2);
+            } else if (alignSelf === 'end') {
+                offsetX = Math.max(0, columnWidth - width);
+            }
+
+            const x = currentX + offsetX;
+            const y = cursorY;
+
+            const { props } = item;
+            if (
+                props.x !== x ||
+                props.y !== y ||
+                props.width !== width ||
+                props.height !== height
+            ) {
+                updates.set(item.element.id, {
+                    x,
+                    y,
+                    width,
+                    height,
+                });
+            }
+
+            cursorY += height;
+            if (itemIndex < count - 1) {
+                cursorY += columnGapSpacing;
+            }
+        });
+
+        currentX += columnWidth;
+        if (columnIndex < columnsToRender.length - 1) {
+            currentX += gap;
+        }
+    });
+
+    if (updates.size === 0) {
+        return { elements: frame.elements, changed: false };
+    }
+
+    const elements = frame.elements.map((element) => {
+        const overrides = updates.get(element.id);
+        if (!overrides) return element;
         return {
             ...element,
             props: {
@@ -702,6 +1038,7 @@ function withElementDefaults(element) {
             layoutGap: element.layoutGap ?? 24,
             layoutAlign: element.layoutAlign ?? 'start',
             layoutCrossAlign: element.layoutCrossAlign ?? 'stretch',
+            layoutWrap: element.layoutWrap ?? DEFAULT_FLEX_WRAP,
             layoutPadding: element.layoutPadding
                 ? normalizePadding(element.layoutPadding)
                 : { ...DEFAULT_LAYOUT_PADDING },
@@ -792,6 +1129,7 @@ const initialFrame = {
     layoutGap: 32,
     layoutAlign: 'start',
     layoutCrossAlign: 'start',
+    layoutWrap: DEFAULT_FLEX_WRAP,
     layoutPadding: { ...DEFAULT_LAYOUT_PADDING },
     layoutRowGap: 32,
     layoutGridColumns: DEFAULT_GRID_COLUMNS,
@@ -1014,6 +1352,7 @@ export const useCanvasStore = create(
                 layoutGap: overrides.layoutGap ?? 32,
                 layoutAlign: overrides.layoutAlign ?? 'start',
                 layoutCrossAlign: overrides.layoutCrossAlign ?? 'start',
+                layoutWrap: overrides.layoutWrap ?? DEFAULT_FLEX_WRAP,
                 layoutPadding: overrides.layoutPadding
                     ? { ...DEFAULT_LAYOUT_PADDING, ...overrides.layoutPadding }
                     : { ...DEFAULT_LAYOUT_PADDING },
@@ -1072,6 +1411,14 @@ export const useCanvasStore = create(
                     shouldReflow = true;
                 }
 
+                if (updates.layoutWrap !== undefined) {
+                    const allowedWrap = ['nowrap', 'wrap', 'wrap-reverse'];
+                    next.layoutWrap = typeof updates.layoutWrap === 'string' && allowedWrap.includes(updates.layoutWrap)
+                        ? updates.layoutWrap
+                        : frame.layoutWrap ?? DEFAULT_FLEX_WRAP;
+                    shouldReflow = true;
+                }
+
                 if (frame.layoutMode !== 'absolute' || next.layoutMode !== 'absolute') {
                     if (updates.width !== undefined || updates.height !== undefined) {
                         shouldReflow = true;
@@ -1083,6 +1430,7 @@ export const useCanvasStore = create(
                     updates.layoutGap !== undefined ||
                     updates.layoutAlign !== undefined ||
                     updates.layoutCrossAlign !== undefined ||
+                    updates.layoutWrap !== undefined ||
                     updates.layoutPadding !== undefined ||
                     updates.layoutRowGap !== undefined ||
                     updates.layoutGridColumns !== undefined ||
@@ -1120,6 +1468,7 @@ export const useCanvasStore = create(
                     layoutGap: updates.layoutGap ?? frame.layoutGap ?? 0,
                     layoutAlign: updates.layoutAlign ?? frame.layoutAlign ?? 'start',
                     layoutCrossAlign: updates.layoutCrossAlign ?? frame.layoutCrossAlign ?? 'start',
+                    layoutWrap: updates.layoutWrap ?? frame.layoutWrap ?? DEFAULT_FLEX_WRAP,
                     layoutPadding: nextPadding,
                     layoutRowGap: updates.layoutRowGap ?? frame.layoutRowGap ?? 0,
                     layoutGridColumns: updates.layoutGridColumns ?? frame.layoutGridColumns ?? DEFAULT_GRID_COLUMNS,
@@ -1153,6 +1502,7 @@ export const useCanvasStore = create(
                     const nextGap = updates.layoutGap ?? element.layoutGap ?? 0;
                     const nextAlign = updates.layoutAlign ?? element.layoutAlign ?? 'start';
                     const nextCrossAlign = updates.layoutCrossAlign ?? element.layoutCrossAlign ?? 'stretch';
+                    const nextWrap = updates.layoutWrap ?? element.layoutWrap ?? DEFAULT_FLEX_WRAP;
                     const nextRowGap = updates.layoutRowGap ?? element.layoutRowGap ?? 0;
                     const nextColumns = updates.layoutGridColumns ?? element.layoutGridColumns ?? DEFAULT_GRID_COLUMNS;
                     const nextAutoRows = updates.layoutGridAutoRows ?? element.layoutGridAutoRows ?? DEFAULT_GRID_AUTO_ROWS;
@@ -1164,6 +1514,7 @@ export const useCanvasStore = create(
                         element.layoutGap !== nextGap ||
                         element.layoutAlign !== nextAlign ||
                         element.layoutCrossAlign !== nextCrossAlign ||
+                        element.layoutWrap !== nextWrap ||
                         element.layoutRowGap !== nextRowGap ||
                         element.layoutGridColumns !== nextColumns ||
                         element.layoutGridAutoRows !== nextAutoRows ||
@@ -1180,6 +1531,7 @@ export const useCanvasStore = create(
                         layoutGap: nextGap,
                         layoutAlign: nextAlign,
                         layoutCrossAlign: nextCrossAlign,
+                        layoutWrap: nextWrap,
                         layoutPadding: nextPadding,
                         layoutRowGap: nextRowGap,
                         layoutGridColumns: nextColumns,
@@ -1332,6 +1684,7 @@ export const useCanvasStore = create(
             layoutGap: group.layoutGap ?? 0,
             layoutAlign: group.layoutAlign ?? 'start',
             layoutCrossAlign: group.layoutCrossAlign ?? 'stretch',
+            layoutWrap: group.layoutWrap ?? DEFAULT_FLEX_WRAP,
             layoutPadding: padding,
             layoutRowGap: group.layoutRowGap ?? group.layoutGap ?? 0,
             layoutGridColumns: group.layoutGridColumns ?? DEFAULT_GRID_COLUMNS,

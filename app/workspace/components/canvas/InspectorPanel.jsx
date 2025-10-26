@@ -284,6 +284,12 @@ const GRID_AUTO_FIT_OPTIONS = [
 ];
 const GRID_AUTO_FIT_VALUES = GRID_AUTO_FIT_OPTIONS.map((option) => option.value);
 
+const FLEX_WRAP_OPTIONS = [
+    { value: 'nowrap', label: 'No Wrap' },
+    { value: 'wrap', label: 'Wrap' },
+    { value: 'wrap-reverse', label: 'Wrap Reverse' },
+];
+
 export default function InspectorPanel() {
     const mode = useCanvasStore((state) => state.mode);
     const frames = useCanvasStore((state) => state.frames);
@@ -916,6 +922,7 @@ export default function InspectorPanel() {
         const rawAutoRows = isGroupContainer ? activeElement.layoutGridAutoRows : activeFrame.layoutGridAutoRows;
         const rawAlign = isGroupContainer ? activeElement.layoutAlign : activeFrame.layoutAlign;
         const rawCrossAlign = isGroupContainer ? activeElement.layoutCrossAlign : activeFrame.layoutCrossAlign;
+        const rawWrap = isGroupContainer ? activeElement.layoutWrap : activeFrame.layoutWrap;
         const rawPadding = isGroupContainer ? activeElement.layoutPadding : activeFrame.layoutPadding;
         const rawAutoFit = isGroupContainer ? activeElement.layoutGridAutoFit : activeFrame.layoutGridAutoFit;
         const rawMinColumnWidth = isGroupContainer
@@ -927,6 +934,7 @@ export default function InspectorPanel() {
         const layoutGridAutoRows = Number.isFinite(rawAutoRows) ? rawAutoRows : DEFAULT_GRID_AUTO_ROWS;
         const layoutAlign = rawAlign ?? 'start';
         const layoutCrossAlign = rawCrossAlign ?? 'stretch';
+        const layoutWrap = typeof rawWrap === 'string' ? rawWrap : 'nowrap';
         const padding = rawPadding ?? {};
         const layoutGridAutoFit = GRID_AUTO_FIT_VALUES.includes(rawAutoFit) ? rawAutoFit : 'none';
         const layoutGridMinColumnWidth = Number.isFinite(rawMinColumnWidth)
@@ -1048,6 +1056,14 @@ export default function InspectorPanel() {
                                 options={crossAlignOptions}
                                 onChange={(next) => updateContainerLayout({ layoutCrossAlign: next })}
                             />
+                            {isFlexLayout ? (
+                                <SegmentedControl
+                                    label='Flex Wrap'
+                                    value={layoutWrap}
+                                    options={FLEX_WRAP_OPTIONS}
+                                    onChange={(next) => updateContainerLayout({ layoutWrap: next })}
+                                />
+                            ) : null}
                             {isGridLayout ? (
                                 <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
                                     <SelectRow
