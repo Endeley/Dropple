@@ -17,6 +17,7 @@ const initialFrame = {
     backgroundColor: DEFAULT_FRAME_BACKGROUND,
     backgroundImage: null,
     backgroundFit: 'cover',
+    timelineDuration: 20,
     elements: [
         {
             id: 'text-hero',
@@ -101,6 +102,9 @@ export const useCanvasStore = create((set, get) => ({
     activePrototypeFrameId: initialFrame.id,
     frameLinks: [],
     activeGuides: [],
+    activeToolOverlay: null,
+    comments: [],
+    timelineAssets: [],
 
     setMode: (mode) => set({ mode }),
     setScale: (value) =>
@@ -110,6 +114,7 @@ export const useCanvasStore = create((set, get) => ({
     setSelectedTool: (tool) => set({ selectedTool: tool }),
     setActiveGuides: (guides) => set({ activeGuides: Array.isArray(guides) ? guides : [] }),
     clearActiveGuides: () => set({ activeGuides: [] }),
+    setActiveToolOverlay: (overlay) => set({ activeToolOverlay: overlay }),
 
     setSelectedFrame: (id) =>
         set((state) => ({
@@ -195,6 +200,7 @@ export const useCanvasStore = create((set, get) => ({
                 backgroundColor: overrides.backgroundColor ?? DEFAULT_FRAME_BACKGROUND,
                 backgroundImage: overrides.backgroundImage ?? null,
                 backgroundFit: overrides.backgroundFit ?? 'cover',
+                timelineDuration: overrides.timelineDuration ?? 20,
                 elements: [],
             };
             createdFrame = newFrame;
@@ -305,6 +311,7 @@ export const useCanvasStore = create((set, get) => ({
                     elements: frame.elements.filter((element) => element.id !== elementId),
                 };
             }),
+            comments: state.comments.filter((comment) => comment.elementId !== elementId),
         })),
 
     groupSelectedElements: () => {
@@ -481,9 +488,13 @@ export const useCanvasStore = create((set, get) => ({
             };
         }),
 
-    removeFrameLink: (fromFrameId) =>
+    removeFrameLink: (fromFrameId, toFrameId = null) =>
         set((state) => ({
-            frameLinks: state.frameLinks.filter((link) => link.from !== fromFrameId),
+            frameLinks: state.frameLinks.filter((link) => {
+                if (link.from !== fromFrameId) return true;
+                if (toFrameId == null) return false;
+                return link.to !== toFrameId;
+            }),
         })),
 
     resetCanvas: () =>
@@ -499,6 +510,9 @@ export const useCanvasStore = create((set, get) => ({
             activePrototypeFrameId: initialFrame.id,
             frameLinks: [],
             activeGuides: [],
+            activeToolOverlay: null,
+            comments: [],
+            timelineAssets: [],
         }),
 
     getFrameById: (id) => get().frames.find((frame) => frame.id === id),
@@ -508,4 +522,59 @@ export const useCanvasStore = create((set, get) => ({
         return frame.elements.find((element) => element.id === elementId) ?? null;
     },
     getLinkedFrames: (frameId) => get().frameLinks.filter((link) => link.from === frameId),
+    addComment: ({ frameId, elementId = null, text }) => {
+        if (!frameId || !text) return;
+        set((state) => ({
+            comments: [
+                ...state.comments,
+                {
+                    id: `comment-${nanoid(6)}`,
+                    frameId,
+                    elementId,
+                    text,
+                    createdAt: new Date().toISOString(),
+                },
+            ],
+        }));
+    },
+    removeComment: (commentId) =>
+        set((state) => ({
+            comments: state.comments.filter((comment) => comment.id !== commentId),
+        })),
+    addTimelineAsset: ({ frameId, label, type, duration }) => {
+        if (!frameId || !label) return;
+        set((state) => ({
+            timelineAssets: [
+                ...state.timelineAssets,
+                {
+                    id: `asset-${nanoid(6)}`,
+                    frameId,
+                    label,
+                    type: type ?? 'clip',
+                    duration: duration ?? 5,
+                    createdAt: new Date().toISOString(),
+                },
+            ],
+        }));
+    },
+    removeTimelineAsset: (assetId) =>
+        set((state) => ({
+            timelineAssets: state.timelineAssets.filter((asset) => asset.id !== assetId),
+        })),
+    chainFrames: (frameIds) => {
+        const uniqueIds = Array.from(new Set(Array.isArray(frameIds) ? frameIds : [])).filter(Boolean);
+        if (uniqueIds.length < 2) return;
+
+        set((state) => {
+            const filteredLinks = state.frameLinks.filter((link) => !uniqueIds.includes(link.from));
+            const generatedLinks = uniqueIds.slice(0, -1).map((fromId, index) => ({
+                id: `link-${nanoid(6)}`,
+                from: fromId,
+                to: uniqueIds[index + 1],
+            }));
+            return {
+                frameLinks: [...filteredLinks, ...generatedLinks],
+            };
+        });
+    },
 }));

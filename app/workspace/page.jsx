@@ -8,6 +8,7 @@ import CanvasControls from './components/canvas/CanvasControls';
 import InspectorPanel from './components/canvas/InspectorPanel';
 import { useCanvasStore } from './components/canvas/context/CanvasStore';
 import PrototypeOverlay from './components/canvas/PrototypeOverlay';
+import ToolOverlayLayer from './components/canvas/overlays/ToolOverlayLayer';
 
 export default function WorkspacePage() {
     const mode = useCanvasStore((state) => state.mode);
@@ -30,8 +31,9 @@ export default function WorkspacePage() {
                 <ToolSidebar />
                 <main className='relative flex flex-1 flex-col overflow-hidden bg-[rgba(15,23,42,0.6)]'>
                     <ModeToolbar />
-                    <div className='flex flex-1 overflow-hidden'>
+                    <div className='relative flex flex-1 overflow-hidden'>
                         <CanvasContainer />
+                        <ToolOverlayLayer />
                     </div>
                     <CanvasControls />
                     <PrototypeOverlay />

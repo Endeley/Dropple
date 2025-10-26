@@ -21,6 +21,8 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
     const setSelectedElement = useCanvasStore((state) => state.setSelectedElement);
     const toggleElementSelection = useCanvasStore((state) => state.toggleElementSelection);
     const updateElementProps = useCanvasStore((state) => state.updateElementProps);
+    const comments = useCanvasStore((state) => state.comments);
+    const setActiveToolOverlay = useCanvasStore((state) => state.setActiveToolOverlay);
 
     const dragStateRef = useRef(null);
     const resizeStateRef = useRef(null);
@@ -31,6 +33,14 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
     const isPointerTool = !selectedTool || selectedTool === 'pointer';
     const isSelected = selectedFrameId === frameId && selectedElementIds.includes(element.id);
     const hasLink = Boolean(props.linkTarget);
+    const elementComments = useMemo(
+        () =>
+            comments.filter(
+                (comment) => comment.frameId === frameId && comment.elementId === element.id,
+            ),
+        [comments, frameId, element.id],
+    );
+    const hasComments = elementComments.length > 0;
     const canResize =
         isSelected &&
         isPointerTool &&
@@ -97,7 +107,15 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
 
             const targets = createElementTargets(frameState, element.id);
             const snapped = snapRectToTargets({ rect: candidateRect, targets });
-            storeApi.setActiveGuides(snapped.guides);
+            const offsetGuides = (snapped.guides ?? []).map((guide) => {
+                const basePosition = guide.position ?? 0;
+                const frameOffset =
+                    guide.orientation === 'vertical'
+                        ? frameState?.x ?? 0
+                        : frameState?.y ?? 0;
+                return { ...guide, position: basePosition + frameOffset };
+            });
+            storeApi.setActiveGuides(offsetGuides);
 
             updateElementProps(frameId, element.id, {
                 x: snapped.x,
@@ -178,7 +196,15 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                 handle: current.handle,
                 targets,
             });
-            storeApi.setActiveGuides(snapped.guides);
+            const offsetGuides = (snapped.guides ?? []).map((guide) => {
+                const basePosition = guide.position ?? 0;
+                const frameOffset =
+                    guide.orientation === 'vertical'
+                        ? frameState?.x ?? 0
+                        : frameState?.y ?? 0;
+                return { ...guide, position: basePosition + frameOffset };
+            });
+            storeApi.setActiveGuides(offsetGuides);
 
             updateElementProps(frameId, element.id, snapped.rect);
         };
@@ -217,6 +243,8 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
             backgroundSize: props.backgroundFit ?? 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: props.imageUrl ? 'no-repeat' : undefined,
+            boxShadow: props.boxShadow,
+            filter: props.filter && props.filter !== 'none' ? props.filter : undefined,
         }),
         [
             props.x,
@@ -232,6 +260,8 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
             props.fill,
             props.imageUrl,
             props.backgroundFit,
+            props.boxShadow,
+            props.filter,
         ],
     );
 
@@ -239,6 +269,19 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
         <span className='pointer-events-none absolute right-2 top-2 rounded-full border border-[rgba(59,130,246,0.35)] bg-[rgba(59,130,246,0.15)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[rgba(148,163,184,0.85)]'>
             Link
         </span>
+    ) : null;
+    const commentBadge = hasComments ? (
+        <button
+            type='button'
+            onPointerDown={(event) => {
+                event.stopPropagation();
+                setSelectedElement(frameId, element.id);
+                setActiveToolOverlay('comment');
+            }}
+            className='absolute left-2 top-2 flex h-6 items-center gap-1 rounded-full border border-[rgba(148,163,184,0.35)] bg-[rgba(15,23,42,0.7)] px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgba(236,233,254,0.85)]'
+        >
+            💬 {elementComments.length}
+        </button>
     ) : null;
 
     const resizeHandles =
@@ -281,6 +324,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                 >
                     {linkBadge}
                     {resizeHandles}
+                    {commentBadge}
                 </div>
             );
         case 'text':
@@ -309,6 +353,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                     {props.text}
                     {linkBadge}
                     {resizeHandles}
+                    {commentBadge}
                 </div>
             );
         case 'group':
@@ -327,6 +372,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
                     onPointerDown={handlePointerDown}
                 >
                     {linkBadge}
+                    {commentBadge}
                     {resizeHandles}
                     {childrenNodes.map(({ element: child, children }) => (
                         <ElementNode key={child.id} element={child} frameId={frameId} childrenNodes={children} />
