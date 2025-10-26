@@ -7,6 +7,7 @@ import ToolSidebar from './components/canvas/ToolSidebar';
 import CanvasControls from './components/canvas/CanvasControls';
 import InspectorPanel from './components/canvas/InspectorPanel';
 import { useCanvasStore } from './components/canvas/context/CanvasStore';
+import PrototypeOverlay from './components/canvas/PrototypeOverlay';
 
 export default function WorkspacePage() {
     const mode = useCanvasStore((state) => state.mode);
@@ -33,6 +34,7 @@ export default function WorkspacePage() {
                         <CanvasContainer />
                     </div>
                     <CanvasControls />
+                    <PrototypeOverlay />
                 </main>
                 <InspectorPanel />
             </div>

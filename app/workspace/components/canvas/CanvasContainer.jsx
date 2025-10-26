@@ -1,15 +1,113 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { nanoid } from 'nanoid';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import CanvasLayer from './CanvasLayer';
 import { useCanvasStore } from './context/CanvasStore';
 
 const SCALE_STEP = 1.1;
 
+const TOOL_BEHAVIORS = {
+    pointer: { type: 'pointer' },
+    frame: { type: 'frame', width: 960, height: 640 },
+    canvas: { type: 'frame', width: 1280, height: 720 },
+    scene: { type: 'frame', width: 1280, height: 720 },
+    segment: { type: 'frame', width: 960, height: 320 },
+    shape: { type: 'element', elementType: 'rect' },
+    rect: { type: 'element', elementType: 'rect' },
+    overlay: { type: 'element', elementType: 'rect' },
+    clip: { type: 'element', elementType: 'rect' },
+    text: { type: 'element', elementType: 'text' },
+    script: { type: 'element', elementType: 'text' },
+    image: { type: 'element', elementType: 'image' },
+    'ai-generator': { type: 'element', elementType: 'text' },
+    component: { type: 'element', elementType: 'rect' },
+    character: { type: 'element', elementType: 'rect' },
+};
+
+function resolveTool(toolId) {
+    if (!toolId || toolId === 'pointer') return TOOL_BEHAVIORS.pointer;
+    if (TOOL_BEHAVIORS[toolId]) return TOOL_BEHAVIORS[toolId];
+    if (toolId.includes('frame')) return TOOL_BEHAVIORS.frame;
+    if (toolId.includes('text')) return TOOL_BEHAVIORS.text;
+    if (toolId.includes('image') || toolId.includes('photo')) return TOOL_BEHAVIORS.image;
+    if (toolId.includes('shape') || toolId.includes('rect') || toolId.includes('overlay')) return TOOL_BEHAVIORS.shape;
+    return { type: 'pointer' };
+}
+
+function findFrameAtPoint(frames, point) {
+    for (let i = frames.length - 1; i >= 0; i -= 1) {
+        const frame = frames[i];
+        if (
+            point.x >= frame.x &&
+            point.x <= frame.x + frame.width &&
+            point.y >= frame.y &&
+            point.y <= frame.y + frame.height
+        ) {
+            return frame;
+        }
+    }
+    return null;
+}
+
+function createElement(elementType, frame, point) {
+    const defaults = {
+        rect: {
+            width: 240,
+            height: 160,
+            fill: '#2A244B',
+            cornerRadius: 20,
+            stroke: '#8B5CF6',
+            strokeWidth: 1,
+            opacity: 0.9,
+        },
+        text: {
+            text: 'New text block',
+            width: 320,
+            height: 120,
+            fontSize: 24,
+            fill: '#ECE9FE',
+            lineHeight: 1.3,
+            letterSpacing: 0,
+            opacity: 1,
+        },
+        image: {
+            width: 320,
+            height: 220,
+            fill: 'linear-gradient(135deg, #312E81, #9333EA)',
+            cornerRadius: 24,
+            imageUrl: null,
+            backgroundFit: 'cover',
+            opacity: 0.95,
+        },
+    };
+
+    const preset = defaults[elementType] ?? defaults.rect;
+    const width = preset.width ?? 200;
+    const height = preset.height ?? 120;
+    const localX = point.x - frame.x - width / 2;
+    const localY = point.y - frame.y - height / 2;
+
+    return {
+        id: `el-${nanoid(6)}`,
+        type: elementType,
+        parentId: null,
+        props: {
+            x: localX,
+            y: localY,
+            width,
+            height,
+            ...preset,
+        },
+    };
+}
+
 export default function CanvasContainer() {
     const viewportRef = useRef(null);
     const isPointerDown = useRef(false);
     const lastPointer = useRef({ x: 0, y: 0 });
+    const fileInputRef = useRef(null);
+    const [pendingImageElement, setPendingImageElement] = useState(null);
 
     const scale = useCanvasStore((state) => state.scale);
     const setScale = useCanvasStore((state) => state.setScale);
@@ -40,6 +138,52 @@ export default function CanvasContainer() {
             window.removeEventListener('pointerup', handlePointerUp);
         };
     }, [setPosition]);
+    useEffect(() => {
+        if (!pendingImageElement) return;
+        const input = fileInputRef.current;
+        if (!input) return;
+
+        // Reset value so selecting the same file twice still triggers change event
+        input.value = '';
+        input.click();
+    }, [pendingImageElement]);
+
+    const handleImageFileChange = useCallback(
+        (event) => {
+            const current = pendingImageElement;
+            const input = event.target;
+            if (!current) {
+                if (input) input.value = '';
+                return;
+            }
+
+            const file = input?.files?.[0];
+            if (!file) {
+                setPendingImageElement(null);
+                if (input) input.value = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = () => {
+                if (typeof reader.result === 'string') {
+                    const store = useCanvasStore.getState();
+                    store.updateElementProps(current.frameId, current.elementId, {
+                        imageUrl: reader.result,
+                        fill: 'transparent',
+                    });
+                }
+                setPendingImageElement(null);
+                if (input) input.value = '';
+            };
+            reader.onerror = () => {
+                setPendingImageElement(null);
+                if (input) input.value = '';
+            };
+            reader.readAsDataURL(file);
+        },
+        [pendingImageElement],
+    );
 
     const handleWheel = useCallback(
         (event) => {
@@ -71,8 +215,123 @@ export default function CanvasContainer() {
     );
 
     const handlePointerDown = (event) => {
-        isPointerDown.current = true;
-        lastPointer.current = { x: event.clientX, y: event.clientY };
+        const store = useCanvasStore.getState();
+        const selectedTool = store.selectedTool || 'pointer';
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+
+        const rect = viewport.getBoundingClientRect();
+        const canvasPoint = {
+            x: (event.clientX - rect.left - store.position.x) / store.scale,
+            y: (event.clientY - rect.top - store.position.y) / store.scale,
+        };
+
+        const action = resolveTool(selectedTool);
+        const primaryButton = event.button === 0;
+
+        if (primaryButton && action.type !== 'pointer') {
+            event.preventDefault();
+
+            if (action.type === 'frame') {
+                const width = action.width ?? 960;
+                const height = action.height ?? 640;
+                const newFrame = store.addFrameAt(
+                    {
+                        x: canvasPoint.x - width / 2,
+                        y: canvasPoint.y - height / 2,
+                    },
+                    { width, height },
+                );
+                if (newFrame) {
+                    store.setSelectedFrame(newFrame.id);
+                }
+                store.setSelectedTool('pointer');
+                return;
+            }
+
+            if (action.type === 'element') {
+                let targetFrame = findFrameAtPoint(store.frames, canvasPoint);
+                if (!targetFrame) {
+                    targetFrame = store.addFrameAt(
+                        {
+                            x: canvasPoint.x - 480,
+                            y: canvasPoint.y - 320,
+                        },
+                        { width: 960, height: 640 },
+                    );
+                }
+
+                if (targetFrame) {
+                    const element = createElement(action.elementType, targetFrame, canvasPoint);
+                    store.addElementToFrame(targetFrame.id, element);
+                    store.setSelectedElement(targetFrame.id, element.id);
+                    if (selectedTool === 'image') {
+                        setPendingImageElement({ frameId: targetFrame.id, elementId: element.id });
+                    }
+                    if (selectedTool === 'ai-generator') {
+                        const baseWidth = Math.max(360, element.props?.width ?? 320);
+                        const baseHeight = Math.max(160, element.props?.height ?? 160);
+                        const storeAfterInsert = useCanvasStore.getState();
+                        storeAfterInsert.updateElementProps(targetFrame.id, element.id, {
+                            text: 'Generating AI copy…',
+                            width: baseWidth,
+                            height: baseHeight,
+                        });
+
+                        setTimeout(() => {
+                            const promptMessage = 'Describe the copy you want generated for this block:';
+                            const defaultPrompt =
+                                'Write a short Dropple landing page headline and supporting sentence.';
+                            const userInput =
+                                typeof window !== 'undefined' ? window.prompt(promptMessage, defaultPrompt) : null;
+                            const instructions =
+                                userInput && userInput.trim().length > 0 ? userInput.trim() : defaultPrompt;
+
+                            const storeAfterPrompt = useCanvasStore.getState();
+                            storeAfterPrompt.updateElementProps(targetFrame.id, element.id, {
+                                text: 'Generating AI copy…',
+                                width: baseWidth,
+                            });
+
+                            fetch('/api/ai', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    type: 'text',
+                                    prompt: instructions,
+                                }),
+                            })
+                                .then(async (response) => {
+                                    if (!response.ok) throw new Error('Failed to generate text');
+                                    const data = await response.json();
+                                    return data.text ?? instructions;
+                                })
+                                .catch(() => instructions)
+                                .then((generatedText) => {
+                                    const latestStore = useCanvasStore.getState();
+                                    latestStore.updateElementProps(targetFrame.id, element.id, {
+                                        text: generatedText,
+                                        width: baseWidth,
+                                    });
+                                });
+                        }, 0);
+                    }
+                }
+
+                store.setSelectedTool('pointer');
+                return;
+            }
+        }
+
+        const shouldPan = event.button === 1 || event.button === 2 || event.altKey;
+        if (shouldPan) {
+            isPointerDown.current = true;
+            lastPointer.current = { x: event.clientX, y: event.clientY };
+        } else if (action.type === 'pointer' && primaryButton) {
+            store.clearSelection();
+        }
     };
 
     return (
@@ -89,6 +348,14 @@ export default function CanvasContainer() {
                 <CanvasLayer />
             </div>
             <div className='pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(139,92,246,0.08),_transparent_55%)]' />
+            <input
+                ref={fileInputRef}
+                type='file'
+                accept='image/*'
+                className='hidden'
+                onChange={handleImageFileChange}
+                aria-hidden='true'
+            />
         </div>
     );
 }

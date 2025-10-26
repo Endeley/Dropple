@@ -5,10 +5,15 @@ import { useCanvasStore } from './context/CanvasStore';
 
 export default function CanvasControls() {
     const mode = useCanvasStore((state) => state.mode);
+    const frames = useCanvasStore((state) => state.frames);
+    const selectedFrameId = useCanvasStore((state) => state.selectedFrameId);
     const scale = useCanvasStore((state) => state.scale);
     const position = useCanvasStore((state) => state.position);
+    const prototypeMode = useCanvasStore((state) => state.prototypeMode);
     const setScale = useCanvasStore((state) => state.setScale);
     const setPosition = useCanvasStore((state) => state.setPosition);
+    const setPrototypeMode = useCanvasStore((state) => state.setPrototypeMode);
+    const setActivePrototypeFrameId = useCanvasStore((state) => state.setActivePrototypeFrameId);
 
     const modeConfig = MODE_CONFIG[mode] ?? MODE_CONFIG.design;
     const actions = modeConfig.bottomActions ?? [];
@@ -16,6 +21,16 @@ export default function CanvasControls() {
     const handleReset = () => {
         setScale(1);
         setPosition({ x: 0, y: 0 });
+    };
+
+    const handlePrototypeToggle = () => {
+        if (!prototypeMode) {
+            const frameId = selectedFrameId ?? frames[0]?.id ?? null;
+            if (frameId) {
+                setActivePrototypeFrameId(frameId);
+            }
+        }
+        setPrototypeMode(!prototypeMode);
     };
 
     return (
@@ -29,6 +44,17 @@ export default function CanvasControls() {
                     className='rounded-full border border-[rgba(139,92,246,0.35)] px-3 py-1 font-medium text-[rgba(236,233,254,0.9)] transition-colors hover:border-[rgba(236,233,254,0.7)] hover:text-white'
                 >
                     Reset view
+                </button>
+                <button
+                    type='button'
+                    onClick={handlePrototypeToggle}
+                    className={`rounded-full border px-3 py-1 font-medium transition-colors ${
+                        prototypeMode
+                            ? 'border-[rgba(59,130,246,0.6)] bg-[rgba(59,130,246,0.15)] text-[rgba(191,219,254,0.95)] hover:border-[rgba(191,219,254,0.85)]'
+                            : 'border-[rgba(148,163,184,0.3)] text-[rgba(226,232,240,0.78)] hover:border-[rgba(236,233,254,0.65)] hover:text-white'
+                    }`}
+                >
+                    {prototypeMode ? 'Exit prototype' : 'Prototype preview'}
                 </button>
             </div>
             <div className='hidden items-center gap-3 md:flex'>
