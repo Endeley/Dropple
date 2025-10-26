@@ -275,8 +275,8 @@ export default function CanvasContainer() {
                 });
             } else {
                 setPosition((prev) => ({
-                    x: prev.x - event.deltaX,
-                    y: prev.y - event.deltaY,
+                    x: prev.x + event.deltaX,
+                    y: prev.y + event.deltaY,
                 }));
             }
         },
@@ -457,7 +457,10 @@ export default function CanvasContainer() {
                     'relative h-full w-full overflow-hidden bg-[var(--color-canvas)]',
                     creationCursor ? 'cursor-crosshair' : 'cursor-default',
                 )}
-                style={gridBackground}
+                style={{
+                    ...gridBackground,
+                    overscrollBehavior: 'none',
+                }}
                 onWheel={handleWheel}
                 onPointerDown={handlePointerDown}
                 onContextMenu={handleCanvasContextMenu}
