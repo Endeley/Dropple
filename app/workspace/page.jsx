@@ -5,6 +5,7 @@ import CanvasContainer from './components/canvas/CanvasContainer';
 import ModeToolbar from './components/canvas/ModeToolbar';
 import ToolSidebar from './components/canvas/ToolSidebar';
 import CanvasControls from './components/canvas/CanvasControls';
+import InspectorPanel from './components/canvas/InspectorPanel';
 import { useCanvasStore } from './components/canvas/context/CanvasStore';
 
 export default function WorkspacePage() {
@@ -26,11 +27,14 @@ export default function WorkspacePage() {
             </header>
             <div className='relative flex flex-1 overflow-hidden'>
                 <ToolSidebar />
-                <main className='relative flex flex-1 flex-col bg-[rgba(15,23,42,0.6)]'>
+                <main className='relative flex flex-1 flex-col overflow-hidden bg-[rgba(15,23,42,0.6)]'>
                     <ModeToolbar />
+                    <div className='flex flex-1 overflow-hidden'>
+                        <CanvasContainer />
+                    </div>
                     <CanvasControls />
-                    <CanvasContainer />
                 </main>
+                <InspectorPanel />
             </div>
         </div>
     );

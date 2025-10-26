@@ -9,7 +9,33 @@ const initialFrame = {
     y: 120,
     width: 1440,
     height: 1024,
-    elements: [],
+    elements: [
+        {
+            id: 'text-hero',
+            type: 'text',
+            props: {
+                text: 'Welcome to Dropple',
+                fontSize: 48,
+                fill: 'rgba(236,233,254,0.95)',
+                fontStyle: 'bold',
+                x: 120,
+                y: 140,
+                width: 520,
+            },
+        },
+        {
+            id: 'rect-card',
+            type: 'rect',
+            props: {
+                x: 120,
+                y: 260,
+                width: 420,
+                height: 220,
+                fill: 'rgba(139,92,246,0.18)',
+                cornerRadius: 24,
+            },
+        },
+    ],
 };
 
 export const useCanvasStore = create((set, get) => ({
@@ -17,9 +43,15 @@ export const useCanvasStore = create((set, get) => ({
     scale: 1,
     position: { x: 0, y: 0 },
     frames: [initialFrame],
+    selectedFrameId: initialFrame.id,
+    selectedElementId: null,
+    selectedTool: 'pointer',
     setMode: (mode) => set({ mode }),
     setScale: (scale) => set({ scale }),
     setPosition: (position) => set({ position }),
+    setSelectedTool: (tool) => set({ selectedTool: tool }),
+    setSelectedFrame: (id) => set({ selectedFrameId: id, selectedElementId: null }),
+    setSelectedElement: (frameId, elementId) => set({ selectedFrameId: frameId, selectedElementId: elementId }),
     addFrame: (frame) => set((state) => ({ frames: [...state.frames, frame] })),
     updateFrame: (id, updates) =>
         set((state) => ({
@@ -51,6 +83,13 @@ export const useCanvasStore = create((set, get) => ({
                 };
             }),
         })),
-    resetCanvas: () => set({ scale: 1, position: { x: 0, y: 0 }, frames: [initialFrame] }),
+    resetCanvas: () =>
+        set({
+            scale: 1,
+            position: { x: 0, y: 0 },
+            frames: [initialFrame],
+            selectedFrameId: initialFrame.id,
+            selectedElementId: null,
+        }),
     getFrameById: (id) => get().frames.find((frame) => frame.id === id),
 }));

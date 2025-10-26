@@ -1,8 +1,7 @@
 'use client';
 
+import { MODE_CONFIG, MODE_LIST } from './modeConfig';
 import { useCanvasStore } from './context/CanvasStore';
-
-const MODES = ['design', 'podcast', 'video', 'docs', 'dev'];
 
 export default function ModeToolbar() {
     const mode = useCanvasStore((state) => state.mode);
@@ -11,8 +10,9 @@ export default function ModeToolbar() {
     return (
         <div className='pointer-events-auto fixed left-1/2 top-6 z-30 -translate-x-1/2 rounded-2xl border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.85)] px-4 py-2 shadow-lg shadow-[rgba(15,23,42,0.3)] backdrop-blur'>
             <nav className='flex items-center gap-2'>
-                {MODES.map((item) => {
+                {MODE_LIST.map((item) => {
                     const active = mode === item;
+                    const label = MODE_CONFIG[item]?.label ?? item;
                     return (
                         <button
                             key={item}
@@ -24,7 +24,7 @@ export default function ModeToolbar() {
                                     : 'text-[rgba(226,232,240,0.7)] hover:text-white hover:bg-[rgba(59,130,246,0.18)]'
                             }`}
                         >
-                            {item}
+                            {label}
                         </button>
                     );
                 })}
