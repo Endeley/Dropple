@@ -277,6 +277,7 @@ export default function FrameNode({ frame }) {
             frameY: frame.y,
             pointerId: event.pointerId,
             target,
+            hasMoved: false,
         };
 
         target.setPointerCapture?.(event.pointerId);
@@ -313,10 +314,15 @@ export default function FrameNode({ frame }) {
                 nextY = Math.round(nextY / gridSize) * gridSize;
             }
 
-            updateFrame(frame.id, {
-                x: nextX,
-                y: nextY,
-            });
+            updateFrame(
+                frame.id,
+                {
+                    x: nextX,
+                    y: nextY,
+                },
+                { skipHistory: true },
+            );
+            dragStateRef.current.hasMoved = true;
         };
 
         const handlePointerUp = () => {
@@ -324,6 +330,9 @@ export default function FrameNode({ frame }) {
             const current = dragStateRef.current;
             if (current?.pointerId != null && current?.target) {
                 current.target.releasePointerCapture?.(current.pointerId);
+            }
+            if (current?.hasMoved) {
+                useCanvasStore.getState().commitHistory('Move frame', 'canvas');
             }
             dragStateRef.current = null;
             window.removeEventListener('pointermove', handlePointerMove);
@@ -375,6 +384,7 @@ export default function FrameNode({ frame }) {
                 width: frame.width,
                 height: frame.height,
             },
+            hasResized: false,
         };
 
         event.currentTarget.setPointerCapture?.(pointerId);
@@ -420,7 +430,8 @@ export default function FrameNode({ frame }) {
                 };
             }
 
-            updateFrame(frame.id, rect);
+            updateFrame(frame.id, rect, { skipHistory: true });
+            resizeStateRef.current.hasResized = true;
         };
 
         const handlePointerUp = () => {
@@ -428,6 +439,9 @@ export default function FrameNode({ frame }) {
             const current = resizeStateRef.current;
             if (current?.pointerId != null && current?.target) {
                 current.target.releasePointerCapture?.(current.pointerId);
+            }
+            if (current?.hasResized) {
+                useCanvasStore.getState().commitHistory('Resize frame', 'canvas');
             }
             resizeStateRef.current = null;
             window.removeEventListener('pointermove', handlePointerMove);

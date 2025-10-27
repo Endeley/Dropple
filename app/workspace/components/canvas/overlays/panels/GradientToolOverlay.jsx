@@ -39,17 +39,26 @@ export default function GradientToolOverlay() {
         [activeFrame, selectedElementId],
     );
 
-    const handleApplyToElement = (gradient) => {
+    const handleApplyToElement = (gradient, label) => {
         if (!activeFrame || !activeElement) return;
-        updateElementProps(activeFrame.id, activeElement.id, { fill: gradient, imageUrl: null });
+        updateElementProps(
+            activeFrame.id,
+            activeElement.id,
+            { fill: gradient, imageUrl: null },
+            { historyLabel: `Gradient: Apply "${label}" to element`, source: 'overlay' },
+        );
     };
 
-    const handleApplyToFrame = (gradient) => {
+    const handleApplyToFrame = (gradient, label) => {
         if (!activeFrame) return;
-        updateFrame(activeFrame.id, {
-            backgroundColor: 'transparent',
-            backgroundImage: gradient,
-        });
+        updateFrame(
+            activeFrame.id,
+            {
+                backgroundColor: 'transparent',
+                backgroundImage: gradient,
+            },
+            { historyLabel: `Gradient: Apply "${label}" to frame`, source: 'overlay' },
+        );
     };
 
     const canApplyElement = Boolean(activeFrame && activeElement);
@@ -86,7 +95,7 @@ export default function GradientToolOverlay() {
                                 <button
                                     type='button'
                                     disabled={!canApplyElement}
-                                    onClick={() => handleApplyToElement(preset.value)}
+                                    onClick={() => handleApplyToElement(preset.value, preset.label)}
                                     className={`rounded-lg border px-3 py-1 text-[11px] uppercase tracking-[0.2em] transition-colors ${
                                         canApplyElement
                                             ? 'border-[rgba(139,92,246,0.45)] text-[rgba(236,233,254,0.85)] hover:border-[rgba(236,233,254,0.85)] hover:text-white'
@@ -98,7 +107,7 @@ export default function GradientToolOverlay() {
                                 <button
                                     type='button'
                                     disabled={!canApplyFrame}
-                                    onClick={() => handleApplyToFrame(preset.value)}
+                                    onClick={() => handleApplyToFrame(preset.value, preset.label)}
                                     className={`rounded-lg border px-3 py-1 text-[11px] uppercase tracking-[0.2em] transition-colors ${
                                         canApplyFrame
                                             ? 'border-[rgba(59,130,246,0.45)] text-[rgba(191,219,254,0.9)] hover:border-[rgba(191,219,254,0.85)] hover:text-white'

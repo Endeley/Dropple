@@ -330,29 +330,59 @@ export default function InspectorPanel() {
     const activeElementProps = activeElement?.props ?? {};
     const selectionCount = selectedElementIds.length;
     const isGroup = activeElement?.type === 'group';
+    const humanizeProp = (key) =>
+        (key ?? '')
+            .replace(/([A-Z])/g, ' $1')
+            .replace(/[-_]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .replace(/^./, (char) => char.toUpperCase());
+
     const handleFramePropChange = (prop, next) => {
         if (!activeFrame) return;
-        updateFrame(activeFrame.id, { [prop]: next });
+        const label = `Inspector: Set Frame ${humanizeProp(prop)}`;
+        updateFrame(
+            activeFrame.id,
+            { [prop]: next },
+            { historyLabel: label, source: 'inspector' },
+        );
     };
 
     const handleElementPropChange = (prop, next) => {
         if (!activeFrame || !activeElement) return;
-        updateElementProps(activeFrame.id, activeElement.id, { [prop]: next });
+        const label = `Inspector: Set Element ${humanizeProp(prop)}`;
+        updateElementProps(
+            activeFrame.id,
+            activeElement.id,
+            { [prop]: next },
+            { historyLabel: label, source: 'inspector' },
+        );
+    };
+
+    const applyFrameBackground = (updates, historyLabel) => {
+        if (!activeFrame) return;
+        setFrameBackground(activeFrame.id, updates, {
+            historyLabel: historyLabel ?? 'Inspector: Update Frame Background',
+            source: 'inspector',
+        });
     };
 
     const handleFrameBackgroundColor = (next) => {
-        if (!activeFrame) return;
-        setFrameBackground(activeFrame.id, { backgroundColor: next });
+        applyFrameBackground({ backgroundColor: next }, 'Inspector: Set Frame Background Color');
     };
 
     const handleFrameBackgroundImage = (next) => {
-        if (!activeFrame) return;
-        setFrameBackground(activeFrame.id, { backgroundImage: next });
+        applyFrameBackground({ backgroundImage: next }, 'Inspector: Set Frame Background Image');
     };
 
     const handleElementImage = (next) => {
         if (!activeFrame || !activeElement) return;
-        updateElementProps(activeFrame.id, activeElement.id, { imageUrl: next });
+        updateElementProps(
+            activeFrame.id,
+            activeElement.id,
+            { imageUrl: next },
+            { historyLabel: 'Inspector: Set Element Image', source: 'inspector' },
+        );
     };
 
     const handleLayerAction = (action) => {
@@ -636,9 +666,10 @@ export default function InspectorPanel() {
                     value={frameFillType}
                     options={FILL_TYPE_OPTIONS}
                     onChange={(next) =>
-                        setFrameBackground(activeFrame.id, {
-                            backgroundFillType: next,
-                        })
+                        applyFrameBackground(
+                            { backgroundFillType: next },
+                            'Inspector: Set Frame Fill Type',
+                        )
                     }
                 />
                 <ColorRow label='Background Color' value={activeFrame.backgroundColor ?? '#0F172A'} onChange={handleFrameBackgroundColor} />
@@ -649,27 +680,30 @@ export default function InspectorPanel() {
                             value={activeFrame.backgroundGradientType ?? 'linear'}
                             options={GRADIENT_TYPE_OPTIONS}
                             onChange={(next) =>
-                                setFrameBackground(activeFrame.id, {
-                                    backgroundGradientType: next,
-                                })
+                                applyFrameBackground(
+                                    { backgroundGradientType: next },
+                                    'Inspector: Set Gradient Type',
+                                )
                             }
                         />
                         <ColorRow
                             label='Gradient Start'
                             value={activeFrame.backgroundGradientStart ?? '#8B5CF6'}
                             onChange={(next) =>
-                                setFrameBackground(activeFrame.id, {
-                                    backgroundGradientStart: next,
-                                })
+                                applyFrameBackground(
+                                    { backgroundGradientStart: next },
+                                    'Inspector: Set Gradient Color Start',
+                                )
                             }
                         />
                         <ColorRow
                             label='Gradient End'
                             value={activeFrame.backgroundGradientEnd ?? '#3B82F6'}
                             onChange={(next) =>
-                                setFrameBackground(activeFrame.id, {
-                                    backgroundGradientEnd: next,
-                                })
+                                applyFrameBackground(
+                                    { backgroundGradientEnd: next },
+                                    'Inspector: Set Gradient Color End',
+                                )
                             }
                         />
                         <SliderRow
@@ -679,9 +713,10 @@ export default function InspectorPanel() {
                             step={1}
                             value={activeFrame.backgroundGradientAngle ?? 45}
                             onChange={(next) =>
-                                setFrameBackground(activeFrame.id, {
-                                    backgroundGradientAngle: next,
-                                })
+                                applyFrameBackground(
+                                    { backgroundGradientAngle: next },
+                                    'Inspector: Set Gradient Angle',
+                                )
                             }
                         />
                     </div>
@@ -691,7 +726,7 @@ export default function InspectorPanel() {
                         <ImageInputRow
                             label='Background Image'
                             value={activeFrame.backgroundImage ?? null}
-                            onChange={(next) => setFrameBackground(activeFrame.id, { backgroundImage: next })}
+                            onChange={handleFrameBackgroundImage}
                         />
                         {frameFillType === 'pattern' ? (
                             <>
@@ -702,9 +737,10 @@ export default function InspectorPanel() {
                                     step={0.05}
                                     value={activeFrame.backgroundPatternScale ?? 1}
                                     onChange={(next) =>
-                                        setFrameBackground(activeFrame.id, {
-                                            backgroundPatternScale: next,
-                                        })
+                                        applyFrameBackground(
+                                            { backgroundPatternScale: next },
+                                            'Inspector: Set Pattern Scale',
+                                        )
                                     }
                                 />
                                 <div className='grid grid-cols-2 gap-3'>
@@ -715,9 +751,10 @@ export default function InspectorPanel() {
                                         step={1}
                                         value={activeFrame.backgroundPatternOffsetX ?? 0}
                                         onChange={(next) =>
-                                            setFrameBackground(activeFrame.id, {
-                                                backgroundPatternOffsetX: next,
-                                            })
+                                            applyFrameBackground(
+                                                { backgroundPatternOffsetX: next },
+                                                'Inspector: Set Pattern Offset X',
+                                            )
                                         }
                                     />
                                     <SliderRow
@@ -727,9 +764,10 @@ export default function InspectorPanel() {
                                         step={1}
                                         value={activeFrame.backgroundPatternOffsetY ?? 0}
                                         onChange={(next) =>
-                                            setFrameBackground(activeFrame.id, {
-                                                backgroundPatternOffsetY: next,
-                                            })
+                                            applyFrameBackground(
+                                                { backgroundPatternOffsetY: next },
+                                                'Inspector: Set Pattern Offset Y',
+                                            )
                                         }
                                     />
                                 </div>
@@ -738,9 +776,10 @@ export default function InspectorPanel() {
                                     value={activeFrame.backgroundPatternRepeat ?? 'repeat'}
                                     options={PATTERN_REPEAT_OPTIONS}
                                     onChange={(next) =>
-                                        setFrameBackground(activeFrame.id, {
-                                            backgroundPatternRepeat: next,
-                                        })
+                                        applyFrameBackground(
+                                            { backgroundPatternRepeat: next },
+                                            'Inspector: Set Pattern Repeat',
+                                        )
                                     }
                                 />
                             </>
@@ -749,7 +788,12 @@ export default function InspectorPanel() {
                                 label='Object Fit'
                                 value={activeFrame.backgroundFit ?? 'cover'}
                                 options={IMAGE_FIT_OPTIONS}
-                                onChange={(next) => setFrameBackground(activeFrame.id, { backgroundFit: next })}
+                                onChange={(next) =>
+                                    applyFrameBackground(
+                                        { backgroundFit: next },
+                                        'Inspector: Set Background Fit',
+                                    )
+                                }
                             />
                         )}
                     </div>
@@ -758,7 +802,12 @@ export default function InspectorPanel() {
                     label='Background Blend'
                     value={activeFrame.backgroundBlendMode ?? 'normal'}
                     options={BACKGROUND_BLEND_OPTIONS}
-                    onChange={(next) => setFrameBackground(activeFrame.id, { backgroundBlendMode: next })}
+                    onChange={(next) =>
+                        applyFrameBackground(
+                            { backgroundBlendMode: next },
+                            'Inspector: Set Background Blend Mode',
+                        )
+                    }
                 />
                 <button
                     type='button'
@@ -993,10 +1042,30 @@ export default function InspectorPanel() {
         const layoutSectionLabel = isGroupContainer ? 'Group Layout' : 'Frame Layout';
         const updateContainerLayout = (payload) => {
             if (!activeFrame) return;
+            const keys = Object.keys(payload ?? {});
+            const targetLabel = isGroupContainer ? 'Group' : 'Frame';
+            let label = `Inspector: Update ${targetLabel} Layout`;
+            if (keys.length === 1) {
+                const key = keys[0];
+                if (key === 'layoutPadding') {
+                    const paddingKeys = Object.keys(payload.layoutPadding ?? {});
+                    if (paddingKeys.length === 1) {
+                        label = `Inspector: Set ${targetLabel} Layout Padding ${humanizeProp(paddingKeys[0])}`;
+                    } else {
+                        label = `Inspector: Set ${targetLabel} Layout Padding`;
+                    }
+                } else {
+                    label = `Inspector: Set ${targetLabel} ${humanizeProp(key)}`;
+                }
+            }
+            const options = {
+                historyLabel: label,
+                source: 'inspector',
+            };
             if (isGroupContainer && activeElement) {
-                setGroupLayout(activeFrame.id, activeElement.id, payload);
+                setGroupLayout(activeFrame.id, activeElement.id, payload, options);
             } else {
-                setFrameLayout(activeFrame.id, payload);
+                setFrameLayout(activeFrame.id, payload, options);
             }
         };
 
@@ -1038,8 +1107,23 @@ export default function InspectorPanel() {
                     : activeElement
                         ? [activeElement]
                         : [];
-            targets.forEach((target) => {
-                setElementLayout(activeFrame.id, target.id, updates);
+            if (targets.length === 0) return;
+            const keys = Object.keys(updates ?? {});
+            let label = 'Inspector: Update Element Layout';
+            if (keys.length === 1) {
+                label = `Inspector: Set Element Layout ${humanizeProp(keys[0])}`;
+            }
+            targets.forEach((target, index) => {
+                setElementLayout(
+                    activeFrame.id,
+                    target.id,
+                    updates,
+                    {
+                        historyLabel: label,
+                        source: 'inspector',
+                        skipHistory: index < targets.length - 1,
+                    },
+                );
             });
         };
         const deriveAlignSelf = () => {
@@ -1196,7 +1280,7 @@ export default function InspectorPanel() {
                                     <NumberInputRow
                                         label='Order'
                                         value={Number.isFinite(currentElementLayout.order) ? currentElementLayout.order : 0}
-                                        onChange={(next) => setElementLayout(activeFrame.id, activeElement.id, { order: next })}
+                                        onChange={(next) => applyLayoutToSelection({ order: next })}
                                     />
                                 ) : null}
                                 {isFlexLayout ? (

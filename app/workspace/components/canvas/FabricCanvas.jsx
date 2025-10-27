@@ -100,14 +100,14 @@ export default function FabricCanvas() {
                     }
                 },
                 onFrameChange: (frameId, updates) => {
-                    updateFrame(frameId, updates);
-                    const latest = useCanvasStore.getState();
-                    latest.commitHistory('Update frame');
+                    updateFrame(frameId, updates, { historyLabel: 'Fabric: Update frame', source: 'fabric' });
                 },
                 onElementChange: (frameId, elementId, updates) => {
                     const store = useCanvasStore.getState();
-                    store.updateElementProps(frameId, elementId, updates);
-                    store.commitHistory('Update element');
+                    store.updateElementProps(frameId, elementId, updates, {
+                        historyLabel: 'Fabric: Update element',
+                        source: 'fabric',
+                    });
                 },
             });
             fabricService.setCanvas(fabricCanvas);
@@ -163,14 +163,19 @@ export default function FabricCanvas() {
                             if (currentTool === 'ai-generator') {
                                 const baseWidth = Math.max(360, element.props?.width ?? 320);
                                 const baseHeight = Math.max(160, element.props?.height ?? 160);
-                                const storeAfterInsert = useCanvasStore.getState();
-                                storeAfterInsert.updateElementProps(targetFrame.id, element.id, {
-                                    text: 'Generating AI copy…',
-                                    width: baseWidth,
-                                    height: baseHeight,
-                                });
+                        const storeAfterInsert = useCanvasStore.getState();
+                        storeAfterInsert.updateElementProps(
+                            targetFrame.id,
+                            element.id,
+                            {
+                                text: 'Generating AI copy…',
+                                width: baseWidth,
+                                height: baseHeight,
+                            },
+                            { skipHistory: true },
+                        );
 
-                                setTimeout(() => {
+                        setTimeout(() => {
                                     const promptMessage = 'Describe the copy you want generated for this block:';
                                     const defaultPrompt =
                                         'Write a short Dropple landing page headline and supporting sentence.';
@@ -179,11 +184,16 @@ export default function FabricCanvas() {
                                     const instructions =
                                         userInput && userInput.trim().length > 0 ? userInput.trim() : defaultPrompt;
 
-                                    const storeAfterPrompt = useCanvasStore.getState();
-                                    storeAfterPrompt.updateElementProps(targetFrame.id, element.id, {
-                                        text: 'Generating AI copy…',
-                                        width: baseWidth,
-                                    });
+                            const storeAfterPrompt = useCanvasStore.getState();
+                            storeAfterPrompt.updateElementProps(
+                                targetFrame.id,
+                                element.id,
+                                {
+                                    text: 'Generating AI copy…',
+                                    width: baseWidth,
+                                },
+                                { skipHistory: true },
+                            );
 
                                     fetch('/api/ai', {
                                         method: 'POST',
@@ -203,11 +213,15 @@ export default function FabricCanvas() {
                                         .catch(() => instructions)
                                         .then((generatedText) => {
                                             const latestStore = useCanvasStore.getState();
-                                            latestStore.updateElementProps(targetFrame.id, element.id, {
-                                                text: generatedText,
-                                                width: baseWidth,
-                                            });
-                                            latestStore.commitHistory('AI text update', 'system');
+                                            latestStore.updateElementProps(
+                                                targetFrame.id,
+                                                element.id,
+                                                {
+                                                    text: generatedText,
+                                                    width: baseWidth,
+                                                },
+                                                { historyLabel: 'AI text update', source: 'system' },
+                                            );
                                         });
                                 }, 0);
                             }
@@ -302,11 +316,15 @@ export default function FabricCanvas() {
         reader.onload = () => {
             if (typeof reader.result === 'string') {
                 const store = useCanvasStore.getState();
-                store.updateElementProps(current.frameId, current.elementId, {
-                    imageUrl: reader.result,
-                    fill: 'transparent',
-                });
-                store.commitHistory('Update image');
+                store.updateElementProps(
+                    current.frameId,
+                    current.elementId,
+                    {
+                        imageUrl: reader.result,
+                        fill: 'transparent',
+                    },
+                    { historyLabel: 'Update image' },
+                );
             }
             setPendingImageElement(null);
             if (input) input.value = '';

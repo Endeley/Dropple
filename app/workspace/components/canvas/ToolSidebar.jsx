@@ -170,7 +170,7 @@ export default function ToolSidebar() {
         if (!editingTarget) return;
         const value = draftName.trim();
         if (editingTarget.type === 'frame') {
-            updateFrame(editingTarget.frameId, { name: value || 'Untitled Frame' });
+            updateFrame(editingTarget.frameId, { name: value || 'Untitled Frame' }, { historyLabel: 'Rename frame', source: 'sidebar' });
         } else if (editingTarget.type === 'element') {
             renameElement(editingTarget.frameId, editingTarget.elementId, value);
         }

@@ -21,6 +21,7 @@ export function configureHistory(producer: SnapshotProducer) {
 }
 
 function notify() {
+    computeStatus();
     listeners.forEach((listener) => listener());
 }
 
@@ -35,11 +36,26 @@ export function getHistoryState() {
     return historyState;
 }
 
-export function getHistoryStatus() {
-    return {
-        canUndo: historyState.past.length > 0,
-        canRedo: historyState.future.length > 0,
+let cachedStatus = {
+    canUndo: false,
+    canRedo: false,
+};
+
+function computeStatus() {
+    const nextCanUndo = historyState.past.length > 0;
+    const nextCanRedo = historyState.future.length > 0;
+    if (cachedStatus.canUndo === nextCanUndo && cachedStatus.canRedo === nextCanRedo) {
+        return cachedStatus;
+    }
+    cachedStatus = {
+        canUndo: nextCanUndo,
+        canRedo: nextCanRedo,
     };
+    return cachedStatus;
+}
+
+export function getHistoryStatus() {
+    return computeStatus();
 }
 
 function createSnapshot(label?: string): CanvasHistorySnapshot | null {

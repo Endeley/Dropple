@@ -67,6 +67,8 @@ export default function TimelineAssetsOverlay() {
             offset: Number(offset) || 0,
             thumbnailUrl: thumbnail?.data ?? null,
             waveform: waveformData,
+            historyLabel: `Timeline: Add ${type} "${label.trim()}"`,
+            source: 'timeline',
         });
         setLabel('New clip');
         setOffset(0);
@@ -107,7 +109,11 @@ export default function TimelineAssetsOverlay() {
                                     if (!activeFrame) return;
                                     const value = Number(timelineDurationInput) || 1;
                                     setTimelineDurationInput(value);
-                                    updateFrame(activeFrame.id, { timelineDuration: value });
+                                    updateFrame(
+                                        activeFrame.id,
+                                        { timelineDuration: value },
+                                        { historyLabel: 'Timeline: Set duration', source: 'timeline' },
+                                    );
                                 }}
                                 className='w-24 rounded-lg border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.7)] px-3 py-2 text-sm text-[rgba(236,233,254,0.9)]'
                             />
@@ -258,7 +264,10 @@ export default function TimelineAssetsOverlay() {
                                     <button
                                         type='button'
                                         onClick={() => {
-                                            removeTimelineAsset(asset.id);
+                                            removeTimelineAsset(asset.id, {
+                                                historyLabel: `Timeline: Remove ${asset.type ?? 'asset'} "${asset.label}"`,
+                                                source: 'timeline',
+                                            });
                                             addToast('success', `Removed asset "${asset.label}"`);
                                         }}
                                         className='rounded-md border border-[rgba(248,113,113,0.45)] px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-[rgba(254,202,202,0.9)] hover:border-[rgba(254,202,202,0.9)]'

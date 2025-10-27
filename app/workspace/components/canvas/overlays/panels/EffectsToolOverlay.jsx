@@ -49,21 +49,48 @@ export default function EffectsToolOverlay() {
     const hasBlur = props.filter && props.filter.includes('blur');
 
     const toggleShadow = () => {
-        updateElementProps(activeFrame.id, activeElement.id, {
-            boxShadow: hasShadow && !hasGlow ? 'none' : DROP_SHADOW_VALUE,
-        });
+        const enable = !(hasShadow && !hasGlow);
+        updateElementProps(
+            activeFrame.id,
+            activeElement.id,
+            {
+                boxShadow: enable ? DROP_SHADOW_VALUE : 'none',
+            },
+            {
+                historyLabel: enable ? 'Effects: Enable shadow' : 'Effects: Disable shadow',
+                source: 'overlay',
+            },
+        );
     };
 
     const toggleGlow = () => {
-        updateElementProps(activeFrame.id, activeElement.id, {
-            boxShadow: hasGlow ? 'none' : GLOW_VALUE,
-        });
+        const enable = !hasGlow;
+        updateElementProps(
+            activeFrame.id,
+            activeElement.id,
+            {
+                boxShadow: enable ? GLOW_VALUE : 'none',
+            },
+            {
+                historyLabel: enable ? 'Effects: Enable glow' : 'Effects: Disable glow',
+                source: 'overlay',
+            },
+        );
     };
 
     const toggleBlur = () => {
-        updateElementProps(activeFrame.id, activeElement.id, {
-            filter: hasBlur ? 'none' : BLUR_VALUE,
-        });
+        const enable = !hasBlur;
+        updateElementProps(
+            activeFrame.id,
+            activeElement.id,
+            {
+                filter: enable ? BLUR_VALUE : 'none',
+            },
+            {
+                historyLabel: enable ? 'Effects: Enable blur' : 'Effects: Disable blur',
+                source: 'overlay',
+            },
+        );
     };
 
     return (

@@ -523,6 +523,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
             elementY: props.y ?? 0,
             pointerId: event.pointerId,
             target: event.currentTarget,
+            hasMoved: false,
         };
 
         event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -565,10 +566,16 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
             });
             storeApi.setActiveGuides(offsetGuides);
 
-            updateElementProps(frameId, element.id, {
-                x: snapped.x,
-                y: snapped.y,
-            });
+            updateElementProps(
+                frameId,
+                element.id,
+                {
+                    x: snapped.x,
+                    y: snapped.y,
+                },
+                { skipHistory: true },
+            );
+            dragStateRef.current.hasMoved = true;
         };
 
         const handlePointerUp = () => {
@@ -577,6 +584,9 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
             const current = dragStateRef.current;
             if (current?.pointerId != null && current?.target) {
                 current.target.releasePointerCapture?.(current.pointerId);
+            }
+            if (current?.hasMoved) {
+                useCanvasStore.getState().commitHistory('Move element', 'canvas');
             }
             dragStateRef.current = null;
             window.removeEventListener('pointermove', handlePointerMove);
@@ -638,6 +648,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
             deltaX: 0,
             deltaY: 0,
             liveIndex: initialIndex >= 0 ? initialIndex : 0,
+            hasMoved: false,
         };
 
         event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -657,6 +668,9 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
             const deltaY = (moveEvent.clientY - current.startClientY) / (scale || 1);
             current.deltaX = deltaX;
             current.deltaY = deltaY;
+            if (Math.abs(deltaX) > 0 || Math.abs(deltaY) > 0) {
+                current.hasMoved = true;
+            }
 
             const latestFrame = useCanvasStore.getState().getFrameById(frameId);
             const containerMeta = resolveContainerMeta(latestFrame);
@@ -690,6 +704,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
             if (drop.index !== current.liveIndex) {
                 reorderElement(frameId, element.id, drop.index);
                 current.liveIndex = drop.index;
+                current.hasMoved = true;
             }
         };
 
@@ -730,12 +745,16 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
 
             if (drop.index !== current.liveIndex) {
                 reorderElement(frameId, element.id, drop.index);
+                current.hasMoved = true;
             }
 
             if (drop.index !== current.initialIndex) {
                 // ensure final index persisted; reorderElement handles reflow
             }
 
+            if (current.hasMoved) {
+                useCanvasStore.getState().commitHistory('Reorder element', 'canvas');
+            }
             dragStateRef.current = null;
         };
 
@@ -820,6 +839,7 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
             startY: event.clientY,
             target: event.currentTarget,
             startBox,
+            hasResized: false,
         };
 
         event.currentTarget.setPointerCapture?.(pointerId);
@@ -864,18 +884,19 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
             });
             storeApi.setActiveGuides(offsetGuides);
 
-            updateElementProps(frameId, element.id, snapped.rect);
+            updateElementProps(frameId, element.id, snapped.rect, { skipHistory: true });
+            current.hasResized = true;
             if (isFlexParent) {
                 if (parentLayoutMode === 'flex-row') {
                     setElementLayout(frameId, element.id, {
                         basis: Math.max(ELEMENT_MIN_SIZE, snapped.rect.width),
                         grow: 0,
-                    });
+                    }, { skipHistory: true });
                 } else if (parentLayoutMode === 'flex-column') {
                     setElementLayout(frameId, element.id, {
                         basis: Math.max(ELEMENT_MIN_SIZE, snapped.rect.height),
                         grow: 0,
-                    });
+                    }, { skipHistory: true });
                 }
             }
         };
@@ -885,6 +906,9 @@ export default function ElementNode({ element, frameId, childrenNodes = [] }) {
             const current = resizeStateRef.current;
             if (current?.pointerId != null && current?.target) {
                 current.target.releasePointerCapture?.(current.pointerId);
+            }
+            if (current?.hasResized) {
+                useCanvasStore.getState().commitHistory('Resize element', 'canvas');
             }
             resizeStateRef.current = null;
             window.removeEventListener('pointermove', handlePointerMove);

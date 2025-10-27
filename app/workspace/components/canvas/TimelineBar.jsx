@@ -55,6 +55,7 @@ export default function TimelineBar({ frameId, assets, totalDuration, getTimelin
             shiftKey: event.shiftKey,
             initialOffset: currentAsset.offset,
             initialDuration: currentAsset.duration,
+            hasChanged: false,
         };
         setActiveAssetId(assetId);
         setDragLabel({
@@ -106,20 +107,22 @@ export default function TimelineBar({ frameId, assets, totalDuration, getTimelin
 
         if (handleType === 'offset') {
             const nextOffset = clamp(asset.offset + snappedDelta, 0, totalDuration - 0.1);
-            updateTimelineAsset(asset.id, { offset: nextOffset }, { log: false });
+            updateTimelineAsset(asset.id, { offset: nextOffset }, { log: false, skipHistory: true });
             setDragLabel({ assetId, value: nextOffset });
             if (shiftKey) {
                 setHighlightTick(Math.round(nextOffset / gridStep) * gridStep);
                 setHighlightFading(false);
             }
+            pointerInfo.hasChanged = true;
         } else if (handleType === 'end') {
             const nextDuration = clamp(asset.duration + snappedDelta, 0.1, totalDuration - asset.offset);
-            updateTimelineAsset(asset.id, { duration: nextDuration }, { log: false });
+            updateTimelineAsset(asset.id, { duration: nextDuration }, { log: false, skipHistory: true });
             setDragLabel({ assetId, value: nextDuration });
             if (shiftKey) {
                 setHighlightTick(Math.round((asset.offset + nextDuration) / gridStep) * gridStep);
                 setHighlightFading(false);
             }
+            pointerInfo.hasChanged = true;
         }
     };
 
@@ -148,6 +151,11 @@ export default function TimelineBar({ frameId, assets, totalDuration, getTimelin
                         thumbnailUrl: asset.thumbnailUrl,
                         waveform: asset.waveform ? [...asset.waveform] : null,
                     });
+                    const action = pointerInfo.handleType === 'offset' ? 'offset' : 'duration';
+                    storeState.commitHistory(
+                        `Timeline: Adjust ${action} for "${asset.label}"`,
+                        'timeline',
+                    );
                 }
             }
         }
@@ -163,10 +171,10 @@ export default function TimelineBar({ frameId, assets, totalDuration, getTimelin
         if (!pointerInfo) return;
         if (event.key === 'Escape') {
             if (pointerInfo.handleType === 'offset') {
-                updateTimelineAsset(pointerInfo.assetId, { offset: pointerInfo.initialOffset });
+                updateTimelineAsset(pointerInfo.assetId, { offset: pointerInfo.initialOffset }, { skipHistory: true });
                 setDragLabel({ assetId: pointerInfo.assetId, value: pointerInfo.initialOffset });
             } else {
-                updateTimelineAsset(pointerInfo.assetId, { duration: pointerInfo.initialDuration });
+                updateTimelineAsset(pointerInfo.assetId, { duration: pointerInfo.initialDuration }, { skipHistory: true });
                 setDragLabel({ assetId: pointerInfo.assetId, value: pointerInfo.initialDuration });
             }
             handlePointerUp();
@@ -295,7 +303,13 @@ export default function TimelineBar({ frameId, assets, totalDuration, getTimelin
                             value={asset.offset.toFixed(2)}
                             min={0}
                             step={0.1}
-                            onChange={(event) => updateTimelineAsset(asset.id, { offset: Number(event.target.value) || 0 })}
+                            onChange={(event) =>
+                                updateTimelineAsset(
+                                    asset.id,
+                                    { offset: Number(event.target.value) || 0 },
+                                    { historyLabel: `Timeline: Set offset for "${asset.label}"`, source: 'timeline' },
+                                )
+                            }
                             className='w-16 rounded-md border border-[rgba(148,163,184,0.3)] bg-[rgba(15,23,42,0.7)] px-1 py-0.5 text-[10px] text-[rgba(236,233,254,0.92)] focus:border-[rgba(139,92,246,0.6)]'
                         />
                         <input
@@ -303,7 +317,13 @@ export default function TimelineBar({ frameId, assets, totalDuration, getTimelin
                             value={asset.duration.toFixed(2)}
                             min={0.1}
                             step={0.1}
-                            onChange={(event) => updateTimelineAsset(asset.id, { duration: Number(event.target.value) || 0.1 })}
+                            onChange={(event) =>
+                                updateTimelineAsset(
+                                    asset.id,
+                                    { duration: Number(event.target.value) || 0.1 },
+                                    { historyLabel: `Timeline: Set duration for "${asset.label}"`, source: 'timeline' },
+                                )
+                            }
                             className='w-16 rounded-md border border-[rgba(148,163,184,0.3)] bg-[rgba(15,23,42,0.7)] px-1 py-0.5 text-[10px] text-[rgba(236,233,254,0.92)] focus:border-[rgba(139,92,246,0.6)]'
                         />
                     </div>
