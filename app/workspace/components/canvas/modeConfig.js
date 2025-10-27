@@ -25,6 +25,48 @@ export const MODE_CONFIG = {
             { id: 'ai-layout', label: 'AI Suggest Layout' },
         ],
     },
+    image: {
+        label: 'Image',
+        description: 'Photo editing, retouching, background removal, and AI enhancements.',
+        tools: [
+            { id: 'select', name: 'Select / Move', description: 'Position and transform layers on the canvas.' },
+            { id: 'crop', name: 'Crop & Straighten', description: 'Trim edges, adjust aspect ratios, and straighten shots.' },
+            { id: 'resize', name: 'Resize', description: 'Change image dimensions with smart resampling.' },
+            { id: 'erase', name: 'Erase / Mask', description: 'Brush away or mask regions with adjustable softness.' },
+            { id: 'healing', name: 'Healing Brush', description: 'Retouch blemishes, wrinkles, and dust automatically.' },
+            { id: 'filters', name: 'Filters & LUTs', description: 'Apply presets, curves, and color grading quickly.' },
+            { id: 'background', name: 'Background Remover', description: 'Remove or replace the background with one click.' },
+            { id: 'ai-fill', name: 'Generative Fill', description: 'Extend, replace, or remix areas with AI suggestions.' },
+        ],
+        inspectorSections: [
+            {
+                id: 'adjustments',
+                title: 'Adjustments',
+                items: ['Exposure', 'Highlights', 'Shadows', 'Temperature', 'Tint'],
+            },
+            {
+                id: 'color',
+                title: 'Color',
+                items: ['Saturation', 'Vibrance', 'Hue', 'Split toning'],
+            },
+            {
+                id: 'details',
+                title: 'Details',
+                items: ['Sharpness', 'Noise reduction', 'Texture', 'Clarity'],
+            },
+            {
+                id: 'export',
+                title: 'Export',
+                items: ['PNG', 'JPG', 'WebP', 'PSD'],
+            },
+        ],
+        bottomActions: [
+            { id: 'history', label: 'History' },
+            { id: 'compare', label: 'Before / After' },
+            { id: 'ai-enhance', label: 'AI Enhance' },
+            { id: 'batch', label: 'Batch Export' },
+        ],
+    },
     ux: {
         label: 'UI/UX',
         description: 'Design interfaces, link frames, prototype flows, and export code.',
@@ -327,4 +369,4 @@ export const MODE_CONFIG = {
     },
 };
 
-export const MODE_LIST = ['design', 'ai-studio', 'graphics', 'ux', 'video', 'podcast', 'cartoon', 'docs', 'dev', 'classroom', 'brand'];
+export const MODE_LIST = ['design', 'graphics', 'image', 'ux', 'video', 'podcast', 'cartoon', 'ai-studio', 'docs', 'dev', 'classroom', 'brand'];

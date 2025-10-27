@@ -471,14 +471,13 @@ export default function CanvasContainer() {
                 >
                     <CanvasLayer />
                 </div>
-                <div className='pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(139,92,246,0.08),_transparent_55%)]' />
+                <div className='pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(139,92,246,0.08),transparent55%)]' />
                 <input
                     ref={fileInputRef}
                     type='file'
                     accept='image/*'
                     className='hidden'
                     onChange={handleImageFileChange}
-                    aria-hidden='true'
                 />
             </div>
             <CanvasContextMenu />

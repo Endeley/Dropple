@@ -5,6 +5,7 @@ import SectionShell from './SectionShell';
 import SectionHeading from './SectionHeading';
 import ActionButtons from './ActionButtons';
 import MediaFrame from './MediaFrame';
+import FeatureList from './FeatureList';
 
 export default function HeroSection({ section }) {
     return (
@@ -24,6 +25,15 @@ export default function HeroSection({ section }) {
                     accent='var(--color-primary)'
                 />
                 <ActionButtons actions={section.actions} align='center' />
+                {section.highlights && section.highlights.length > 0 && (
+                    <div className='max-w-4xl'>
+                        <FeatureList
+                            items={section.highlights}
+                            columns={section.highlightColumns || 3}
+                            dense
+                        />
+                    </div>
+                )}
             </motion.div>
             <motion.div
                 initial={{ opacity: 0, y: 40 }}

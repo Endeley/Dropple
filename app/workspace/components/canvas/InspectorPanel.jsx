@@ -317,6 +317,7 @@ export default function InspectorPanel() {
     const [showShadowDetails, setShowShadowDetails] = useState(false);
     const [showFilterDetails, setShowFilterDetails] = useState(false);
     const [showTypographyAdvanced, setShowTypographyAdvanced] = useState(false);
+    const [sectionControlValues, setSectionControlValues] = useState({});
 
     const modeConfig = MODE_CONFIG[mode] ?? MODE_CONFIG.design;
     const inspectorSections = modeConfig.inspectorSections ?? [];
@@ -357,6 +358,23 @@ export default function InspectorPanel() {
     const handleLayerAction = (action) => {
         if (!activeFrame || !activeElement) return;
         action(activeFrame.id, activeElement.id);
+    };
+
+    const getSectionControlValue = (sectionId, itemId) => {
+        const key = `${sectionId}::${itemId}`;
+        const current = sectionControlValues[key];
+        if (Number.isFinite(current)) return current;
+        return 50;
+    };
+
+    const handleSectionControlChange = (sectionId, itemId, rawValue) => {
+        const nextValue = Number.parseFloat(rawValue);
+        if (Number.isNaN(nextValue)) return;
+        const key = `${sectionId}::${itemId}`;
+        setSectionControlValues((prev) => ({
+            ...prev,
+            [key]: Math.min(100, Math.max(0, nextValue)),
+        }));
     };
 
     const handleFlip = (axis) => {
@@ -1557,16 +1575,38 @@ export default function InspectorPanel() {
                     return (
                         <section key={section.id} className='rounded-xl border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.55)] p-4'>
                             <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.7)]'>{section.title}</h3>
-                            <ul className='mt-3 space-y-2'>
-                                {section.items?.map((item) => (
-                                    <li
-                                        key={item}
-                                        className='flex items-center justify-between rounded-lg border border-[rgba(148,163,184,0.12)] bg-[rgba(15,23,42,0.6)] px-3 py-2 text-xs text-[rgba(226,232,240,0.75)]'
-                                    >
-                                        <span>{item}</span>
-                                        <span className='text-[rgba(139,92,246,0.65)]'>Edit</span>
-                                    </li>
-                                ))}
+                            <ul className='mt-3 space-y-3'>
+                                {section.items?.map((item) => {
+                                    const itemId = item.toString().toLowerCase().replace(/\s+/g, '-');
+                                    const value = getSectionControlValue(section.id, itemId);
+                                    return (
+                                        <li
+                                            key={item}
+                                            className='rounded-lg border border-[rgba(148,163,184,0.12)] bg-[rgba(15,23,42,0.6)] px-3 py-3 text-xs text-[rgba(226,232,240,0.78)]'
+                                        >
+                                            <div className='flex items-center justify-between'>
+                                                <span className='uppercase tracking-[0.16em] text-[rgba(226,232,240,0.72)]'>{item}</span>
+                                                <span className='font-semibold text-[rgba(236,233,254,0.88)]'>{Math.round(value)}%</span>
+                                            </div>
+                                            <div className='relative mt-2 h-2 w-full overflow-hidden rounded-full bg-[rgba(148,163,184,0.18)]'>
+                                                <div
+                                                    className='pointer-events-none absolute inset-0 rounded-full bg-[rgba(139,92,246,0.52)]'
+                                                    style={{ width: `${value}%` }}
+                                                />
+                                                <input
+                                                    type='range'
+                                                    min={0}
+                                                    max={100}
+                                                    step={1}
+                                                    value={value}
+                                                    onChange={(event) => handleSectionControlChange(section.id, itemId, event.target.value)}
+                                                    className='absolute inset-0 h-2 w-full cursor-pointer opacity-0'
+                                                    aria-label={`${item} level`}
+                                                />
+                                            </div>
+                                        </li>
+                                    );
+                                })}
                             </ul>
                         </section>
                     );
