@@ -360,6 +360,20 @@ export default function InspectorPanel() {
         action(activeFrame.id, activeElement.id);
     };
 
+    const handleInspectorAction = (sectionId, item) => {
+        if (!activeFrame) return;
+        if (sectionId === 'export') {
+            setActiveToolOverlay((prev) => (prev === 'export' ? null : 'export'));
+            console.info(`Preparing export for ${item.toUpperCase()}...`);
+            return;
+        }
+        if (sectionId === 'code') {
+            setActiveToolOverlay((prev) => (prev === 'code-preview' ? null : 'code-preview'));
+            console.info(`Opening code preview for ${item}...`);
+            return;
+        }
+    };
+
     const getSectionControlValue = (sectionId, itemId) => {
         const key = `${sectionId}::${itemId}`;
         const current = sectionControlValues[key];
@@ -1568,6 +1582,47 @@ export default function InspectorPanel() {
                             <section key={section.id} className='rounded-xl border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.55)] p-4'>
                                 <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.7)]'>{section.title}</h3>
                                 <div className='mt-3 space-y-4'>{renderInteractionControls()}</div>
+                            </section>
+                        );
+                    }
+
+                    if (section.id === 'export') {
+                        return (
+                            <section key={section.id} className='rounded-xl border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.55)] p-4'>
+                                <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.7)]'>{section.title}</h3>
+                                <div className='mt-3 space-y-2'>
+                                    {section.items?.map((item) => (
+                                        <button
+                                            key={item}
+                                            type='button'
+                                            onClick={() => handleInspectorAction(section.id, item)}
+                                            className='flex w-full items-center justify-between rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.6)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[rgba(226,232,240,0.85)] transition-colors hover:border-[rgba(236,233,254,0.35)] hover:bg-[rgba(139,92,246,0.18)] hover:text-white'
+                                        >
+                                            <span>{item}</span>
+                                            <span className='text-[rgba(236,233,254,0.85)]'>Export</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </section>
+                        );
+                    }
+                    if (section.id === 'code') {
+                        return (
+                            <section key={section.id} className='rounded-xl border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.55)] p-4'>
+                                <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.7)]'>{section.title}</h3>
+                                <div className='mt-3 space-y-2'>
+                                    {section.items?.map((item) => (
+                                        <button
+                                            key={item}
+                                            type='button'
+                                            onClick={() => handleInspectorAction(section.id, item)}
+                                            className='flex w-full items-center justify-between rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.6)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[rgba(226,232,240,0.85)] transition-colors hover:border-[rgba(236,233,254,0.35)] hover:bg-[rgba(59,130,246,0.18)] hover:text-white'
+                                        >
+                                            <span>{item}</span>
+                                            <span className='text-[rgba(236,233,254,0.85)]'>Preview</span>
+                                        </button>
+                                    ))}
+                                </div>
                             </section>
                         );
                     }

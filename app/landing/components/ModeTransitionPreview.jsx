@@ -334,38 +334,55 @@ export default function ModeTransitionPreview({ modes = DEFAULT_MODES, cycleDura
                         <div className='rounded-xl border border-[rgba(255,255,255,0.18)] bg-[rgba(15,23,42,0.45)] p-4 lg:hidden'>
                             <div className='text-xs font-semibold uppercase tracking-[0.25em] text-[rgba(226,232,240,0.75)]'>Inspector</div>
                             <p className='mt-2 text-sm font-semibold text-white'>{activeSection.title}</p>
-                            <ul className='mt-3 space-y-3 text-[12px] text-[rgba(226,232,240,0.82)]'>
-                                {activeSection.items.map((item) => {
-                                    const itemId = slugify(item);
-                                    const value = getInspectorValue(activeSection.id, itemId);
-                                    return (
-                                        <li key={item} className='rounded-lg border border-[rgba(255,255,255,0.14)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
-                                            <div className='flex items-center justify-between text-[11px] uppercase tracking-[0.16em]'>
-                                                <span>{item}</span>
-                                                <span className='font-semibold text-[rgba(236,233,254,0.88)]'>{Math.round(value)}%</span>
-                                            </div>
-                                            <div className='relative mt-2 h-2 w-full overflow-hidden rounded-full bg-[rgba(255,255,255,0.12)]'>
-                                                <div
-                                                    className='pointer-events-none absolute inset-0 rounded-full bg-[rgba(139,92,246,0.55)]'
-                                                    style={{ width: `${value}%` }}
-                                                />
-                                                <input
-                                                    type='range'
-                                                    min={0}
-                                                    max={100}
-                                                    step={1}
-                                                    value={value}
-                                                    onChange={(event) =>
-                                                        handleInspectorValueChange(activeSection.id, itemId, event.target.value)
-                                                    }
-                                                    className='absolute inset-0 h-2 w-full cursor-pointer opacity-0'
-                                                    aria-label={`${item} adjustment`}
-                                                />
-                                            </div>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
+                            {['export', 'code'].includes(activeSection.id) ? (
+                                <div className='mt-3 space-y-2'>
+                                    {activeSection.items.map((item) => (
+                                        <button
+                                            key={item}
+                                            type='button'
+                                            className='flex w-full items-center justify-between rounded-lg border border-[rgba(255,255,255,0.14)] bg-[rgba(15,23,42,0.55)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(236,233,254,0.88)] transition-colors hover:border-[rgba(236,233,254,0.35)] hover:bg-[rgba(139,92,246,0.2)] hover:text-white'
+                                        >
+                                            <span>{item}</span>
+                                            <span className='text-[rgba(236,233,254,0.85)]'>
+                                                {activeSection.id === 'export' ? 'Export' : 'Preview'}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <ul className='mt-3 space-y-3 text-[12px] text-[rgba(226,232,240,0.82)]'>
+                                    {activeSection.items.map((item) => {
+                                        const itemId = slugify(item);
+                                        const value = getInspectorValue(activeSection.id, itemId);
+                                        return (
+                                            <li key={item} className='rounded-lg border border-[rgba(255,255,255,0.14)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
+                                                <div className='flex items-center justify-between text-[11px] uppercase tracking-[0.16em]'>
+                                                    <span>{item}</span>
+                                                    <span className='font-semibold text-[rgba(236,233,254,0.88)]'>{Math.round(value)}%</span>
+                                                </div>
+                                                <div className='relative mt-2 h-2 w-full overflow-hidden rounded-full bg-[rgba(255,255,255,0.12)]'>
+                                                    <div
+                                                        className='pointer-events-none absolute inset-0 rounded-full bg-[rgba(139,92,246,0.55)]'
+                                                        style={{ width: `${value}%` }}
+                                                    />
+                                                    <input
+                                                        type='range'
+                                                        min={0}
+                                                        max={100}
+                                                        step={1}
+                                                        value={value}
+                                                        onChange={(event) =>
+                                                            handleInspectorValueChange(activeSection.id, itemId, event.target.value)
+                                                        }
+                                                        className='absolute inset-0 h-2 w-full cursor-pointer opacity-0'
+                                                        aria-label={`${item} adjustment`}
+                                                    />
+                                                </div>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            )}
                         </div>
                     ) : null}
                 </div>
@@ -392,36 +409,53 @@ export default function ModeTransitionPreview({ modes = DEFAULT_MODES, cycleDura
                                         {!isActive ? <span className='text-[rgba(236,233,254,0.45)]'>→</span> : null}
                                     </div>
                                     {isActive && section.items.length > 0 ? (
-                                        <ul className='mt-3 space-y-2 text-[11px] font-normal normal-case tracking-normal text-[rgba(226,232,240,0.86)]'>
-                                            {section.items.map((item) => {
-                                                const itemId = slugify(item);
-                                                const value = getInspectorValue(section.id, itemId);
-                                                return (
-                                                    <li key={item} className='rounded-lg border border-[rgba(255,255,255,0.14)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
-                                                        <div className='flex items-center justify-between uppercase tracking-[0.14em]'>
-                                                            <span>{item}</span>
-                                                            <span className='font-semibold text-[rgba(236,233,254,0.88)]'>{Math.round(value)}%</span>
-                                                        </div>
-                                                        <div className='relative mt-2 h-2 w-full overflow-hidden rounded-full bg-[rgba(255,255,255,0.12)]'>
-                                                            <div
-                                                                className='pointer-events-none absolute inset-0 rounded-full bg-[rgba(139,92,246,0.55)]'
-                                                                style={{ width: `${value}%` }}
-                                                            />
-                                                            <input
-                                                                type='range'
-                                                                min={0}
-                                                                max={100}
-                                                                step={1}
-                                                                value={value}
-                                                                onChange={(event) => handleInspectorValueChange(section.id, itemId, event.target.value)}
-                                                                className='absolute inset-0 h-2 w-full cursor-pointer opacity-0'
-                                                                aria-label={`${item} adjustment`}
-                                                            />
-                                                        </div>
-                                                    </li>
-                                                );
-                                            })}
-                                        </ul>
+                                        ['export', 'code'].includes(section.id) ? (
+                                            <div className='mt-3 space-y-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[rgba(236,233,254,0.9)]'>
+                                                {section.items.map((item) => (
+                                                    <button
+                                                        key={item}
+                                                        type='button'
+                                                        className='flex w-full items-center justify-between rounded-lg border border-[rgba(255,255,255,0.14)] bg-[rgba(15,23,42,0.55)] px-3 py-2 transition-colors hover:border-[rgba(236,233,254,0.35)] hover:bg-[rgba(139,92,246,0.2)] hover:text-white'
+                                                    >
+                                                        <span>{item}</span>
+                                                        <span className='text-[rgba(236,233,254,0.85)]'>
+                                                            {section.id === 'export' ? 'Export' : 'Preview'}
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <ul className='mt-3 space-y-2 text-[11px] font-normal normal-case tracking-normal text-[rgba(226,232,240,0.86)]'>
+                                                {section.items.map((item) => {
+                                                    const itemId = slugify(item);
+                                                    const value = getInspectorValue(section.id, itemId);
+                                                    return (
+                                                        <li key={item} className='rounded-lg border border-[rgba(255,255,255,0.14)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
+                                                            <div className='flex items-center justify-between uppercase tracking-[0.14em]'>
+                                                                <span>{item}</span>
+                                                                <span className='font-semibold text-[rgba(236,233,254,0.88)]'>{Math.round(value)}%</span>
+                                                            </div>
+                                                            <div className='relative mt-2 h-2 w-full overflow-hidden rounded-full bg-[rgba(255,255,255,0.12)]'>
+                                                                <div
+                                                                    className='pointer-events-none absolute inset-0 rounded-full bg-[rgba(139,92,246,0.55)]'
+                                                                    style={{ width: `${value}%` }}
+                                                                />
+                                                                <input
+                                                                    type='range'
+                                                                    min={0}
+                                                                    max={100}
+                                                                    step={1}
+                                                                    value={value}
+                                                                    onChange={(event) => handleInspectorValueChange(section.id, itemId, event.target.value)}
+                                                                    className='absolute inset-0 h-2 w-full cursor-pointer opacity-0'
+                                                                    aria-label={`${item} adjustment`}
+                                                                />
+                                                            </div>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        )
                                     ) : null}
                                 </button>
                             );
