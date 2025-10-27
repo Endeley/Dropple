@@ -2,6 +2,7 @@
 
 import { MODE_CONFIG } from './modeConfig';
 import { useCanvasStore } from './context/CanvasStore';
+import { useHistoryStatus } from './history/useHistoryStatus';
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 4;
@@ -24,6 +25,9 @@ export default function CanvasControls() {
     const setActivePrototypeFrameId = useCanvasStore((state) => state.setActivePrototypeFrameId);
     const setActiveToolOverlay = useCanvasStore((state) => state.setActiveToolOverlay);
     const toggleGrid = useCanvasStore((state) => state.toggleGrid);
+    const undoCanvas = useCanvasStore((state) => state.undoCanvas);
+    const redoCanvas = useCanvasStore((state) => state.redoCanvas);
+    const { canUndo, canRedo } = useHistoryStatus();
 
     const modeConfig = MODE_CONFIG[mode] ?? MODE_CONFIG.design;
     const actions = modeConfig.bottomActions ?? [];
@@ -65,6 +69,32 @@ export default function CanvasControls() {
     return (
         <footer className='pointer-events-auto fixed bottom-6 left-1/2 z-30 flex -translate-x-1/2 items-center'>
             <div className='flex items-center gap-4 rounded-2xl border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.85)] px-5 py-3 text-xs text-[rgba(226,232,240,0.78)] shadow-lg shadow-[rgba(15,23,42,0.25)] backdrop-blur'>
+                <div className='flex items-center gap-2'>
+                    <button
+                        type='button'
+                        onClick={() => undoCanvas()}
+                        disabled={!canUndo}
+                        className={`rounded-xl px-3 py-1.5 text-sm font-medium transition-colors ${
+                            canUndo
+                                ? 'text-[rgba(226,232,240,0.82)] hover:bg-[rgba(59,130,246,0.18)] hover:text-white'
+                                : 'text-[rgba(148,163,184,0.5)] cursor-not-allowed'
+                        }`}
+                    >
+                        ↩️ Undo
+                    </button>
+                    <button
+                        type='button'
+                        onClick={() => redoCanvas()}
+                        disabled={!canRedo}
+                        className={`rounded-xl px-3 py-1.5 text-sm font-medium transition-colors ${
+                            canRedo
+                                ? 'text-[rgba(226,232,240,0.82)] hover:bg-[rgba(59,130,246,0.18)] hover:text-white'
+                                : 'text-[rgba(148,163,184,0.5)] cursor-not-allowed'
+                        }`}
+                    >
+                        Redo ↪️
+                    </button>
+                </div>
                 <div className='flex items-center gap-3 rounded-xl border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.65)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.75)]'>
                     <span>Zoom {formattedScale}%</span>
                     <div className='flex items-center gap-2'>

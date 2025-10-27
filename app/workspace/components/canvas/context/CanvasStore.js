@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { generateFrameExport } from '../utils/exportCode';
+import { configureHistory, pushHistory, canUndo, canRedo, undo, redo } from '../history/historyService';
 
 const DEFAULT_FRAME_BACKGROUND = '#0F172A';
 const DEFAULT_TEXT_COLOR = '#ECE9FE';
@@ -118,6 +119,15 @@ function clampValue(value, minValue, maxValue) {
         next = Math.min(maxValue, next);
     }
     return next;
+}
+
+function arraysEqual(a = [], b = []) {
+    if (a === b) return true;
+    if (a.length !== b.length) return false;
+    for (let index = 0; index < a.length; index += 1) {
+        if (a[index] !== b[index]) return false;
+    }
+    return true;
 }
 
 function computeFlexColumnLayout(frame) {
@@ -1219,15 +1229,15 @@ export const useCanvasStore = create(
         (set, get) => ({
             mode: 'design',
             scale: 1,
-    position: { x: 0, y: 0 },
-    frames: [initialFrame],
-    selectedFrameId: initialFrame.id,
-    selectedElementId: null,
-    selectedElementIds: [],
-    selectedTool: 'pointer',
-    prototypeMode: false,
-    activePrototypeFrameId: initialFrame.id,
-    frameLinks: [],
+            position: { x: 0, y: 0 },
+            frames: [initialFrame],
+            selectedFrameId: initialFrame.id,
+            selectedElementId: null,
+            selectedElementIds: [],
+            selectedTool: 'pointer',
+            prototypeMode: false,
+            activePrototypeFrameId: initialFrame.id,
+            frameLinks: [],
             activeGuides: [],
             autoLayoutPreview: null,
             activeToolOverlay: null,
@@ -1237,6 +1247,31 @@ export const useCanvasStore = create(
             gridVisible: false,
             gridSize: 40,
             clipboard: null,
+            commitHistory: (label, source = 'user') => pushHistory(label, source),
+            undoCanvas: () => {
+                const snapshot = undo();
+                if (!snapshot) return false;
+                const { frames, selection } = snapshot.payload;
+                set({
+                    frames: JSON.parse(JSON.stringify(frames)),
+                    selectedFrameId: selection.frameId ?? null,
+                    selectedElementIds: [...selection.elementIds],
+                    selectedElementId: selection.elementIds[0] ?? null,
+                });
+                return true;
+            },
+            redoCanvas: () => {
+                const snapshot = redo();
+                if (!snapshot) return false;
+                const { frames, selection } = snapshot.payload;
+                set({
+                    frames: JSON.parse(JSON.stringify(frames)),
+                    selectedFrameId: selection.frameId ?? null,
+                    selectedElementIds: [...selection.elementIds],
+                    selectedElementId: selection.elementIds[0] ?? null,
+                });
+                return true;
+            },
             contextMenu: null,
 
     setMode: (mode) => set({ mode }),
@@ -1254,28 +1289,35 @@ export const useCanvasStore = create(
     clearActiveGuides: () => set({ activeGuides: [] }),
     setActiveToolOverlay: (overlay) => set({ activeToolOverlay: overlay }),
 
-    setSelectedFrame: (id) =>
-        set((state) => ({
-            selectedFrameId: id,
+    setSelectedFrame: (id) => {
+        const state = get();
+        const nextFrameId = id ?? null;
+        const selectionUnchanged =
+            state.selectedFrameId === nextFrameId &&
+            state.selectedElementIds.length === 0 &&
+            state.selectedElementId === null;
+        if (selectionUnchanged) return;
+        const nextPrototype = state.activePrototypeFrameId ?? nextFrameId ?? state.frames[0]?.id ?? null;
+        set({
+            selectedFrameId: nextFrameId,
             selectedElementId: null,
             selectedElementIds: [],
-            activePrototypeFrameId: state.activePrototypeFrameId ?? id ?? state.frames[0]?.id ?? null,
-        })),
+            activePrototypeFrameId: nextPrototype,
+        });
+        get().commitHistory('Selection change', 'system');
+    },
 
-    setSelectedElement: (frameId, elementId, options = {}) =>
-        set((state) => {
-            if (!frameId || !elementId) {
-                return {
-                    selectedFrameId: frameId ?? state.selectedFrameId,
-                    selectedElementId: elementId ?? null,
-                    selectedElementIds: elementId ? [elementId] : [],
-                };
-            }
+    setSelectedElement: (frameId, elementId, options = {}) => {
+        const state = get();
+        let nextFrameId;
+        let nextIds;
 
+        if (!frameId || !elementId) {
+            nextFrameId = frameId ?? state.selectedFrameId ?? null;
+            nextIds = elementId ? [elementId] : [];
+        } else {
             const additive = Boolean(options.additive);
             const sameFrame = state.selectedFrameId === frameId;
-            let nextIds = [];
-
             if (additive && sameFrame) {
                 nextIds = state.selectedElementIds.includes(elementId)
                     ? state.selectedElementIds
@@ -1283,39 +1325,63 @@ export const useCanvasStore = create(
             } else {
                 nextIds = [elementId];
             }
+            nextFrameId = frameId;
+        }
 
-            return {
-                selectedFrameId: frameId,
-                selectedElementId: nextIds[0] ?? null,
-                selectedElementIds: nextIds,
-            };
-        }),
+        const nextPrimary = nextIds[0] ?? null;
+        const selectionUnchanged =
+            state.selectedFrameId === nextFrameId &&
+            state.selectedElementId === nextPrimary &&
+            arraysEqual(state.selectedElementIds, nextIds);
+        if (selectionUnchanged) return;
 
-    toggleElementSelection: (frameId, elementId) =>
-        set((state) => {
-            if (!frameId || !elementId) return {};
+        set({
+            selectedFrameId: nextFrameId,
+            selectedElementId: nextPrimary,
+            selectedElementIds: nextIds,
+        });
+        get().commitHistory('Selection change', 'system');
+    },
 
-            if (state.selectedFrameId !== frameId) {
-                return {
-                    selectedFrameId: frameId,
-                    selectedElementId: elementId,
-                    selectedElementIds: [elementId],
-                };
-            }
+    toggleElementSelection: (frameId, elementId) => {
+        const state = get();
+        if (!frameId || !elementId) return;
 
+        let nextIds;
+        if (state.selectedFrameId !== frameId) {
+            nextIds = [elementId];
+        } else {
             const exists = state.selectedElementIds.includes(elementId);
-            const nextIds = exists
+            nextIds = exists
                 ? state.selectedElementIds.filter((id) => id !== elementId)
                 : [...state.selectedElementIds, elementId];
+        }
 
-            return {
-                selectedFrameId: frameId,
-                selectedElementId: nextIds[0] ?? null,
-                selectedElementIds: nextIds,
-            };
-        }),
+        const nextPrimary = nextIds[0] ?? null;
+        const selectionUnchanged =
+            state.selectedFrameId === frameId &&
+            state.selectedElementId === nextPrimary &&
+            arraysEqual(state.selectedElementIds, nextIds);
+        if (selectionUnchanged) return;
 
-    clearSelection: () => set({ selectedFrameId: null, selectedElementId: null, selectedElementIds: [] }),
+        set({
+            selectedFrameId: frameId,
+            selectedElementId: nextPrimary,
+            selectedElementIds: nextIds,
+        });
+        get().commitHistory('Selection change', 'system');
+    },
+
+    clearSelection: () => {
+        const state = get();
+        const noSelection =
+            state.selectedFrameId === null &&
+            state.selectedElementId === null &&
+            state.selectedElementIds.length === 0;
+        if (noSelection) return;
+        set({ selectedFrameId: null, selectedElementId: null, selectedElementIds: [] });
+        get().commitHistory('Selection change', 'system');
+    },
 
     addFrame: (frame) =>
         set((state) => ({
@@ -2489,6 +2555,7 @@ export const useCanvasStore = create(
     selectElementsInRect: (frameId, rect, options = {}) => {
         const { additive = false } = options;
         if (!frameId || !rect) return;
+        const state = get();
         const normalized = {
             x: rect.width >= 0 ? rect.x : rect.x + rect.width,
             y: rect.height >= 0 ? rect.y : rect.y + rect.height,
@@ -2497,39 +2564,46 @@ export const useCanvasStore = create(
         };
         if (normalized.width === 0 && normalized.height === 0) return;
 
-        set((state) => {
-            const frame = state.frames.find((item) => item.id === frameId);
-            if (!frame) return {};
-            const intersects = (elementRect, selectionRect) =>
-                elementRect.x < selectionRect.x + selectionRect.width &&
-                elementRect.x + elementRect.width > selectionRect.x &&
-                elementRect.y < selectionRect.y + selectionRect.height &&
-                elementRect.y + elementRect.height > selectionRect.y;
+        const frame = state.frames.find((item) => item.id === frameId);
+        if (!frame) return;
 
-            const selectionIds = frame.elements
-                .filter((element) => (element.parentId ?? null) === null)
-                .filter((element) => {
-                    const props = element.props ?? {};
-                    const rectElement = {
-                        x: props.x ?? 0,
-                        y: props.y ?? 0,
-                        width: Math.max(props.width ?? 0, 0),
-                        height: Math.max(props.height ?? 0, 0),
-                    };
-                    return intersects(rectElement, normalized);
-                })
-                .map((element) => element.id);
+        const intersects = (elementRect, selectionRect) =>
+            elementRect.x < selectionRect.x + selectionRect.width &&
+            elementRect.x + elementRect.width > selectionRect.x &&
+            elementRect.y < selectionRect.y + selectionRect.height &&
+            elementRect.y + elementRect.height > selectionRect.y;
 
-            const baseSet = new Set(additive ? state.selectedElementIds : []);
-            selectionIds.forEach((id) => baseSet.add(id));
-            const selectedIds = Array.from(baseSet);
+        const selectionIds = frame.elements
+            .filter((element) => (element.parentId ?? null) === null)
+            .filter((element) => {
+                const props = element.props ?? {};
+                const rectElement = {
+                    x: props.x ?? 0,
+                    y: props.y ?? 0,
+                    width: Math.max(props.width ?? 0, 0),
+                    height: Math.max(props.height ?? 0, 0),
+                };
+                return intersects(rectElement, normalized);
+            })
+            .map((element) => element.id);
 
-            return {
-                selectedFrameId: frameId,
-                selectedElementId: selectedIds[0] ?? null,
-                selectedElementIds: selectedIds,
-            };
+        const baseSet = new Set(additive ? state.selectedElementIds : []);
+        selectionIds.forEach((id) => baseSet.add(id));
+        const selectedIds = Array.from(baseSet);
+        const nextPrimary = selectedIds[0] ?? null;
+
+        const selectionUnchanged =
+            state.selectedFrameId === frameId &&
+            state.selectedElementId === nextPrimary &&
+            arraysEqual(state.selectedElementIds, selectedIds);
+        if (selectionUnchanged) return;
+
+        set({
+            selectedFrameId: frameId,
+            selectedElementId: nextPrimary,
+            selectedElementIds: selectedIds,
         });
+        get().commitHistory('Selection change', 'system');
     },
 
     setPrototypeMode: (value) =>
@@ -3035,3 +3109,16 @@ export const useCanvasStore = create(
         },
     ),
 );
+
+configureHistory(() => {
+    const state = useCanvasStore.getState();
+    return {
+        frames: JSON.parse(JSON.stringify(state.frames)),
+        selection: {
+            frameId: state.selectedFrameId,
+            elementIds: [...state.selectedElementIds],
+        },
+    };
+});
+
+useCanvasStore.getState().commitHistory('Initial state', 'system');

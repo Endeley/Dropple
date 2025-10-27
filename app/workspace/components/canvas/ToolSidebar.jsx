@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 import { MODE_CONFIG } from './modeConfig';
 import { useCanvasStore } from './context/CanvasStore';
+import { getElementLabel } from './utils/elementFactory';
 
 const POINTER_TOOLS = new Set([
     'pointer',
@@ -157,7 +158,7 @@ export default function ToolSidebar() {
 
     const beginEditElement = (frameId, element) => {
         setEditingTarget({ type: 'element', frameId, elementId: element.id });
-        setDraftName(element.name ?? ELEMENT_LABELS[element.type] ?? 'Layer');
+        setDraftName(getElementLabel(element));
     };
 
     const cancelEditing = () => {

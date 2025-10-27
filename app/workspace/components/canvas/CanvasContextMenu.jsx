@@ -3,6 +3,7 @@
 import clsx from 'clsx';
 import { useEffect, useMemo, useState } from 'react';
 import { useCanvasStore } from './context/CanvasStore';
+import { useHistoryStatus } from './history/useHistoryStatus';
 
 const MENU_WIDTH = 320;
 
@@ -36,6 +37,9 @@ export default function CanvasContextMenu() {
     const setPosition = useCanvasStore((state) => state.setPosition);
     const toggleGrid = useCanvasStore((state) => state.toggleGrid);
     const setMode = useCanvasStore((state) => state.setMode);
+    const undoCanvas = useCanvasStore((state) => state.undoCanvas);
+    const redoCanvas = useCanvasStore((state) => state.redoCanvas);
+    const { canUndo, canRedo } = useHistoryStatus();
 
     useEffect(() => {
         if (!contextMenu) return undefined;
@@ -141,8 +145,22 @@ export default function CanvasContextMenu() {
     const universalItems = [];
 
     universalItems.push(
-        createMenuItem({ key: 'undo', label: 'Undo', icon: '↩️', disabled: true, keywords: ['undo'] }),
-        createMenuItem({ key: 'redo', label: 'Redo', icon: '↪️', disabled: true, keywords: ['redo'] }),
+        createMenuItem({
+            key: 'undo',
+            label: 'Undo',
+            icon: '↩️',
+            action: canUndo ? () => undoCanvas() : null,
+            disabled: !canUndo,
+            keywords: ['undo'],
+        }),
+        createMenuItem({
+            key: 'redo',
+            label: 'Redo',
+            icon: '↪️',
+            action: canRedo ? () => redoCanvas() : null,
+            disabled: !canRedo,
+            keywords: ['redo'],
+        }),
         createMenuItem({
             key: 'copy',
             label: 'Copy',

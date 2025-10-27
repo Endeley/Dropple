@@ -1,145 +1,18 @@
 'use client';
 
 import clsx from 'clsx';
-import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CanvasLayer from './CanvasLayer';
 import CanvasContextMenu from './CanvasContextMenu';
 import FabricCanvas from './FabricCanvas';
 import { useCanvasStore } from './context/CanvasStore';
+import { resolveTool, TOOL_BEHAVIORS } from './utils/toolBehaviors';
+import { createElement } from './utils/elementFactory';
+import { findFrameAtPoint, findElementAtPoint } from './utils/frameUtils';
 
 const SCALE_STEP = 1.1;
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 4;
-
-const TOOL_BEHAVIORS = {
-    pointer: { type: 'pointer' },
-    frame: { type: 'frame', width: 960, height: 640 },
-    canvas: { type: 'frame', width: 1280, height: 720 },
-    scene: { type: 'frame', width: 1280, height: 720 },
-    segment: { type: 'frame', width: 960, height: 320 },
-    shape: { type: 'element', elementType: 'rect' },
-    rect: { type: 'element', elementType: 'rect' },
-    overlay: { type: 'element', elementType: 'rect' },
-    clip: { type: 'element', elementType: 'rect' },
-    text: { type: 'element', elementType: 'text' },
-    script: { type: 'element', elementType: 'text' },
-    image: { type: 'element', elementType: 'image' },
-    'ai-generator': { type: 'element', elementType: 'text' },
-    component: { type: 'element', elementType: 'rect' },
-    character: { type: 'element', elementType: 'rect' },
-};
-
-function resolveTool(toolId) {
-    if (!toolId || toolId === 'pointer') return TOOL_BEHAVIORS.pointer;
-    if (TOOL_BEHAVIORS[toolId]) return TOOL_BEHAVIORS[toolId];
-    if (toolId.includes('frame')) return TOOL_BEHAVIORS.frame;
-    if (toolId.includes('text')) return TOOL_BEHAVIORS.text;
-    if (toolId.includes('image') || toolId.includes('photo')) return TOOL_BEHAVIORS.image;
-    if (toolId.includes('shape') || toolId.includes('rect') || toolId.includes('overlay')) return TOOL_BEHAVIORS.shape;
-    return { type: 'pointer' };
-}
-
-function findFrameAtPoint(frames, point) {
-    for (let i = frames.length - 1; i >= 0; i -= 1) {
-        const frame = frames[i];
-        if (
-            point.x >= frame.x &&
-            point.x <= frame.x + frame.width &&
-            point.y >= frame.y &&
-            point.y <= frame.y + frame.height
-        ) {
-            return frame;
-        }
-    }
-    return null;
-}
-
-function findElementAtPoint(frame, point) {
-    if (!frame?.elements) return null;
-    for (let index = frame.elements.length - 1; index >= 0; index -= 1) {
-        const element = frame.elements[index];
-        const props = element?.props ?? {};
-        const elementX = frame.x + (props.x ?? 0);
-        const elementY = frame.y + (props.y ?? 0);
-        const width = props.width ?? 0;
-        const height = props.height ?? 0;
-        if (
-            point.x >= elementX &&
-            point.x <= elementX + width &&
-            point.y >= elementY &&
-            point.y <= elementY + height
-        ) {
-            return element;
-        }
-    }
-    return null;
-}
-
-const ELEMENT_LABELS = {
-    rect: 'Rectangle',
-    shape: 'Rectangle',
-    overlay: 'Overlay',
-    clip: 'Clip',
-    text: 'Text',
-    script: 'Script',
-    image: 'Image',
-    component: 'Component',
-    character: 'Character',
-};
-
-function createElement(elementType, frame, point) {
-    const defaults = {
-        rect: {
-            width: 240,
-            height: 160,
-            fill: '#2A244B',
-            cornerRadius: 20,
-            stroke: '#8B5CF6',
-            strokeWidth: 1,
-            opacity: 0.9,
-        },
-        text: {
-            text: 'New text block',
-            width: 320,
-            height: 120,
-            fontSize: 24,
-            fill: '#ECE9FE',
-            lineHeight: 1.3,
-            letterSpacing: 0,
-            opacity: 1,
-        },
-        image: {
-            width: 320,
-            height: 220,
-            fill: 'linear-gradient(135deg, #312E81, #9333EA)',
-            cornerRadius: 24,
-            imageUrl: null,
-            backgroundFit: 'cover',
-            opacity: 0.95,
-        },
-    };
-
-    const preset = defaults[elementType] ?? defaults.rect;
-    const width = preset.width ?? 200;
-    const height = preset.height ?? 120;
-    const localX = point.x - frame.x - width / 2;
-    const localY = point.y - frame.y - height / 2;
-
-    return {
-        id: `el-${nanoid(6)}`,
-        type: elementType,
-        parentId: null,
-        name: ELEMENT_LABELS[elementType] ?? 'Layer',
-        props: {
-            x: localX,
-            y: localY,
-            width,
-            height,
-            ...preset,
-        },
-    };
-}
 
 export default function CanvasContainer() {
     const viewportRef = useRef(null);
