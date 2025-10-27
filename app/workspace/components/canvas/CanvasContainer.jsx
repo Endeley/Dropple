@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CanvasLayer from './CanvasLayer';
 import CanvasContextMenu from './CanvasContextMenu';
+import FabricCanvas from './FabricCanvas';
 import { useCanvasStore } from './context/CanvasStore';
 
 const SCALE_STEP = 1.1;
@@ -147,6 +148,8 @@ export default function CanvasContainer() {
     const fileInputRef = useRef(null);
     const [pendingImageElement, setPendingImageElement] = useState(null);
 
+    const mode = useCanvasStore((state) => state.mode);
+    const useFabricCanvas = mode === 'graphics';
     const scale = useCanvasStore((state) => state.scale);
     const setScale = useCanvasStore((state) => state.setScale);
     const position = useCanvasStore((state) => state.position);
@@ -164,6 +167,7 @@ export default function CanvasContainer() {
     );
 
     useEffect(() => {
+        if (useFabricCanvas) return undefined;
         const viewport = viewportRef.current;
         if (!viewport) return undefined;
 
@@ -186,7 +190,7 @@ export default function CanvasContainer() {
             viewport.removeEventListener('pointermove', handlePointerMove);
             window.removeEventListener('pointerup', handlePointerUp);
         };
-    }, [setPosition]);
+    }, [setPosition, useFabricCanvas]);
 
     useEffect(() => {
         const handleKeyDown = (event) => {
@@ -447,6 +451,17 @@ export default function CanvasContainer() {
             backgroundPosition: `${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px`,
         };
     }, [gridVisible, gridSize, position.x, position.y, scale]);
+
+    if (useFabricCanvas) {
+        return (
+            <>
+                <div className='relative h-full w-full overflow-hidden bg-[var(--color-canvas)]' style={{ overscrollBehavior: 'none' }}>
+                    <FabricCanvas />
+                </div>
+                <CanvasContextMenu />
+            </>
+        );
+    }
 
     return (
         <>
