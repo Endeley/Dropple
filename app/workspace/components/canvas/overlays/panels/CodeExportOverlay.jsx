@@ -6,7 +6,67 @@ import { useCanvasStore } from '../../context/CanvasStore';
 const TAB_OPTIONS = [
     { id: 'html', label: 'HTML' },
     { id: 'css', label: 'CSS' },
+    { id: 'react', label: 'React JSX' },
+    { id: 'vue', label: 'Vue' },
+    { id: 'svelte', label: 'Svelte' },
+    { id: 'json', label: 'JSON' },
 ];
+
+const toComponentName = (name) => {
+    const fallback = 'DroppleComponent';
+    if (!name) return fallback;
+    const cleaned = name.replace(/[^a-zA-Z0-9]+/g, ' ').trim();
+    const capitalized = cleaned
+        .split(' ')
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join('');
+    return capitalized || fallback;
+};
+
+const indentLines = (code, spaces = 2) => {
+    const indent = ' '.repeat(spaces);
+    return code
+        .split('\n')
+        .map((line) => (line.length ? indent + line : line))
+        .join('\n');
+};
+
+const convertHtmlToJsx = (html) =>
+    html
+        .replace(/class=/g, 'className=')
+        .replace(/for=/g, 'htmlFor=')
+        .replace(/<img([^>]*)>/g, '<img$1 />')
+        .replace(/<input([^>]*)>/g, '<input$1 />')
+        .replace(/<br>/g, '<br />');
+
+const buildReactExport = (componentName, html, css) => {
+    const jsxBody = indentLines(convertHtmlToJsx(html), 6);
+    return [
+        "import React from 'react';",
+        '',
+        `export default function ${componentName}() {`,
+        '  return (',
+        jsxBody,
+        '  );',
+        '}',
+        '',
+        `// Styles`,
+        css,
+    ].join('\n');
+};
+
+const buildVueExport = (html, css) => {
+    const template = indentLines(html, 2);
+    const scopedCss = indentLines(css, 2);
+    return [`<template>\n${template}\n</template>`, '', `<style scoped>\n${scopedCss}\n</style>`].join('\n');
+};
+
+const buildSvelteExport = (html, css) => {
+    const markup = html;
+    const styles = indentLines(css, 2);
+    return [`<script>\n  // Add component logic here\n</script>`, '', markup, '', `<style>\n${styles}\n</style>`].join('\n');
+};
 
 function copyToClipboard(value) {
     if (!value) return;
@@ -42,7 +102,19 @@ export default function CodeExportOverlay() {
     const exportResult = useMemo(() => {
         if (!frame) return null;
         try {
-            return exportFrameCode(frame.id, { format: 'object' });
+            const base = exportFrameCode(frame.id, { format: 'object' });
+            if (!base) return null;
+            const html = base.html ?? '';
+            const css = base.css ?? '';
+            const componentName = toComponentName(frame.name ?? 'Frame');
+            return {
+                html,
+                css,
+                react: buildReactExport(componentName, html, css),
+                vue: buildVueExport(html, css),
+                svelte: buildSvelteExport(html, css),
+                json: JSON.stringify(frame, null, 2),
+            };
         } catch (error) {
             console.error('Failed to generate export code', error);
             return null;
@@ -77,7 +149,7 @@ export default function CodeExportOverlay() {
             </header>
             {!frame || !exportResult ? (
                 <p className='rounded-lg border border-[rgba(148,163,184,0.25)] bg-[rgba(30,41,59,0.6)] px-3 py-4 text-xs text-[rgba(148,163,184,0.8)]'>
-                    Add or select a frame to view exportable HTML and CSS.
+                    Add or select a frame to preview exportable snippets.
                 </p>
             ) : (
                 <div className='space-y-3'>

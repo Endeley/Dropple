@@ -1,11 +1,39 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useCanvasStore } from '../../context/CanvasStore';
 
-const DROP_SHADOW_VALUE = '0 24px 48px rgba(15,23,42,0.45)';
-const GLOW_VALUE = '0 0 40px rgba(139,92,246,0.45)';
-const BLUR_VALUE = 'blur(12px)';
+const clamp01 = (value) => Math.min(1, Math.max(0, value ?? 0));
+
+const parseShadowStrength = (value) => {
+    if (typeof value !== 'string' || !value.includes('15,23,42')) return 0.6;
+    const match = value.match(/rgba\(15,23,42,([\d.]+)\)/);
+    if (!match) return 0.6;
+    const alpha = Number(match[1]);
+    return clamp01((alpha - 0.2) / 0.55);
+};
+
+const parseGlowStrength = (value) => {
+    if (typeof value !== 'string' || !value.includes('139,92,246')) return 0.6;
+    const match = value.match(/rgba\(139,92,246,([\d.]+)\)/);
+    if (!match) return 0.6;
+    const alpha = Number(match[1]);
+    return clamp01((alpha - 0.25) / 0.55);
+};
+
+const buildShadowValue = (strength) => {
+    const clamped = clamp01(strength);
+    const blur = 18 + clamped * 42;
+    const alpha = 0.2 + clamped * 0.55;
+    return `0 24px ${Math.round(blur)}px rgba(15,23,42,${alpha.toFixed(2)})`;
+};
+
+const buildGlowValue = (strength) => {
+    const clamped = clamp01(strength);
+    const blur = 18 + clamped * 48;
+    const alpha = 0.25 + clamped * 0.55;
+    return `0 0 ${Math.round(blur)}px rgba(139,92,246,${alpha.toFixed(2)})`;
+};
 
 export default function EffectsToolOverlay() {
     const selectedFrameId = useCanvasStore((state) => state.selectedFrameId);
@@ -44,17 +72,46 @@ export default function EffectsToolOverlay() {
     }
 
     const props = activeElement.props ?? {};
-    const hasShadow = props.boxShadow && props.boxShadow !== 'none';
-    const hasGlow = props.boxShadow === GLOW_VALUE;
-    const hasBlur = props.filter && props.filter.includes('blur');
+    const [shadowStrength, setShadowStrength] = useState(() => parseShadowStrength(props.boxShadow));
+    const [glowStrength, setGlowStrength] = useState(() => parseGlowStrength(props.boxShadow));
+    const [blurAmount, setBlurAmount] = useState(() => {
+        const match = (props.filter ?? '').match(/blur\((\d+(?:\.\d+)?)px\)/);
+        return match ? Number(match[1]) : 0;
+    });
+
+    useEffect(() => {
+        setShadowStrength(parseShadowStrength(props.boxShadow));
+        setGlowStrength(parseGlowStrength(props.boxShadow));
+        const match = (props.filter ?? '').match(/blur\((\d+(?:\.\d+)?)px\)/);
+        setBlurAmount(match ? Number(match[1]) : 0);
+    }, [props.boxShadow, props.filter]);
+
+    const previewStyle = useMemo(
+        () => ({
+            boxShadow: props.boxShadow ?? 'none',
+            filter: props.filter ?? 'none',
+            backgroundImage:
+                'linear-gradient(135deg, rgba(59,130,246,0.35) 0%, rgba(139,92,246,0.35) 100%)',
+            borderRadius: '18px',
+        }),
+        [props.boxShadow, props.filter],
+    );
+    const hasShadow = typeof props.boxShadow === 'string' && props.boxShadow.includes('15,23,42');
+    const hasGlow = typeof props.boxShadow === 'string' && props.boxShadow.includes('139,92,246');
+    const hasBlur = blurAmount > 0;
 
     const toggleShadow = () => {
-        const enable = !(hasShadow && !hasGlow);
+        const enable = !hasShadow;
+        const nextStrength = enable ? (shadowStrength > 0 ? shadowStrength : 0.6) : shadowStrength;
+        const value = enable ? buildShadowValue(nextStrength) : 'none';
+        if (enable) {
+            setShadowStrength(nextStrength);
+        }
         updateElementProps(
             activeFrame.id,
             activeElement.id,
             {
-                boxShadow: enable ? DROP_SHADOW_VALUE : 'none',
+                boxShadow: value,
             },
             {
                 historyLabel: enable ? 'Effects: Enable shadow' : 'Effects: Disable shadow',
@@ -65,11 +122,16 @@ export default function EffectsToolOverlay() {
 
     const toggleGlow = () => {
         const enable = !hasGlow;
+        const nextStrength = enable ? (glowStrength > 0 ? glowStrength : 0.6) : glowStrength;
+        const value = enable ? buildGlowValue(nextStrength) : 'none';
+        if (enable) {
+            setGlowStrength(nextStrength);
+        }
         updateElementProps(
             activeFrame.id,
             activeElement.id,
             {
-                boxShadow: enable ? GLOW_VALUE : 'none',
+                boxShadow: value,
             },
             {
                 historyLabel: enable ? 'Effects: Enable glow' : 'Effects: Disable glow',
@@ -78,16 +140,66 @@ export default function EffectsToolOverlay() {
         );
     };
 
-    const toggleBlur = () => {
-        const enable = !hasBlur;
+    const handleShadowChange = (value) => {
+        const amount = clamp01((Number(value) || 0) / 100);
+        setShadowStrength(amount);
         updateElementProps(
             activeFrame.id,
             activeElement.id,
             {
-                filter: enable ? BLUR_VALUE : 'none',
+                boxShadow: amount > 0 ? buildShadowValue(amount) : 'none',
+            },
+            {
+                historyLabel: 'Effects: Adjust shadow',
+                source: 'overlay',
+            },
+        );
+    };
+
+    const handleGlowChange = (value) => {
+        const amount = clamp01((Number(value) || 0) / 100);
+        setGlowStrength(amount);
+        updateElementProps(
+            activeFrame.id,
+            activeElement.id,
+            {
+                boxShadow: amount > 0 ? buildGlowValue(amount) : 'none',
+            },
+            {
+                historyLabel: 'Effects: Adjust glow',
+                source: 'overlay',
+            },
+        );
+    };
+
+    const toggleBlur = () => {
+        const enable = !(blurAmount > 0);
+        const nextAmount = enable ? Math.max(blurAmount, 12) : 0;
+        setBlurAmount(nextAmount);
+        updateElementProps(
+            activeFrame.id,
+            activeElement.id,
+            {
+                filter: enable ? `blur(${nextAmount}px)` : 'none',
             },
             {
                 historyLabel: enable ? 'Effects: Enable blur' : 'Effects: Disable blur',
+                source: 'overlay',
+            },
+        );
+    };
+
+    const handleBlurChange = (value) => {
+        const amount = Math.max(0, Number(value) || 0);
+        setBlurAmount(amount);
+        updateElementProps(
+            activeFrame.id,
+            activeElement.id,
+            {
+                filter: amount > 0 ? `blur(${amount}px)` : 'none',
+            },
+            {
+                historyLabel: 'Effects: Adjust blur',
                 source: 'overlay',
             },
         );
@@ -108,6 +220,14 @@ export default function EffectsToolOverlay() {
                     Close
                 </button>
             </header>
+
+            <div className='mb-4 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(30,41,59,0.65)] p-3'>
+                <p className='text-[11px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>Live Preview</p>
+                <div
+                    className='mt-3 h-20 w-full rounded-xl border border-[rgba(148,163,184,0.25)] bg-[rgba(8,15,35,0.9)]'
+                    style={previewStyle}
+                />
+            </div>
 
             <div className='space-y-3'>
                 <button
@@ -154,6 +274,57 @@ export default function EffectsToolOverlay() {
                         Applies a background blur for glassmorphism effects.
                     </p>
                 </button>
+            </div>
+
+            <div className='mt-4 space-y-3'>
+                <div className='rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(30,41,59,0.65)] p-3'>
+                    <div className='flex items-center justify-between text-[11px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>
+                        <span>Shadow Strength</span>
+                        <span>{Math.round(shadowStrength * 100)}%</span>
+                    </div>
+                    <input
+                        type='range'
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={Math.round(shadowStrength * 100)}
+                        onChange={(event) => handleShadowChange(event.target.value)}
+                        disabled={!hasShadow}
+                        className={`mt-2 w-full accent-[rgba(139,92,246,0.75)] ${!hasShadow ? 'pointer-events-none opacity-40' : ''}`}
+                    />
+                </div>
+                <div className='rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(30,41,59,0.65)] p-3'>
+                    <div className='flex items-center justify-between text-[11px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>
+                        <span>Glow Strength</span>
+                        <span>{Math.round(glowStrength * 100)}%</span>
+                    </div>
+                    <input
+                        type='range'
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={Math.round(glowStrength * 100)}
+                        onChange={(event) => handleGlowChange(event.target.value)}
+                        disabled={!hasGlow}
+                        className={`mt-2 w-full accent-[rgba(236,233,254,0.75)] ${!hasGlow ? 'pointer-events-none opacity-40' : ''}`}
+                    />
+                </div>
+                <div className='rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(30,41,59,0.65)] p-3'>
+                    <div className='flex items-center justify-between text-[11px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>
+                        <span>Blur Amount</span>
+                        <span>{blurAmount}px</span>
+                    </div>
+                    <input
+                        type='range'
+                        min={0}
+                        max={40}
+                        step={1}
+                        value={blurAmount}
+                        onChange={(event) => handleBlurChange(event.target.value)}
+                        disabled={!hasBlur}
+                        className={`mt-2 w-full accent-[rgba(139,92,246,0.75)] ${!hasBlur ? 'pointer-events-none opacity-40' : ''}`}
+                    />
+                </div>
             </div>
         </div>
     );

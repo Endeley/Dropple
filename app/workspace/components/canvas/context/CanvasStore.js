@@ -5,6 +5,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { generateFrameExport } from '../utils/exportCode';
 import { configureHistory, pushHistory, canUndo, canRedo, undo, redo } from '../history/historyService';
+import { MODE_ASSETS, MODE_CONFIG } from '../modeConfig';
 
 const DEFAULT_FRAME_BACKGROUND = '#0F172A';
 const DEFAULT_TEXT_COLOR = '#ECE9FE';
@@ -96,6 +97,213 @@ const DEFAULT_GRID_TEMPLATE = 'none';
 const DEFAULT_GRID_MIN_COLUMN_WIDTH = 240;
 const AUTO_FIT_OPTIONS = ['none', 'auto-fit', 'auto-fill'];
 const DEFAULT_FLEX_WRAP = 'nowrap';
+const FALLBACK_INTENT_ACCENT = '#6366F1';
+const DEFAULT_MODE_DESCRIPTION = 'Switching creative environment…';
+
+const humanizeModeName = (value) => {
+    if (!value) return 'Mode';
+    return value
+        .split('-')
+        .map((segment) => {
+            if (!segment) return segment;
+            if (segment.length <= 2) {
+                return segment.toUpperCase();
+            }
+            return segment.charAt(0).toUpperCase() + segment.slice(1);
+        })
+        .join(' ');
+};
+
+const normalizeModeIntent = (mode, intent = {}) => {
+    const assets = MODE_ASSETS[mode] ?? {};
+    const config = MODE_CONFIG[mode] ?? {};
+    const source = intent.source ?? 'system';
+    const label = intent.label ?? config.label ?? humanizeModeName(mode);
+    const description = intent.description ?? config.description ?? DEFAULT_MODE_DESCRIPTION;
+    const accent = intent.accent ?? assets.accent ?? FALLBACK_INTENT_ACCENT;
+    const thumbnail = intent.thumbnail ?? assets.thumbnail ?? null;
+    const message =
+        intent.message ??
+        (source === 'ai'
+            ? 'Dropple is reconfiguring the workspace based on your request…'
+            : 'Preparing tools & panels…');
+    const badge =
+        intent.badge ??
+        (source === 'ai' ? 'AI Assist' : source === 'user' ? 'User Intent' : null);
+    return {
+        id: intent.id ?? `intent-${nanoid(6)}`,
+        mode,
+        source,
+        label,
+        description,
+        message,
+        accent,
+        thumbnail,
+        badge,
+        payload: intent.payload ?? null,
+        createdAt: Date.now(),
+    };
+};
+
+const getNow = () =>
+    typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+const DEFAULT_GRADIENT_LIBRARY = [];
+const DEFAULT_ASSET_LIBRARY = [
+    {
+        id: 'asset-ai-hero-gradient',
+        label: 'AI Hero Gradient',
+        category: 'ai',
+        source: 'system',
+        status: 'ready',
+        type: 'element',
+        elementType: 'rect',
+        preview: {
+            kind: 'gradient',
+            value: 'linear-gradient(135deg, #8B5CF6 0%, #3B82F6 50%, #F472B6 100%)',
+        },
+        props: {
+            width: 640,
+            height: 360,
+            cornerRadius: 32,
+            fill: 'linear-gradient(135deg, #8B5CF6 0%, #3B82F6 50%, #F472B6 100%)',
+            opacity: 1,
+        },
+        metadata: {
+            aiPrompt: 'gradient hero background for creative app',
+        },
+    },
+    {
+        id: 'asset-ai-capsule-card',
+        label: 'Capsule CTA',
+        category: 'components',
+        source: 'system',
+        status: 'ready',
+        type: 'element',
+        elementType: 'group',
+        children: [
+            {
+                type: 'rect',
+                props: {
+                    x: 0,
+                    y: 0,
+                    width: 420,
+                    height: 220,
+                    cornerRadius: 28,
+                    fill: 'linear-gradient(135deg, rgba(15,23,42,0.95) 0%, rgba(30,41,59,0.92) 100%)',
+                    stroke: 'rgba(148,163,184,0.25)',
+                    strokeWidth: 1,
+                },
+            },
+            {
+                type: 'text',
+                props: {
+                    x: 32,
+                    y: 36,
+                    width: 356,
+                    text: 'Bring motion, copy, and design together.',
+                    fontSize: 24,
+                    fontWeight: 600,
+                    fill: '#E0E7FF',
+                },
+            },
+            {
+                type: 'text',
+                props: {
+                    x: 32,
+                    y: 96,
+                    width: 356,
+                    text: 'Dropple stitches your creative modes so nothing falls through.',
+                    fontSize: 15,
+                    lineHeight: 1.5,
+                    fill: 'rgba(226,232,240,0.72)',
+                },
+            },
+            {
+                type: 'rect',
+                props: {
+                    x: 32,
+                    y: 150,
+                    width: 168,
+                    height: 48,
+                    cornerRadius: 16,
+                    fill: '#8B5CF6',
+                },
+            },
+            {
+                type: 'text',
+                props: {
+                    x: 32,
+                    y: 162,
+                    width: 168,
+                    text: 'Start a canvas →',
+                    align: 'center',
+                    fontSize: 16,
+                    fontWeight: 600,
+                    fill: '#111827',
+                },
+            },
+        ],
+        props: {
+            width: 420,
+            height: 220,
+            opacity: 1,
+        },
+        metadata: {
+            tags: ['component', 'cta'],
+        },
+    },
+    {
+        id: 'asset-brand-logo',
+        label: 'Dropple Glyph',
+        category: 'brand',
+        source: 'system',
+        status: 'ready',
+        type: 'element',
+        elementType: 'image',
+        props: {
+            width: 160,
+            height: 160,
+            imageUrl:
+                'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="%238B5CF6"/><stop offset="1" stop-color="%233B82F6"/></linearGradient></defs><rect width="120" height="120" rx="32" fill="%230F172A"/><path d="M60 24c20 0 36 16 36 36s-16 36-36 36S24 80 24 60 40 24 60 24zm0 14c-12.15 0-22 9.85-22 22s9.85 22 22 22 22-9.85 22-22S72.15 38 60 38zm0 14a8 8 0 1 1 0 16 8 8 0 0 1 0-16z" fill="url(%23g)"/></svg>',
+            opacity: 1,
+        },
+        metadata: {
+            tags: ['brand', 'logo'],
+        },
+    },
+    {
+        id: 'asset-audio-podcast-intro',
+        label: 'Podcast Intro Loop',
+        category: 'audio',
+        source: 'system',
+        status: 'ready',
+        type: 'timeline',
+        timelineType: 'audio',
+        duration: 12,
+        offset: 0,
+        waveform: [0.2, 0.35, 0.6, 0.42, -0.4, -0.55, -0.32, 0.12, 0.4, 0.58, 0.36, -0.28, -0.48, 0.18, 0.42],
+        metadata: {
+            bpm: 92,
+            key: 'C minor',
+        },
+    },
+    {
+        id: 'asset-video-transition',
+        label: 'Slide Transition',
+        category: 'video',
+        source: 'system',
+        status: 'ready',
+        type: 'timeline',
+        timelineType: 'overlay',
+        duration: 4,
+        offset: 0,
+        metadata: {
+            easing: 'easeInOut',
+        },
+    },
+];
 
 function normalizePadding(padding) {
     const base = { ...DEFAULT_LAYOUT_PADDING };
@@ -128,6 +336,197 @@ function arraysEqual(a = [], b = []) {
         if (a[index] !== b[index]) return false;
     }
     return true;
+}
+
+function computeCenteredPosition(frame, width, height) {
+    const fallbackWidth = Number.isFinite(width) ? width : 320;
+    const fallbackHeight = Number.isFinite(height) ? height : 240;
+    const x = Math.max(32, (frame.width - fallbackWidth) / 2);
+    const y = Math.max(32, (frame.height - fallbackHeight) / 2);
+    return { x, y };
+}
+
+const AI_GRADIENT_PRESETS = [
+    {
+        label: 'Orbit',
+        value: 'linear-gradient(135deg, #8B5CF6 0%, #3B82F6 55%, #22D3EE 100%)',
+    },
+    {
+        label: 'Sunmist',
+        value: 'linear-gradient(135deg, #FACC15 0%, #F97316 45%, #F43F5E 100%)',
+    },
+    {
+        label: 'Nocturne',
+        value: 'linear-gradient(135deg, #0F172A 0%, #1E293B 40%, #312E81 100%)',
+    },
+    {
+        label: 'Pulse',
+        value: 'linear-gradient(135deg, #F472B6 0%, #6366F1 50%, #06B6D4 100%)',
+    },
+];
+
+function hashSeed(input = '') {
+    const normalized = String(input ?? '');
+    let hash = 0;
+    for (let index = 0; index < normalized.length; index += 1) {
+        hash = (hash << 5) - hash + normalized.charCodeAt(index);
+        hash |= 0;
+    }
+    return Math.abs(hash);
+}
+
+function pickGradientByPrompt(prompt) {
+    const seed = hashSeed(prompt);
+    return AI_GRADIENT_PRESETS[seed % AI_GRADIENT_PRESETS.length];
+}
+
+function generateWaveform(seedInput, length = 24) {
+    const seed = hashSeed(seedInput);
+    const values = [];
+    let state = seed % 2147483647;
+    if (state <= 0) state += 2147483646;
+    for (let index = 0; index < length; index += 1) {
+        state = (state * 48271) % 2147483647;
+        const normalized = (state / 2147483647) * 2 - 1;
+        values.push(Math.round(normalized * 100) / 100);
+    }
+    return values;
+}
+
+function buildAiAssetDefinition(kind = 'image', prompt = '') {
+    const gradient = pickGradientByPrompt(prompt);
+    const labelPrefix = prompt ? prompt.charAt(0).toUpperCase() + prompt.slice(1) : null;
+    if (kind === 'audio') {
+        return {
+            label: labelPrefix ? `AI Audio • ${labelPrefix}` : 'AI Audio Loop',
+            type: 'timeline',
+            timelineType: 'audio',
+            duration: 12,
+            waveform: generateWaveform(prompt, 32),
+            metadata: {
+                aiPrompt: prompt,
+                composer: 'Dropple Sonic Model',
+            },
+        };
+    }
+    if (kind === 'overlay' || kind === 'video') {
+        return {
+            label: labelPrefix ? `Overlay • ${labelPrefix}` : 'AI Motion Overlay',
+            type: 'timeline',
+            timelineType: 'overlay',
+            duration: 4,
+            metadata: {
+                aiPrompt: prompt,
+                transition: 'dynamic-swish',
+            },
+        };
+    }
+    if (kind === 'component') {
+        return {
+            label: labelPrefix ? `Component • ${labelPrefix}` : 'AI Component Card',
+            type: 'element',
+            elementType: 'group',
+            props: {
+                width: 420,
+                height: 240,
+                opacity: 1,
+            },
+            children: [
+                {
+                    type: 'rect',
+                    props: {
+                        x: 0,
+                        y: 0,
+                        width: 420,
+                        height: 240,
+                        cornerRadius: 28,
+                        fill: gradient.value,
+                        opacity: 0.9,
+                    },
+                },
+                {
+                    type: 'text',
+                    props: {
+                        x: 32,
+                        y: 36,
+                        width: 356,
+                        text: labelPrefix ? `${labelPrefix}` : 'Generated UI capsule',
+                        fontSize: 24,
+                        fontWeight: 600,
+                        fill: '#F8FAFC',
+                    },
+                },
+                {
+                    type: 'text',
+                    props: {
+                        x: 32,
+                        y: 96,
+                        width: 356,
+                        text:
+                            prompt && prompt.length > 6
+                                ? `AI interpretation of: “${prompt}”`
+                                : 'Responsive component created by Dropple.',
+                        fontSize: 15,
+                        lineHeight: 1.5,
+                        fill: 'rgba(226,232,240,0.75)',
+                    },
+                },
+                {
+                    type: 'rect',
+                    props: {
+                        x: 32,
+                        y: 156,
+                        width: 178,
+                        height: 48,
+                        cornerRadius: 16,
+                        fill: 'rgba(15,23,42,0.88)',
+                    },
+                },
+                {
+                    type: 'text',
+                    props: {
+                        x: 32,
+                        y: 168,
+                        width: 178,
+                        text: 'Insert component →',
+                        fontSize: 16,
+                        fontWeight: 600,
+                        align: 'center',
+                        fill: '#F8FAFC',
+                    },
+                },
+            ],
+            preview: {
+                kind: 'gradient',
+                value: gradient.value,
+            },
+            metadata: {
+                aiPrompt: prompt,
+                gradientLabel: gradient.label,
+            },
+        };
+    }
+
+    return {
+        label: labelPrefix ? `AI Visual • ${labelPrefix}` : 'AI Visual Layer',
+        type: 'element',
+        elementType: 'rect',
+        props: {
+            width: 600,
+            height: 360,
+            cornerRadius: 28,
+            fill: gradient.value,
+            opacity: 1,
+        },
+        preview: {
+            kind: 'gradient',
+            value: gradient.value,
+        },
+        metadata: {
+            aiPrompt: prompt,
+            gradientLabel: gradient.label,
+        },
+    };
 }
 
 function computeFlexColumnLayout(frame) {
@@ -1244,9 +1643,27 @@ export const useCanvasStore = create(
             comments: [],
             timelineAssets: [],
             timelineActions: [],
+            assetLibrary: [...DEFAULT_ASSET_LIBRARY],
+            assetUploadQueue: [],
+            gradientLibrary: [...DEFAULT_GRADIENT_LIBRARY],
+            timelinePlayback: {
+                frameId: null,
+                isPlaying: false,
+                playhead: 0,
+                loop: true,
+                speed: 1,
+                duration: 0,
+                lastTick: null,
+            },
             gridVisible: false,
             gridSize: 40,
             clipboard: null,
+            modeState: {},
+            sceneSnapshot: null,
+            modeTransitionIntent: null,
+            isModeSwitching: false,
+            isSceneHydrating: false,
+            hydrationTimeoutId: null,
             commitHistory: (label, source = 'user') => pushHistory(label, source),
             undoCanvas: () => {
                 const snapshot = undo();
@@ -1278,7 +1695,111 @@ export const useCanvasStore = create(
             },
             contextMenu: null,
 
-    setMode: (mode) => set({ mode }),
+    switchMode: async (nextMode, intentOptions = null) => {
+        const state = get();
+        const normalizedIntent = intentOptions ? normalizeModeIntent(nextMode, intentOptions) : null;
+        if (state.mode === nextMode) {
+            if (normalizedIntent) {
+                set({ modeTransitionIntent: normalizedIntent });
+            }
+            return;
+        }
+        const currentMode = state.mode;
+        const snapshot = {
+            scale: state.scale,
+            position: state.position,
+            selectedTool: state.selectedTool,
+            activeToolOverlay: state.activeToolOverlay,
+            selectedFrameId: state.selectedFrameId,
+            selectedElementIds: state.selectedElementIds,
+            timelineAssets: JSON.parse(JSON.stringify(state.timelineAssets ?? [])),
+            frames: JSON.parse(JSON.stringify(state.frames ?? [])),
+            scene: JSON.parse(JSON.stringify(state.frames ?? [])),
+        };
+        set((draft) => {
+            draft.modeState = {
+                ...draft.modeState,
+                [currentMode]: snapshot,
+            };
+            draft.mode = nextMode;
+            draft.isModeSwitching = true;
+            draft.sceneSnapshot = snapshot.scene;
+            draft.modeTransitionIntent = normalizedIntent;
+        });
+        const saved = state.modeState?.[nextMode];
+        const heavyMode = MODE_ASSETS[nextMode]?.heavy ?? false;
+        const hasScene = Array.isArray(saved?.scene) && saved.scene.length > 0;
+        const requireLoader = hasScene || heavyMode;
+
+        if (requireLoader) {
+            const fallbackTimer = setTimeout(() => {
+                const current = get();
+                if (current.isSceneHydrating) {
+                    set({ isSceneHydrating: false, hydrationTimeoutId: null });
+                }
+            }, 2000);
+            set({ isSceneHydrating: true, hydrationTimeoutId: fallbackTimer });
+        } else {
+            set({ isSceneHydrating: false, hydrationTimeoutId: null });
+        }
+
+        const applySavedState = () => {
+            if (saved) {
+                set({
+                    scale: saved.scale ?? state.scale,
+                    position: saved.position ?? state.position,
+                    selectedTool: saved.selectedTool ?? 'pointer',
+                    activeToolOverlay: saved.activeToolOverlay ?? null,
+                    selectedFrameId: saved.selectedFrameId ?? state.frames[0]?.id ?? null,
+                    selectedElementIds: Array.isArray(saved.selectedElementIds) ? saved.selectedElementIds : [],
+                    selectedElementId: saved.selectedElementIds?.[0] ?? null,
+                    timelineAssets: saved.timelineAssets ?? [],
+                    frames: saved.frames ?? state.frames,
+                    isModeSwitching: false,
+                });
+            } else {
+                set({
+                    selectedTool: 'pointer',
+                    activeToolOverlay: null,
+                    selectedFrameId: state.frames[0]?.id ?? null,
+                    selectedElementIds: [],
+                    selectedElementId: null,
+                    isModeSwitching: false,
+                });
+            }
+        };
+
+        const finishIfNeeded = () => {
+            if (!requireLoader || !heavyMode) {
+                get().finishSceneHydration();
+            }
+        };
+
+        if (hasScene) {
+            requestAnimationFrame(() => {
+                set({ frames: saved.scene ?? state.frames });
+                applySavedState();
+                if (!heavyMode) {
+                    finishIfNeeded();
+                }
+            });
+        } else if (heavyMode) {
+            setTimeout(() => {
+                applySavedState();
+            }, 120);
+        } else {
+            applySavedState();
+            finishIfNeeded();
+        }
+    },
+    setMode: (mode) => get().switchMode(mode),
+    finishSceneHydration: () => {
+        const timer = get().hydrationTimeoutId;
+        if (timer) {
+            clearTimeout(timer);
+        }
+        set({ isSceneHydrating: false, hydrationTimeoutId: null, sceneSnapshot: null });
+    },
     setScale: (value) =>
         set((state) => ({ scale: typeof value === 'function' ? value(state.scale) : value })),
     setPosition: (value) =>
@@ -1292,6 +1813,92 @@ export const useCanvasStore = create(
     clearAutoLayoutPreview: () => set({ autoLayoutPreview: null }),
     clearActiveGuides: () => set({ activeGuides: [] }),
     setActiveToolOverlay: (overlay) => set({ activeToolOverlay: overlay }),
+    setModeTransitionIntent: (intent) => {
+        if (!intent) {
+            set({ modeTransitionIntent: null });
+            return;
+        }
+        const currentMode = get().mode;
+        set({ modeTransitionIntent: normalizeModeIntent(currentMode, intent) });
+    },
+    clearModeTransitionIntent: () => set({ modeTransitionIntent: null }),
+    sendModeIntent: (mode, intent = {}) => get().switchMode(mode, intent),
+    previewAutoLayoutSuggestion: (options = {}) => {
+        const state = get();
+        const targetFrameId =
+            options.frameId ?? state.selectedFrameId ?? state.frames[0]?.id ?? null;
+        if (!targetFrameId) return null;
+        const frame = state.frames.find((item) => item.id === targetFrameId);
+        if (!frame) return null;
+        const width = frame.width ?? 0;
+        const height = frame.height ?? 0;
+        const padding = {
+            top: Number.isFinite(frame.layoutPadding?.top) ? frame.layoutPadding.top : 64,
+            right: Number.isFinite(frame.layoutPadding?.right) ? frame.layoutPadding.right : 64,
+            bottom: Number.isFinite(frame.layoutPadding?.bottom) ? frame.layoutPadding.bottom : 64,
+            left: Number.isFinite(frame.layoutPadding?.left) ? frame.layoutPadding.left : 64,
+        };
+        const rect = {
+            x: padding.left,
+            y: padding.top,
+            width: Math.max(0, width - padding.left - padding.right),
+            height: Math.max(0, height - padding.top - padding.bottom),
+        };
+        const columns = Math.max(2, Number.isFinite(options.columns) ? options.columns : 4);
+        const rows = Math.max(1, Number.isFinite(options.rows) ? options.rows : 3);
+        const guides = [];
+        const columnSlice = columns > 0 ? rect.width / columns : 0;
+        const rowSlice = rows > 0 ? rect.height / rows : 0;
+        for (let index = 1; index < columns; index += 1) {
+            guides.push({
+                orientation: 'vertical',
+                position: rect.x + columnSlice * index,
+            });
+        }
+        for (let index = 1; index < rows; index += 1) {
+            guides.push({
+                orientation: 'horizontal',
+                position: rect.y + rowSlice * index,
+            });
+        }
+        guides.push({
+            orientation: 'vertical',
+            position: rect.x + rect.width / 2,
+        });
+        guides.push({
+            orientation: 'horizontal',
+            position: rect.y + rect.height / 2,
+        });
+
+        const preview = {
+            frameId: frame.id,
+            parentId: null,
+            layoutMode: options.layoutMode ?? frame.layoutMode ?? 'flex-column',
+            rect,
+            beforeId: null,
+            afterId: null,
+            metadata: {
+                columns,
+                rows,
+            },
+        };
+        set({
+            autoLayoutPreview: preview,
+            activeGuides: guides,
+        });
+        const duration = Number.isFinite(options.duration) ? options.duration : 2200;
+        if (typeof window !== 'undefined' && duration > 0) {
+            const timeoutId = window.setTimeout(() => {
+                const latest = get();
+                if (latest.autoLayoutPreview === preview) {
+                    latest.clearAutoLayoutPreview();
+                    latest.clearActiveGuides();
+                }
+            }, duration);
+            return { preview, timeoutId };
+        }
+        return { preview };
+    },
 
     setSelectedFrame: (id) => {
         const state = get();
@@ -1538,6 +2145,25 @@ export const useCanvasStore = create(
             if (latest && latest.layoutMode && latest.layoutMode !== 'absolute') {
                 get().reflowFrame(id);
                 frameChanged = true;
+            }
+        }
+
+        if (updates.timelineDuration !== undefined) {
+            const playback = get().timelinePlayback;
+            if (playback.frameId === id) {
+                const latestFrame = get().frames.find((frame) => frame.id === id);
+                if (latestFrame) {
+                    const duration = Math.max(latestFrame.timelineDuration ?? playback.duration ?? 20, 0.1);
+                    const clamped = Math.min(playback.playhead ?? 0, duration);
+                    set({
+                        timelinePlayback: {
+                            ...playback,
+                            duration,
+                            playhead: clamped,
+                            lastTick: playback.isPlaying ? getNow() : playback.lastTick,
+                        },
+                    });
+                }
             }
         }
 
@@ -2069,7 +2695,6 @@ export const useCanvasStore = create(
     updateElementProps: (frameId, elementId, propUpdates, options = {}) => {
         const { skipHistory = false, historyLabel = 'Edit element', source = 'user' } = options;
         if (!frameId || !elementId || !propUpdates) return;
-
         const state = get();
         const frame = state.frames.find((item) => item.id === frameId);
         if (!frame) return;
@@ -2197,6 +2822,23 @@ export const useCanvasStore = create(
         if (elementChanged && !skipHistory) {
             get().commitHistory(historyLabel, source);
         }
+    },
+    updateElementsPropsBatch: (frameId, updatesList, options = {}) => {
+        const { historyLabel = 'Edit elements', source = 'user', skipHistory = false } = options;
+        if (!frameId || !Array.isArray(updatesList) || updatesList.length === 0) return;
+        updatesList.forEach((entry, index) => {
+            const isLast = index === updatesList.length - 1;
+            get().updateElementProps(
+                frameId,
+                entry.elementId,
+                entry.props ?? {},
+                {
+                    historyLabel,
+                    source,
+                    skipHistory: skipHistory || !isLast,
+                },
+            );
+        });
     },
 
     setElementLink: (frameId, elementId, targetFrameId) => {
@@ -3226,6 +3868,442 @@ export const useCanvasStore = create(
             get().commitHistory(historyLabel ?? `Update timeline asset "${assetLabel}"`, source);
         }
     },
+    playTimeline: (frameId = null) => {
+        const state = get();
+        const targetFrameId =
+            frameId ?? state.selectedFrameId ?? state.timelinePlayback.frameId ?? state.frames[0]?.id ?? null;
+        if (!targetFrameId) return;
+        const frame = state.frames.find((item) => item.id === targetFrameId);
+        if (!frame) return;
+        const duration = Math.max(frame.timelineDuration ?? state.timelinePlayback.duration ?? 20, 0.1);
+        const shouldReset = state.timelinePlayback.frameId !== frame.id;
+        set((prev) => ({
+            timelinePlayback: {
+                ...prev.timelinePlayback,
+                frameId: frame.id,
+                isPlaying: true,
+                duration,
+                playhead: shouldReset
+                    ? 0
+                    : Math.min(prev.timelinePlayback.playhead ?? 0, duration),
+                lastTick: getNow(),
+            },
+        }));
+    },
+    pauseTimeline: () =>
+        set((state) => ({
+            timelinePlayback: {
+                ...state.timelinePlayback,
+                isPlaying: false,
+                lastTick: null,
+            },
+        })),
+    stopTimeline: () =>
+        set((state) => ({
+            timelinePlayback: {
+                ...state.timelinePlayback,
+                isPlaying: false,
+                playhead: 0,
+                lastTick: null,
+            },
+        })),
+    setTimelineLoop: (loop) =>
+        set((state) => ({
+            timelinePlayback: {
+                ...state.timelinePlayback,
+                loop: typeof loop === 'boolean' ? loop : !state.timelinePlayback.loop,
+            },
+        })),
+    setTimelineSpeed: (speed) =>
+        set((state) => ({
+            timelinePlayback: {
+                ...state.timelinePlayback,
+                speed: Number.isFinite(speed) ? Math.max(0, speed) : state.timelinePlayback.speed,
+            },
+        })),
+    setTimelinePlayhead: (frameId = null, playhead = 0, options = {}) => {
+        const state = get();
+        const targetFrameId =
+            frameId ?? state.timelinePlayback.frameId ?? state.selectedFrameId ?? state.frames[0]?.id ?? null;
+        if (!targetFrameId) return;
+        const frame = state.frames.find((item) => item.id === targetFrameId);
+        if (!frame) return;
+        const duration = Math.max(frame.timelineDuration ?? state.timelinePlayback.duration ?? 20, 0.1);
+        const clamped = Math.min(Math.max(Number(playhead) || 0, 0), duration);
+        set((prev) => ({
+            timelinePlayback: {
+                ...prev.timelinePlayback,
+                frameId: targetFrameId,
+                playhead: clamped,
+                duration,
+                lastTick: options.resetTick ? getNow() : prev.timelinePlayback.lastTick,
+            },
+        }));
+    },
+    stepTimelinePlayback: () => {
+        const state = get();
+        const playback = state.timelinePlayback;
+        if (!playback.isPlaying || !playback.frameId) return null;
+        const frame = state.frames.find((item) => item.id === playback.frameId);
+        if (!frame) return null;
+        const duration = Math.max(frame.timelineDuration ?? playback.duration ?? 20, 0.1);
+        const now = getNow();
+        const lastTick = playback.lastTick ?? now;
+        const speed = Math.max(playback.speed ?? 1, 0);
+        const deltaSeconds = speed * Math.max((now - lastTick) / 1000, 0);
+        if (deltaSeconds <= 0) {
+            set({
+                timelinePlayback: {
+                    ...playback,
+                    duration,
+                    lastTick: now,
+                },
+            });
+            return { playhead: playback.playhead, duration, playing: playback.isPlaying };
+        }
+        let next = playback.playhead + deltaSeconds;
+        let isPlaying = playback.isPlaying;
+        if (next >= duration) {
+            if (playback.loop) {
+                next = next % duration;
+            } else {
+                next = duration;
+                isPlaying = false;
+            }
+        }
+        set({
+            timelinePlayback: {
+                ...playback,
+                playhead: next,
+                duration,
+                isPlaying,
+                lastTick: now,
+            },
+        });
+        return { playhead: next, duration, playing: isPlaying };
+    },
+    jumpTimelineToAsset: (assetId) => {
+        const state = get();
+        const asset = state.timelineAssets.find((item) => item.id === assetId);
+        if (!asset) return;
+        get().setTimelinePlayhead(asset.frameId, asset.offset ?? 0, { resetTick: true });
+    },
+    addAssetToLibrary: (asset, options = {}) => {
+        if (!asset) return null;
+        const prepared = {
+            id: asset.id ?? `asset-${nanoid(6)}`,
+            label: asset.label ?? 'Library asset',
+            source: asset.source ?? 'user',
+            category: asset.category ?? 'custom',
+            status: asset.status ?? 'ready',
+            type: asset.type ?? 'element',
+            elementType: asset.elementType ?? (asset.type === 'timeline' ? null : 'rect'),
+            timelineType: asset.timelineType ?? null,
+            props: asset.props ? { ...asset.props } : undefined,
+            children: Array.isArray(asset.children)
+                ? asset.children.map((child) => ({
+                      ...child,
+                      props: child.props ? { ...child.props } : undefined,
+                  }))
+                : undefined,
+            preview: asset.preview ? { ...asset.preview } : undefined,
+            metadata: asset.metadata ? { ...asset.metadata } : {},
+            duration: asset.duration ?? undefined,
+            offset: asset.offset ?? 0,
+            waveform: Array.isArray(asset.waveform) ? [...asset.waveform] : null,
+            favorite: Boolean(asset.favorite),
+            createdAt: asset.createdAt ?? new Date().toISOString(),
+        };
+        set((state) => {
+            const filtered = state.assetLibrary.filter((existing) => existing.id !== prepared.id);
+            return {
+                assetLibrary: [prepared, ...filtered],
+            };
+        });
+        if (!options.skipUsageMark) {
+            get().markAssetUsed(prepared.id);
+        }
+        return prepared.id;
+    },
+    updateAssetMetadata: (assetId, updates = {}) => {
+        if (!assetId || !updates) return;
+        set((state) => ({
+            assetLibrary: state.assetLibrary.map((asset) => {
+                if (asset.id !== assetId) return asset;
+                const next = { ...asset, ...updates };
+                if (updates.props) {
+                    next.props = { ...(asset.props ?? {}), ...updates.props };
+                }
+                if (updates.children) {
+                    next.children = Array.isArray(updates.children)
+                        ? updates.children.map((child) => ({
+                              ...child,
+                              props: child.props ? { ...child.props } : undefined,
+                          }))
+                        : undefined;
+                }
+                if (updates.preview) {
+                    next.preview = { ...updates.preview };
+                }
+                if (updates.metadata) {
+                    next.metadata = { ...(asset.metadata ?? {}), ...updates.metadata };
+                }
+                if (updates.waveform) {
+                    next.waveform = Array.isArray(updates.waveform) ? [...updates.waveform] : null;
+                }
+                return next;
+            }),
+        }));
+    },
+    toggleAssetFavorite: (assetId) => {
+        if (!assetId) return;
+        set((state) => ({
+            assetLibrary: state.assetLibrary.map((asset) =>
+                asset.id === assetId ? { ...asset, favorite: !asset.favorite } : asset,
+            ),
+        }));
+    },
+    markAssetUsed: (assetId) => {
+        if (!assetId) return;
+        const timestamp = new Date().toISOString();
+        set((state) => ({
+            assetLibrary: state.assetLibrary.map((asset) =>
+                asset.id === assetId
+                    ? {
+                          ...asset,
+                          metadata: { ...(asset.metadata ?? {}), lastUsedAt: timestamp },
+                      }
+                    : asset,
+            ),
+        }));
+    },
+    uploadAssetToLibrary: ({ name, dataUrl, mime, duration }) => {
+        if (!dataUrl) return null;
+        const trimmedName = name?.trim();
+        const isAudio = mime?.startsWith('audio');
+        const isVideo = mime?.startsWith('video');
+        const assetType = isAudio || isVideo ? 'timeline' : 'element';
+        const timelineType = isAudio ? 'audio' : isVideo ? 'clip' : null;
+        const elementType = assetType === 'element' ? 'image' : null;
+        const assetId = get().addAssetToLibrary(
+            {
+                id: `asset-upload-${nanoid(6)}`,
+                label: trimmedName || (isAudio ? 'Uploaded audio' : 'Uploaded visual'),
+                source: 'upload',
+                category: isAudio ? 'audio' : isVideo ? 'video' : 'uploads',
+                status: 'ready',
+                type: assetType,
+                elementType,
+                timelineType,
+                props:
+                    assetType === 'element'
+                        ? {
+                              width: 480,
+                              height: 360,
+                              imageUrl: dataUrl,
+                              opacity: 1,
+                          }
+                        : undefined,
+                preview:
+                    assetType === 'element'
+                        ? { kind: 'image', value: dataUrl }
+                        : { kind: 'icon', value: timelineType ?? 'clip' },
+                duration: assetType === 'timeline' ? Number(duration) || (isAudio ? 12 : 6) : undefined,
+            },
+            { skipUsageMark: true },
+        );
+        return assetId;
+    },
+    generateAiAsset: ({ prompt = '', kind = 'image' } = {}) => {
+        const definition = buildAiAssetDefinition(kind, prompt);
+        const tempId = `asset-ai-${nanoid(6)}`;
+        const pending = {
+            ...definition,
+            id: tempId,
+            source: 'ai',
+            category: 'ai',
+            status: 'generating',
+            metadata: {
+                ...(definition.metadata ?? {}),
+                aiPrompt: prompt,
+                requestedAt: new Date().toISOString(),
+            },
+        };
+        set((state) => ({
+            assetLibrary: [pending, ...state.assetLibrary],
+        }));
+        const delay = 900 + Math.round(Math.random() * 900);
+        setTimeout(() => {
+            const finalDefinition = buildAiAssetDefinition(kind, `${prompt}`.trim());
+            set((state) => ({
+                assetLibrary: state.assetLibrary.map((asset) =>
+                    asset.id === tempId
+                        ? {
+                              ...asset,
+                              ...finalDefinition,
+                              status: 'ready',
+                              metadata: {
+                                  ...(asset.metadata ?? {}),
+                                  ...(finalDefinition.metadata ?? {}),
+                                  generatedAt: new Date().toISOString(),
+                              },
+                          }
+                        : asset,
+                ),
+            }));
+        }, delay);
+        return tempId;
+    },
+    removeAssetFromLibrary: (assetId) => {
+        if (!assetId) return;
+        set((state) => ({
+            assetLibrary: state.assetLibrary.filter((asset) => asset.id !== assetId),
+        }));
+    },
+    addGradientPreset: (preset) => {
+        if (!preset || !preset.id) return;
+        const prepared = {
+            ...preset,
+            source: preset.source ?? 'ai',
+            createdAt: preset.createdAt ?? new Date().toISOString(),
+        };
+        set((state) => {
+            const filtered = state.gradientLibrary.filter((item) => item.id !== prepared.id);
+            return {
+                gradientLibrary: [prepared, ...filtered].slice(0, 32),
+            };
+        });
+    },
+    removeGradientPreset: (id) => {
+        if (!id) return;
+        set((state) => ({
+            gradientLibrary: state.gradientLibrary.filter((item) => item.id !== id),
+        }));
+    },
+    placeAssetOnFrame: (assetId, frameId = null, options = {}) => {
+        const state = get();
+        const asset = state.assetLibrary.find((item) => item.id === assetId);
+        if (!asset) return null;
+        const targetFrameId =
+            frameId ?? state.selectedFrameId ?? state.frames[0]?.id ?? null;
+        if (!targetFrameId) return null;
+        const frame = state.frames.find((item) => item.id === targetFrameId);
+        if (!frame) return null;
+
+        if (asset.type === 'timeline') {
+            return get().placeAssetOnTimeline(assetId, targetFrameId, options);
+        }
+
+        const baseWidth = asset.props?.width ?? (asset.children?.[0]?.props?.width ?? 320);
+        const baseHeight = asset.props?.height ?? (asset.children?.[0]?.props?.height ?? 240);
+        const centroid = computeCenteredPosition(frame, baseWidth, baseHeight);
+        const originX = options.position?.x ?? centroid.x;
+        const originY = options.position?.y ?? centroid.y;
+
+        if (asset.type === 'element' && asset.elementType === 'group' && Array.isArray(asset.children)) {
+            const groupId = `asset-group-${nanoid(6)}`;
+            const groupProps = {
+                ...(asset.props ?? {}),
+                x: originX,
+                y: originY,
+            };
+            get().addElementToFrame(
+                frame.id,
+                {
+                    id: groupId,
+                    type: 'group',
+                    name: asset.label,
+                    props: groupProps,
+                },
+                null,
+                { skipHistory: true, source: 'asset-library' },
+            );
+            asset.children.forEach((child) => {
+                const childId = `asset-child-${nanoid(6)}`;
+                const childProps = {
+                    ...(child.props ?? {}),
+                    x: originX + (child.props?.x ?? 0),
+                    y: originY + (child.props?.y ?? 0),
+                };
+                get().addElementToFrame(
+                    frame.id,
+                    {
+                        id: childId,
+                        type: child.type ?? 'rect',
+                        name: child.name ?? asset.label,
+                        props: childProps,
+                    },
+                    groupId,
+                    { skipHistory: true, source: 'asset-library' },
+                );
+            });
+            get().commitHistory(`Insert "${asset.label}"`, 'asset-library');
+            get().markAssetUsed(assetId);
+            return groupId;
+        }
+
+        if (asset.type === 'element') {
+            const elementId = `asset-el-${nanoid(6)}`;
+            const elementProps = {
+                ...(asset.props ?? {}),
+                x: originX,
+                y: originY,
+            };
+            get().addElementToFrame(
+                frame.id,
+                {
+                    id: elementId,
+                    type: asset.elementType ?? 'rect',
+                    name: asset.label,
+                    props: elementProps,
+                },
+                null,
+                { skipHistory: true, source: 'asset-library' },
+            );
+            get().commitHistory(`Insert "${asset.label}"`, 'asset-library');
+            get().markAssetUsed(assetId);
+            return elementId;
+        }
+        return null;
+    },
+    placeAssetOnTimeline: (assetId, frameId = null, options = {}) => {
+        const state = get();
+        const asset = state.assetLibrary.find((item) => item.id === assetId);
+        if (!asset) return null;
+        const targetFrameId =
+            frameId ?? state.selectedFrameId ?? state.timelinePlayback.frameId ?? state.frames[0]?.id ?? null;
+        if (!targetFrameId) return null;
+        const frame = state.frames.find((item) => item.id === targetFrameId);
+        if (!frame) return null;
+        if (asset.type !== 'timeline') {
+            return get().placeAssetOnFrame(assetId, targetFrameId, options);
+        }
+        const duration = Math.max(Number(options.duration ?? asset.duration ?? 4) || 4, 0.25);
+        const offset = Math.max(Number(options.offset ?? asset.offset ?? 0) || 0, 0);
+        get().addTimelineAsset({
+            frameId: frame.id,
+            label: asset.label ?? 'Timeline asset',
+            type: asset.timelineType ?? 'clip',
+            duration,
+            offset,
+            thumbnailUrl: asset.preview?.kind === 'image' ? asset.preview.value : asset.props?.imageUrl ?? null,
+            waveform: asset.waveform ?? null,
+            historyLabel: `Timeline: Insert "${asset.label ?? 'asset'}"`,
+            source: 'asset-library',
+        });
+        get().markAssetUsed(assetId);
+        const modeConfig = MODE_ASSETS[state.mode] ?? {};
+        if (modeConfig.heavy) {
+            set({ isSceneHydrating: true });
+            setTimeout(() => {
+                const storeAfter = get();
+                if (storeAfter.isSceneHydrating) {
+                    storeAfter.finishSceneHydration();
+                }
+            }, 240);
+        }
+        return `${asset.label ?? 'asset'}`;
+    },
     chainFrames: (frameIds) => {
         const uniqueIds = Array.from(new Set(Array.isArray(frameIds) ? frameIds : [])).filter(Boolean);
         if (uniqueIds.length < 2) return;
@@ -3425,6 +4503,7 @@ export const useCanvasStore = create(
                 activePrototypeFrameId: state.activePrototypeFrameId,
                 gridVisible: state.gridVisible,
                 gridSize: state.gridSize,
+                modeState: state.modeState,
             }),
         },
     ),

@@ -399,3 +399,85 @@ export const MODE_CONFIG = {
 };
 
 export const MODE_LIST = ['design', 'graphics', 'image', 'ux', 'video', 'podcast', 'cartoon', 'ai-studio', 'docs', 'dev', 'classroom', 'brand'];
+export const MODE_ASSETS = {
+    design: { thumbnail: '/modes/design.png', accent: '#A855F7' },
+    graphics: { thumbnail: '/modes/graphics.png', accent: '#7C3AED' },
+    image: { thumbnail: '/modes/image.png', accent: '#F59E0B' },
+    ux: { thumbnail: '/modes/ux.png', accent: '#0EA5E9' },
+    video: { thumbnail: '/modes/video.png', accent: '#EF4444', heavy: true },
+    podcast: { thumbnail: '/modes/podcast.png', accent: '#10B981', heavy: true },
+    cartoon: { thumbnail: '/modes/cartoon.png', accent: '#F97316' },
+    'ai-studio': { thumbnail: '/modes/ai-studio.png', accent: '#9CA3AF', heavy: true },
+    docs: { thumbnail: '/modes/docs.png', accent: '#3B82F6' },
+    dev: { thumbnail: '/modes/dev.png', accent: '#6366F1' },
+    classroom: { thumbnail: '/modes/classroom.png', accent: '#22C55E', heavy: true },
+    brand: { thumbnail: '/modes/brand.png', accent: '#F472B6' },
+};
+
+export const MODE_CANVAS_BEHAVIOR = {
+    default: {
+        kind: 'board',
+        snapping: { grid: 16, alignCenter: true },
+    },
+    design: {
+        kind: 'board',
+        snapping: { grid: 16, alignCenter: true },
+        frameDefaults: { width: 1080, height: 720 },
+    },
+    graphics: {
+        kind: 'fabric',
+        usesFabric: true,
+        snapping: { grid: 8, alignCenter: true },
+        frameDefaults: { width: 960, height: 640 },
+    },
+    image: {
+        kind: 'fabric',
+        usesFabric: true,
+        snapping: { grid: 4, alignCenter: false },
+        frameDefaults: { width: 960, height: 640 },
+    },
+    ux: {
+        kind: 'frame',
+        usesFabric: true,
+        snapping: { grid: 8, alignCenter: true, smartGuides: true },
+        frameDefaults: { width: 1280, height: 720 },
+    },
+    animation: {
+        kind: 'timeline',
+        usesFabric: true,
+        timeline: {
+            tracks: ['clip', 'overlay', 'audio'],
+            labels: { clip: 'Layers', overlay: 'Effects', audio: 'Audio' },
+        },
+        snapping: { grid: 8, alignCenter: true },
+        frameDefaults: { width: 1280, height: 720 },
+    },
+    video: {
+        kind: 'timeline',
+        usesFabric: true,
+        timeline: {
+            tracks: ['clip', 'overlay', 'audio'],
+            labels: { clip: 'Video', overlay: 'Overlay', audio: 'Audio' },
+        },
+        snapping: { grid: 4, alignCenter: true },
+        frameDefaults: { width: 1920, height: 1080 },
+    },
+    podcast: {
+        kind: 'waveform',
+        timeline: {
+            tracks: ['segment', 'audio', 'overlay'],
+            labels: { segment: 'Segments', audio: 'Voices', overlay: 'Music & FX' },
+        },
+        snapping: { grid: 1, alignCenter: false },
+    },
+    cartoon: {
+        kind: 'timeline',
+        usesFabric: true,
+        timeline: {
+            tracks: ['clip', 'overlay', 'audio'],
+            labels: { clip: 'Frames', overlay: 'FX', audio: 'Audio' },
+        },
+        snapping: { grid: 8, alignCenter: true },
+        frameDefaults: { width: 1280, height: 720 },
+    },
+};

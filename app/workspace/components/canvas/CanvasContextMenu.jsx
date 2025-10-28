@@ -37,6 +37,8 @@ export default function CanvasContextMenu() {
     const setPosition = useCanvasStore((state) => state.setPosition);
     const toggleGrid = useCanvasStore((state) => state.toggleGrid);
     const setMode = useCanvasStore((state) => state.setMode);
+    const sendModeIntent = useCanvasStore((state) => state.sendModeIntent);
+    const previewAutoLayoutSuggestion = useCanvasStore((state) => state.previewAutoLayoutSuggestion);
     const undoCanvas = useCanvasStore((state) => state.undoCanvas);
     const redoCanvas = useCanvasStore((state) => state.redoCanvas);
     const { canUndo, canRedo } = useHistoryStatus();
@@ -535,7 +537,12 @@ export default function CanvasContextMenu() {
             key: 'ux-ai-layout',
             label: 'AI Suggest Layout',
             icon: '🧠',
-            disabled: true,
+            action: () =>
+                previewAutoLayoutSuggestion({
+                    frameId: frameId ?? selectedFrameId ?? null,
+                    columns: 4,
+                    rows: 3,
+                }),
             keywords: ['ai', 'layout'],
         }),
         createMenuItem({
@@ -1151,28 +1158,46 @@ export default function CanvasContextMenu() {
             key: 'env-mode-graphics',
             label: 'Switch to Graphics Mode',
             icon: '🎨',
-            action: () => setMode('graphics'),
+            action: () =>
+                sendModeIntent('graphics', {
+                    source: 'user',
+                    badge: 'Mode Jump',
+                    message: 'Loading vector tools & layout guides…',
+                }),
             keywords: ['switch', 'graphics'],
         }),
         createMenuItem({
             key: 'env-mode-video',
             label: 'Switch to Video Mode',
             icon: '🎬',
-            action: () => setMode('video'),
+            action: () =>
+                sendModeIntent('video', {
+                    source: 'ai',
+                    message: 'Syncing timeline layers for motion & audio…',
+                }),
             keywords: ['switch', 'video'],
         }),
         createMenuItem({
             key: 'env-mode-ai',
             label: 'Switch to AI Studio',
             icon: '🤖',
-            action: () => setMode('ai-studio'),
+            action: () =>
+                sendModeIntent('ai-studio', {
+                    source: 'ai',
+                    message: 'Opening AI workbench for prompts & generators…',
+                }),
             keywords: ['switch', 'ai studio'],
         }),
         createMenuItem({
             key: 'env-mode-ux',
             label: 'Switch to UI/UX Mode',
             icon: '💻',
-            action: () => setMode('ux'),
+            action: () =>
+                sendModeIntent('ux', {
+                    source: 'user',
+                    badge: 'Prototype',
+                    message: 'Preparing frames, flows, and code preview…',
+                }),
             keywords: ['switch', 'ui'],
         }),
     ];

@@ -12,6 +12,17 @@ const DEFAULT_LAYOUT_PADDING = { top: 64, right: 64, bottom: 64, left: 64 };
 const DEFAULT_GRID_COLUMNS = 3;
 const DEFAULT_GRID_AUTO_ROWS = 240;
 const DEFAULT_GRID_MIN_COLUMN_WIDTH = 240;
+const TIMELINE_MODES = new Set(['video', 'animation', 'podcast']);
+
+const formatSeconds = (value) => {
+    const seconds = Math.max(0, Number.isFinite(value) ? value : 0);
+    if (seconds >= 60) {
+        const minutes = Math.floor(seconds / 60);
+        const remainder = seconds - minutes * 60;
+        return `${minutes}:${remainder.toFixed(1).padStart(4, '0')}`;
+    }
+    return seconds.toFixed(2);
+};
 
 function normalizePadding(padding) {
     const base = { ...DEFAULT_LAYOUT_PADDING };
@@ -41,6 +52,12 @@ export default function FrameNode({ frame }) {
     const prototypeMode = useCanvasStore((state) => state.prototypeMode);
     const mode = useCanvasStore((state) => state.mode);
     const timelineAssets = useCanvasStore((state) => state.timelineAssets);
+    const timelinePlayback = useCanvasStore((state) => state.timelinePlayback);
+    const playTimeline = useCanvasStore((state) => state.playTimeline);
+    const pauseTimeline = useCanvasStore((state) => state.pauseTimeline);
+    const setTimelinePlayhead = useCanvasStore((state) => state.setTimelinePlayhead);
+    const setTimelineLoop = useCanvasStore((state) => state.setTimelineLoop);
+    const setTimelineSpeed = useCanvasStore((state) => state.setTimelineSpeed);
     const setSelectedFrame = useCanvasStore((state) => state.setSelectedFrame);
     const updateFrame = useCanvasStore((state) => state.updateFrame);
     const comments = useCanvasStore((state) => state.comments);
@@ -80,6 +97,11 @@ export default function FrameNode({ frame }) {
         const rounded = Math.round(timelineTotalDuration * 10) / 10;
         return Number.isInteger(rounded) ? String(Math.trunc(rounded)) : rounded.toFixed(1);
     }, [timelineTotalDuration]);
+    const isTimelineMode = TIMELINE_MODES.has(mode);
+    const isTimelineActive = timelinePlayback.frameId === frame.id;
+    const playheadSeconds = isTimelineActive ? timelinePlayback.playhead ?? 0 : 0;
+    const playbackSpeed = timelinePlayback.speed ?? 1;
+    const loopEnabled = Boolean(timelinePlayback.loop);
 
     const frameBackgroundStyle = useMemo(() => {
         const fillType = frame.backgroundFillType ?? (frame.backgroundImage ? 'image' : 'solid');
@@ -917,15 +939,78 @@ export default function FrameNode({ frame }) {
                     <ElementNode key={element.id} element={element} frameId={frame.id} childrenNodes={children} />
                 ))}
             </div>
-            {mode === 'video' && frameTimelineAssets.length > 0 ? (
-                <div className='pointer-events-none absolute inset-x-6 bottom-6'>
-                    <div className='rounded-full border border-[rgba(59,130,246,0.35)] bg-[rgba(15,23,42,0.75)] px-4 py-2 shadow-[0_12px_32px_rgba(15,23,42,0.45)]'>
-                        <div className='flex items-center gap-2 text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.65)]'>
-                            <span>Timeline</span>
-                            <div className='h-px flex-1 bg-[rgba(59,130,246,0.35)]' />
-                            <span>{timelineDurationLabel}s</span>
+            {isTimelineMode ? (
+                <div className='absolute inset-x-6 bottom-6 pointer-events-auto'>
+                    <div className='rounded-3xl border border-[rgba(59,130,246,0.4)] bg-[rgba(8,15,35,0.9)] px-5 py-4 shadow-[0_18px_42px_rgba(8,15,35,0.55)]'>
+                        <div className='flex flex-wrap items-center justify-between gap-3 text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>
+                            <div className='flex items-center gap-3'>
+                                <span>Timeline · {timelineDurationLabel}s</span>
+                                <div className='flex items-center gap-2'>
+                                    <button
+                                        type='button'
+                                        onClick={() => {
+                                            if (isTimelineActive && timelinePlayback.isPlaying) {
+                                                pauseTimeline();
+                                            } else {
+                                                playTimeline(frame.id);
+                                            }
+                                        }}
+                                        className={clsx(
+                                            'rounded-lg border px-3 py-1.5 transition-colors',
+                                            isTimelineActive && timelinePlayback.isPlaying
+                                                ? 'border-[rgba(236,233,254,0.75)] text-white'
+                                                : 'border-[rgba(148,163,184,0.35)] text-[rgba(236,233,254,0.85)] hover:border-[rgba(236,233,254,0.75)] hover:text-white',
+                                        )}
+                                    >
+                                        {isTimelineActive && timelinePlayback.isPlaying ? 'Pause' : 'Play'}
+                                    </button>
+                                    <button
+                                        type='button'
+                                        onClick={() => {
+                                            setTimelinePlayhead(frame.id, 0, { resetTick: true });
+                                            pauseTimeline();
+                                        }}
+                                        className='rounded-lg border border-[rgba(148,163,184,0.35)] px-3 py-1.5 text-[rgba(236,233,254,0.75)] transition-colors hover:border-[rgba(236,233,254,0.7)] hover:text-white'
+                                    >
+                                        Stop
+                                    </button>
+                                    <button
+                                        type='button'
+                                        onClick={() => setTimelineLoop(!loopEnabled)}
+                                        className={clsx(
+                                            'rounded-lg border px-3 py-1.5 transition-colors',
+                                            loopEnabled
+                                                ? 'border-[rgba(59,130,246,0.6)] text-[rgba(191,219,254,0.9)]'
+                                                : 'border-[rgba(148,163,184,0.3)] text-[rgba(148,163,184,0.75)] hover:border-[rgba(59,130,246,0.45)] hover:text-[rgba(191,219,254,0.9)]',
+                                        )}
+                                    >
+                                        Loop {loopEnabled ? 'On' : 'Off'}
+                                    </button>
+                                </div>
+                            </div>
+                            <div className='flex items-center gap-2 text-[rgba(191,219,254,0.85)]'>
+                                <span>{formatSeconds(playheadSeconds)}</span>
+                                <span>/</span>
+                                <span>{formatSeconds(timelineTotalDuration)}</span>
+                                <select
+                                    value={playbackSpeed}
+                                    onChange={(event) => setTimelineSpeed(Number(event.target.value) || 1)}
+                                    className='rounded-md border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.7)] px-2 py-1 text-[10px] text-[rgba(236,233,254,0.92)] focus:border-[rgba(139,92,246,0.6)]'
+                                >
+                                    {[0.5, 1, 1.5, 2].map((speed) => (
+                                        <option key={speed} value={speed}>
+                                            {speed.toFixed(1)}×
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
-                        <TimelineBar frameId={frame.id} assets={frameTimelineAssets} totalDuration={timelineTotalDuration} getTimelineStyles={getTimelineStyles} />
+                        <TimelineBar
+                            frameId={frame.id}
+                            assets={frameTimelineAssets}
+                            totalDuration={timelineTotalDuration}
+                            getTimelineStyles={getTimelineStyles}
+                        />
                     </div>
                 </div>
             ) : null}

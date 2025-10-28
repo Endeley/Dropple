@@ -1,11 +1,11 @@
 'use client';
 
 import clsx from 'clsx';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { MODE_CONFIG } from './modeConfig';
 import { useCanvasStore } from './context/CanvasStore';
 
-function SliderRow({ label, min = 0, max = 100, step = 1, value = 0, onChange }) {
+function SliderRow({ label, min = 0, max = 100, step = 1, value = 0, onChange, mixed = false }) {
     const safeValue = Number.isFinite(value) ? value : min;
     const progress = ((safeValue - min) / (max - min)) * 100;
     const clampedProgress = Math.min(100, Math.max(0, progress));
@@ -13,7 +13,14 @@ function SliderRow({ label, min = 0, max = 100, step = 1, value = 0, onChange })
     return (
         <div className='space-y-1'>
             <div className='flex items-center justify-between text-xs text-[rgba(226,232,240,0.65)]'>
-                <span>{label}</span>
+                <span>
+                    {label}
+                    {mixed ? (
+                        <span className='ml-2 rounded bg-[rgba(148,163,184,0.18)] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.2em] text-[rgba(148,163,184,0.75)]'>
+                            Mixed
+                        </span>
+                    ) : null}
+                </span>
                 <input
                     type='number'
                     className='w-16 rounded-md border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.7)] px-1 py-0.5 text-right text-[rgba(236,233,254,0.9)]'
@@ -43,7 +50,17 @@ function SliderRow({ label, min = 0, max = 100, step = 1, value = 0, onChange })
     );
 }
 
-function NumberInputRow({ label, value = 0, min, max, step = 1, suffix, onChange, disabled = false }) {
+function NumberInputRow({
+    label,
+    value = 0,
+    min,
+    max,
+    step = 1,
+    suffix,
+    onChange,
+    disabled = false,
+    mixed = false,
+}) {
     const handleChange = (event) => {
         if (disabled) return;
         const next = Number(event.target.value);
@@ -66,11 +83,18 @@ function NumberInputRow({ label, value = 0, min, max, step = 1, suffix, onChange
                 disabled && 'opacity-60',
             )}
         >
-            <span className='uppercase tracking-[0.2em]'>{label}</span>
+            <span className='uppercase tracking-[0.2em]'>
+                {label}
+                {mixed ? (
+                    <span className='ml-2 rounded bg-[rgba(148,163,184,0.18)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>
+                        Mixed
+                    </span>
+                ) : null}
+            </span>
             <div className='flex items-center gap-2'>
                 <input
                     type='number'
-                    value={Number.isFinite(value) ? value : ''}
+                    value={mixed ? '' : Number.isFinite(value) ? value : ''}
                     min={min}
                     max={max}
                     step={step}
@@ -80,6 +104,7 @@ function NumberInputRow({ label, value = 0, min, max, step = 1, suffix, onChange
                         'w-20 rounded-md border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.65)] px-2 py-1 text-right text-[rgba(236,233,254,0.9)]',
                         disabled && 'cursor-not-allowed',
                     )}
+                    placeholder={mixed ? '—' : undefined}
                 />
                 {suffix ? <span className='text-[rgba(148,163,184,0.8)]'>{suffix}</span> : null}
             </div>
@@ -87,13 +112,20 @@ function NumberInputRow({ label, value = 0, min, max, step = 1, suffix, onChange
     );
 }
 
-function ColorRow({ label, value = '#ffffff', onChange }) {
+function ColorRow({ label, value = '#ffffff', onChange, mixed = false }) {
     const safeValue = typeof value === 'string' && value.startsWith('#') ? value : '#ffffff';
 
     return (
         <div className='space-y-2'>
             <div className='flex items-center justify-between text-xs text-[rgba(226,232,240,0.65)]'>
-                <span>{label}</span>
+                <span>
+                    {label}
+                    {mixed ? (
+                        <span className='ml-2 rounded bg-[rgba(148,163,184,0.18)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>
+                            Mixed
+                        </span>
+                    ) : null}
+                </span>
                 <span className='rounded-md border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.65)] px-2 py-0.5 text-[rgba(236,233,254,0.9)]'>
                     {safeValue.toUpperCase()}
                 </span>
@@ -108,7 +140,7 @@ function ColorRow({ label, value = '#ffffff', onChange }) {
     );
 }
 
-function ImageInputRow({ label, value, onChange }) {
+function ImageInputRow({ label, value, onChange, mixed = false }) {
     const handleFile = (event) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -125,7 +157,14 @@ function ImageInputRow({ label, value, onChange }) {
     return (
         <div className='space-y-2'>
             <div className='flex items-center justify-between text-xs text-[rgba(226,232,240,0.65)]'>
-                <span>{label}</span>
+                <span>
+                    {label}
+                    {mixed ? (
+                        <span className='ml-2 rounded bg-[rgba(148,163,184,0.18)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>
+                            Mixed
+                        </span>
+                    ) : null}
+                </span>
                 {value ? (
                     <button
                         type='button'
@@ -138,9 +177,9 @@ function ImageInputRow({ label, value, onChange }) {
             </div>
             <input
                 type='text'
-                value={value ?? ''}
+                value={mixed ? '' : value ?? ''}
                 onChange={(event) => onChange?.(event.target.value || null)}
-                placeholder='https://... or drop a file'
+                placeholder={mixed ? 'Mixed value' : 'https://... or drop a file'}
                 className='w-full rounded-md border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.65)] px-3 py-2 text-sm text-[rgba(236,233,254,0.9)] placeholder:text-[rgba(148,163,184,0.6)]'
             />
             <label className='flex cursor-pointer items-center justify-center rounded-md border border-dashed border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.35)] px-3 py-2 text-xs font-medium text-[rgba(148,163,184,0.8)] hover:border-[rgba(139,92,246,0.45)] hover:text-[rgba(236,233,254,0.85)]'>
@@ -151,15 +190,27 @@ function ImageInputRow({ label, value, onChange }) {
     );
 }
 
-function SelectRow({ label, value = '', options = [], onChange }) {
+function SelectRow({ label, value = '', options = [], onChange, mixed = false }) {
     return (
         <label className='flex flex-col gap-1 text-xs text-[rgba(226,232,240,0.7)]'>
-            <span>{label}</span>
+            <span>
+                {label}
+                {mixed ? (
+                    <span className='ml-2 rounded bg-[rgba(148,163,184,0.18)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>
+                        Mixed
+                    </span>
+                ) : null}
+            </span>
             <select
-                value={value ?? ''}
+                value={mixed ? '' : value ?? ''}
                 onChange={(event) => onChange?.(event.target.value)}
                 className='rounded-lg border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.7)] px-3 py-2 text-sm text-[rgba(236,233,254,0.9)]'
             >
+                {mixed ? (
+                    <option value='' disabled>
+                        Mixed value
+                    </option>
+                ) : null}
                 {options.map((option) => (
                     <option key={option.value} value={option.value}>
                         {option.label}
@@ -170,17 +221,22 @@ function SelectRow({ label, value = '', options = [], onChange }) {
     );
 }
 
-function SegmentedControl({ label, value, options = [], onChange }) {
+function SegmentedControl({ label, value, options = [], onChange, mixed = false }) {
     return (
         <div className='space-y-2'>
             {label ? (
                 <div className='text-xs font-medium uppercase tracking-[0.15em] text-[rgba(148,163,184,0.7)]'>
                     {label}
+                    {mixed ? (
+                        <span className='ml-2 rounded bg-[rgba(148,163,184,0.18)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>
+                            Mixed
+                        </span>
+                    ) : null}
                 </div>
             ) : null}
             <div className='flex flex-wrap gap-1'>
                 {options.map((option) => {
-                    const isActive = option.value === value;
+                    const isActive = value !== null && value !== undefined && option.value === value;
                     return (
                         <button
                             key={option.value}
@@ -297,6 +353,7 @@ export default function InspectorPanel() {
     const selectedElementIds = useCanvasStore((state) => state.selectedElementIds);
     const updateFrame = useCanvasStore((state) => state.updateFrame);
     const updateElementProps = useCanvasStore((state) => state.updateElementProps);
+    const updateElementsPropsBatch = useCanvasStore((state) => state.updateElementsPropsBatch);
     const groupSelectedElements = useCanvasStore((state) => state.groupSelectedElements);
     const ungroupElement = useCanvasStore((state) => state.ungroupElement);
     const liftElementOutOfGroup = useCanvasStore((state) => state.liftElementOutOfGroup);
@@ -338,6 +395,53 @@ export default function InspectorPanel() {
             .trim()
             .replace(/^./, (char) => char.toUpperCase());
 
+    const isEqualValue = (a, b) => {
+        if (Object.is(a, b)) return true;
+        if (Number.isNaN(a) && Number.isNaN(b)) return true;
+        if (typeof a === 'object' || typeof b === 'object') {
+            try {
+                return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+            } catch (error) {
+                return false;
+            }
+        }
+        return a === b;
+    };
+
+    const getSelectionPropState = useCallback(
+        (prop, defaultValue = undefined) => {
+            if (!activeFrame || selectionCount === 0) {
+                return { value: defaultValue, mixed: false };
+            }
+            if (selectionCount <= 1 || selectedElements.length <= 1) {
+                const value = activeElementProps?.[prop];
+                return { value: value ?? defaultValue, mixed: false };
+            }
+            const baseElements = selectedElements;
+            const firstRaw = (baseElements[0]?.props ?? {})[prop];
+            const firstValue = firstRaw ?? defaultValue;
+            const mixed = baseElements.some((element, index) => {
+                if (index === 0) return false;
+                const nextRaw = (element.props ?? {})[prop];
+                const nextValue = nextRaw ?? defaultValue;
+                return !isEqualValue(nextValue, firstValue);
+            });
+            return { value: firstValue, mixed };
+        },
+        [activeFrame, selectionCount, selectedElements, activeElementProps],
+    );
+
+    const getControlState = useCallback(
+        (prop, defaultValue) => {
+            const state = getSelectionPropState(prop, defaultValue);
+            return {
+                value: state.value ?? defaultValue,
+                mixed: selectionCount > 1 && state.mixed,
+            };
+        },
+        [getSelectionPropState, selectionCount],
+    );
+
     const handleFramePropChange = (prop, next) => {
         if (!activeFrame) return;
         const label = `Inspector: Set Frame ${humanizeProp(prop)}`;
@@ -349,14 +453,35 @@ export default function InspectorPanel() {
     };
 
     const handleElementPropChange = (prop, next) => {
-        if (!activeFrame || !activeElement) return;
+        if (!activeFrame || selectionCount === 0) return;
         const label = `Inspector: Set Element ${humanizeProp(prop)}`;
-        updateElementProps(
-            activeFrame.id,
-            activeElement.id,
-            { [prop]: next },
-            { historyLabel: label, source: 'inspector' },
-        );
+        const buildValue = () => {
+            if (Array.isArray(next)) {
+                return next.map((item) => (item && typeof item === 'object' ? { ...item } : item));
+            }
+            if (next && typeof next === 'object') {
+                return { ...next };
+            }
+            return next;
+        };
+
+        if (selectionCount > 1) {
+            const entries = selectedElementIds.map((elementId) => ({
+                elementId,
+                props: { [prop]: buildValue() },
+            }));
+            updateElementsPropsBatch(activeFrame.id, entries, {
+                historyLabel: label,
+                source: 'inspector',
+            });
+        } else if (activeElement) {
+            updateElementProps(
+                activeFrame.id,
+                activeElement.id,
+                { [prop]: next },
+                { historyLabel: label, source: 'inspector' },
+            );
+        }
     };
 
     const applyFrameBackground = (updates, historyLabel) => {
@@ -453,14 +578,40 @@ export default function InspectorPanel() {
         });
     };
 
+    const CORNER_KEYS = ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'];
+
     const getCornerValue = (cornerKey) => {
+        if (!activeElement) {
+            return { value: 0, mixed: false };
+        }
+        if (selectionCount > 1) {
+            const baseElements = selectedElements;
+            const firstCorner = (() => {
+                const first = baseElements[0]?.props?.cornerRadius;
+                if (typeof first === 'object' && first !== null) {
+                    return first[cornerKey];
+                }
+                return first;
+            })();
+            const mixed = baseElements.some((element, index) => {
+                if (index === 0) return false;
+                const next = element.props?.cornerRadius;
+                const nextCorner =
+                    typeof next === 'object' && next !== null ? next[cornerKey] : next;
+                return !isEqualValue(nextCorner ?? 0, firstCorner ?? 0);
+            });
+            return {
+                value: Number.isFinite(firstCorner) ? firstCorner : 0,
+                mixed,
+            };
+        }
         const value = activeElementProps.cornerRadius;
         if (typeof value === 'object' && value !== null) {
             const corner = value[cornerKey];
-            return Number.isFinite(corner) ? corner : 0;
+            return { value: Number.isFinite(corner) ? corner : 0, mixed: false };
         }
-        if (Number.isFinite(value)) return value;
-        return 0;
+        if (Number.isFinite(value)) return { value, mixed: false };
+        return { value: 0, mixed: false };
     };
 
     const renderTransformControls = () => {
@@ -469,31 +620,119 @@ export default function InspectorPanel() {
         }
 
         if (activeElement) {
+            const xControl = getControlState('x', 0);
+            const yControl = getControlState('y', 0);
+            const widthControl = getControlState('width', activeElementProps.width ?? 0);
+            const heightControl = getControlState('height', activeElementProps.height ?? 0);
+            const rotationControl = getControlState('rotation', 0);
+            const scaleXControl = getControlState('scaleX', 1);
+            const scaleYControl = getControlState('scaleY', 1);
+            const skewXControl = getControlState('skewX', 0);
+            const skewYControl = getControlState('skewY', 0);
+            const opacityControl = getControlState('opacity', 1);
+            const showWidthSlider = selectedElements.every((element) => Number.isFinite(element.props?.width));
+            const showHeightSlider = selectedElements.every((element) => Number.isFinite(element.props?.height));
+
             return (
                 <div className='space-y-4'>
                     {selectionCount > 1 ? (
                         <p className='rounded-md border border-[rgba(139,92,246,0.25)] bg-[rgba(139,92,246,0.12)] px-3 py-2 text-xs text-[rgba(236,233,254,0.75)]'>
-                            Editing applies to the first selected element. Use group mode to move items together.
+                            Editing applies to {selectionCount} elements. Values will update each selected layer together.
                         </p>
                     ) : null}
-                    <SliderRow label='X Position' min={-4000} max={4000} value={activeElementProps.x ?? 0} onChange={(next) => handleElementPropChange('x', next)} />
-                    <SliderRow label='Y Position' min={-4000} max={4000} value={activeElementProps.y ?? 0} onChange={(next) => handleElementPropChange('y', next)} />
-                    {Number.isFinite(activeElementProps.width) ? (
-                        <SliderRow label='Width' min={0} max={4000} value={activeElementProps.width ?? 0} onChange={(next) => handleElementPropChange('width', next)} />
+                    <SliderRow
+                        label='X Position'
+                        min={-4000}
+                        max={4000}
+                        value={typeof xControl.value === 'number' ? xControl.value : 0}
+                        mixed={xControl.mixed}
+                        onChange={(next) => handleElementPropChange('x', next)}
+                    />
+                    <SliderRow
+                        label='Y Position'
+                        min={-4000}
+                        max={4000}
+                        value={typeof yControl.value === 'number' ? yControl.value : 0}
+                        mixed={yControl.mixed}
+                        onChange={(next) => handleElementPropChange('y', next)}
+                    />
+                    {showWidthSlider ? (
+                        <SliderRow
+                            label='Width'
+                            min={0}
+                            max={4000}
+                            value={typeof widthControl.value === 'number' ? widthControl.value : 0}
+                            mixed={widthControl.mixed}
+                            onChange={(next) => handleElementPropChange('width', next)}
+                        />
                     ) : null}
-                    {Number.isFinite(activeElementProps.height) ? (
-                        <SliderRow label='Height' min={0} max={4000} value={activeElementProps.height ?? 0} onChange={(next) => handleElementPropChange('height', next)} />
+                    {showHeightSlider ? (
+                        <SliderRow
+                            label='Height'
+                            min={0}
+                            max={4000}
+                            value={typeof heightControl.value === 'number' ? heightControl.value : 0}
+                            mixed={heightControl.mixed}
+                            onChange={(next) => handleElementPropChange('height', next)}
+                        />
                     ) : null}
-                    <SliderRow label='Rotation' min={-180} max={180} value={activeElementProps.rotation ?? 0} onChange={(next) => handleElementPropChange('rotation', next)} />
+                    <SliderRow
+                        label='Rotation'
+                        min={-180}
+                        max={180}
+                        value={typeof rotationControl.value === 'number' ? rotationControl.value : 0}
+                        mixed={rotationControl.mixed}
+                        onChange={(next) => handleElementPropChange('rotation', next)}
+                    />
                     <div className='grid grid-cols-2 gap-3'>
-                        <SliderRow label='Scale X' min={-4} max={4} step={0.05} value={activeElementProps.scaleX ?? 1} onChange={(next) => handleElementPropChange('scaleX', next)} />
-                        <SliderRow label='Scale Y' min={-4} max={4} step={0.05} value={activeElementProps.scaleY ?? 1} onChange={(next) => handleElementPropChange('scaleY', next)} />
+                        <SliderRow
+                            label='Scale X'
+                            min={-4}
+                            max={4}
+                            step={0.05}
+                            value={typeof scaleXControl.value === 'number' ? scaleXControl.value : 1}
+                            mixed={scaleXControl.mixed}
+                            onChange={(next) => handleElementPropChange('scaleX', next)}
+                        />
+                        <SliderRow
+                            label='Scale Y'
+                            min={-4}
+                            max={4}
+                            step={0.05}
+                            value={typeof scaleYControl.value === 'number' ? scaleYControl.value : 1}
+                            mixed={scaleYControl.mixed}
+                            onChange={(next) => handleElementPropChange('scaleY', next)}
+                        />
                     </div>
                     <div className='grid grid-cols-2 gap-3'>
-                        <SliderRow label='Skew X' min={-75} max={75} step={1} value={activeElementProps.skewX ?? 0} onChange={(next) => handleElementPropChange('skewX', next)} />
-                        <SliderRow label='Skew Y' min={-75} max={75} step={1} value={activeElementProps.skewY ?? 0} onChange={(next) => handleElementPropChange('skewY', next)} />
+                        <SliderRow
+                            label='Skew X'
+                            min={-75}
+                            max={75}
+                            step={1}
+                            value={typeof skewXControl.value === 'number' ? skewXControl.value : 0}
+                            mixed={skewXControl.mixed}
+                            onChange={(next) => handleElementPropChange('skewX', next)}
+                        />
+                        <SliderRow
+                            label='Skew Y'
+                            min={-75}
+                            max={75}
+                            step={1}
+                            value={typeof skewYControl.value === 'number' ? skewYControl.value : 0}
+                            mixed={skewYControl.mixed}
+                            onChange={(next) => handleElementPropChange('skewY', next)}
+                        />
                     </div>
-                    <SliderRow label='Opacity' min={0} max={1} step={0.01} value={activeElementProps.opacity ?? 1} onChange={(next) => handleElementPropChange('opacity', next)} />
+                    <SliderRow
+                        label='Opacity'
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={typeof opacityControl.value === 'number' ? opacityControl.value : 1}
+                        mixed={opacityControl.mixed}
+                        onChange={(next) => handleElementPropChange('opacity', next)}
+                    />
                     <div className='flex flex-wrap gap-2'>
                         <button
                             type='button'
@@ -571,35 +810,222 @@ export default function InspectorPanel() {
                 );
             }
 
-            const fillType = activeElementProps.fillType ?? (activeElementProps.imageUrl ? 'image' : 'solid');
-            const gradientType = activeElementProps.gradientType ?? 'linear';
+            const fallbackFillType =
+                activeElementProps.fillType ?? (activeElementProps.imageUrl ? 'image' : 'solid');
+            const fillTypeState = getSelectionPropState('fillType', fallbackFillType);
+            const fillType = fillTypeState.value ?? fallbackFillType;
+            const fillTypeMixed = selectionCount > 1 && fillTypeState.mixed;
+            const baseColorState = getSelectionPropState('fill', activeElementProps.fill ?? '#8B5CF6');
+            const gradientTypeState = getSelectionPropState('gradientType', activeElementProps.gradientType ?? 'linear');
+            const gradientStartState = getSelectionPropState(
+                'gradientStart',
+                activeElementProps.gradientStart ?? '#8B5CF6',
+            );
+            const gradientEndState = getSelectionPropState(
+                'gradientEnd',
+                activeElementProps.gradientEnd ?? '#3B82F6',
+            );
+            const gradientAngleControl = getControlState('gradientAngle', activeElementProps.gradientAngle ?? 45);
+            const imageUrlState = getSelectionPropState('imageUrl', activeElementProps.imageUrl ?? null);
+            const patternScaleControl = getControlState('patternScale', activeElementProps.patternScale ?? 1);
+            const patternOffsetXControl = getControlState(
+                'patternOffsetX',
+                activeElementProps.patternOffsetX ?? 0,
+            );
+            const patternOffsetYControl = getControlState(
+                'patternOffsetY',
+                activeElementProps.patternOffsetY ?? 0,
+            );
+            const patternRepeatState = getSelectionPropState(
+                'patternRepeat',
+                activeElementProps.patternRepeat ?? 'repeat',
+            );
+            const backgroundFitState = getSelectionPropState(
+                'backgroundFit',
+                activeElementProps.backgroundFit ?? 'cover',
+            );
+            const strokeColorState = getSelectionPropState('stroke', activeElementProps.stroke ?? '#FFFFFF');
+            const strokeWidthControl = getControlState('strokeWidth', activeElementProps.strokeWidth ?? 0);
+            const blendModeState = getSelectionPropState('blendMode', activeElementProps.blendMode ?? 'normal');
+            const backgroundBlendState = getSelectionPropState(
+                'backgroundBlendMode',
+                activeElementProps.backgroundBlendMode ?? 'normal',
+            );
+            const uniformCornerState = (() => {
+                if (selectionCount > 1) {
+                    const baseElements = selectedElements;
+                    const first = baseElements[0]?.props?.cornerRadius;
+                    const normalized =
+                        typeof first === 'object' && first !== null ? first.topLeft ?? 0 : first ?? 0;
+                    const mixed = baseElements.some((element, index) => {
+                        if (index === 0) return false;
+                        const current = element.props?.cornerRadius;
+                        if (typeof current === 'object' && current !== null) {
+                            return CORNER_KEYS.some((key) => {
+                                const firstCorner =
+                                    typeof first === 'object' && first !== null ? first[key] : first;
+                                const nextCorner = current[key];
+                                return !isEqualValue(nextCorner ?? 0, firstCorner ?? 0);
+                            });
+                        }
+                        return !isEqualValue(current ?? 0, normalized ?? 0);
+                    });
+                    return {
+                        value: Number.isFinite(normalized) ? normalized : 0,
+                        mixed,
+                    };
+                }
+                const value = activeElementProps.cornerRadius;
+                if (Number.isFinite(value)) {
+                    return { value, mixed: false };
+                }
+                if (typeof value === 'object' && value !== null) {
+                    const normalized = value.topLeft ?? 0;
+                    const mixed =
+                        !isEqualValue(value.topLeft ?? 0, value.topRight ?? 0) ||
+                        !isEqualValue(value.topLeft ?? 0, value.bottomLeft ?? 0) ||
+                        !isEqualValue(value.topLeft ?? 0, value.bottomRight ?? 0);
+                    return { value: Number.isFinite(normalized) ? normalized : 0, mixed };
+                }
+                return { value: 0, mixed: false };
+            })();
 
             return (
                 <div className='space-y-4'>
-                    <SegmentedControl label='Fill Type' value={fillType} options={FILL_TYPE_OPTIONS} onChange={(next) => handleElementPropChange('fillType', next)} />
-                    <ColorRow label='Base Color' value={activeElementProps.fill ?? '#8B5CF6'} onChange={(next) => handleElementPropChange('fill', next)} />
-                    {fillType === 'gradient' ? (
+                    <SegmentedControl
+                        label='Fill Type'
+                        value={fillTypeMixed ? null : fillType}
+                        mixed={fillTypeMixed}
+                        options={FILL_TYPE_OPTIONS}
+                        onChange={(next) => handleElementPropChange('fillType', next)}
+                    />
+                    {fillTypeMixed ? (
+                        <p className='rounded-md border border-[rgba(139,92,246,0.25)] bg-[rgba(139,92,246,0.15)] px-3 py-2 text-[11px] uppercase tracking-[0.25em] text-[rgba(236,233,254,0.75)]'>
+                            Mixed fill types — choose a fill type to unify selection.
+                        </p>
+                    ) : (
+                        <ColorRow
+                            label='Base Color'
+                            value={baseColorState.value ?? '#8B5CF6'}
+                            mixed={selectionCount > 1 && baseColorState.mixed}
+                            onChange={(next) => handleElementPropChange('fill', next)}
+                        />
+                    )}
+                    {!fillTypeMixed && fillType === 'gradient' ? (
                         <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
-                            <SelectRow label='Gradient Type' value={gradientType} options={GRADIENT_TYPE_OPTIONS} onChange={(next) => handleElementPropChange('gradientType', next)} />
-                            <ColorRow label='Start Color' value={activeElementProps.gradientStart ?? '#8B5CF6'} onChange={(next) => handleElementPropChange('gradientStart', next)} />
-                            <ColorRow label='End Color' value={activeElementProps.gradientEnd ?? '#3B82F6'} onChange={(next) => handleElementPropChange('gradientEnd', next)} />
-                            <SliderRow label='Angle' min={0} max={360} step={1} value={activeElementProps.gradientAngle ?? 45} onChange={(next) => handleElementPropChange('gradientAngle', next)} />
+                            <SelectRow
+                                label='Gradient Type'
+                                value={
+                                    selectionCount > 1 && gradientTypeState.mixed
+                                        ? ''
+                                        : gradientTypeState.value ?? 'linear'
+                                }
+                                mixed={selectionCount > 1 && gradientTypeState.mixed}
+                                options={GRADIENT_TYPE_OPTIONS}
+                                onChange={(next) => handleElementPropChange('gradientType', next)}
+                            />
+                            <ColorRow
+                                label='Start Color'
+                                value={gradientStartState.value ?? '#8B5CF6'}
+                                mixed={selectionCount > 1 && gradientStartState.mixed}
+                                onChange={(next) => handleElementPropChange('gradientStart', next)}
+                            />
+                            <ColorRow
+                                label='End Color'
+                                value={gradientEndState.value ?? '#3B82F6'}
+                                mixed={selectionCount > 1 && gradientEndState.mixed}
+                                onChange={(next) => handleElementPropChange('gradientEnd', next)}
+                            />
+                            <SliderRow
+                                label='Angle'
+                                min={0}
+                                max={360}
+                                step={1}
+                                value={
+                                    typeof gradientAngleControl.value === 'number'
+                                        ? gradientAngleControl.value
+                                        : 45
+                                }
+                                mixed={gradientAngleControl.mixed}
+                                onChange={(next) => handleElementPropChange('gradientAngle', next)}
+                            />
                         </div>
                     ) : null}
-                    {['image', 'pattern'].includes(fillType) ? (
+                    {!fillTypeMixed && ['image', 'pattern'].includes(fillType) ? (
                         <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
-                            <ImageInputRow label='Image Source' value={activeElementProps.imageUrl ?? null} onChange={handleElementImage} />
+                            <ImageInputRow
+                                label='Image Source'
+                                value={imageUrlState.value ?? null}
+                                mixed={selectionCount > 1 && imageUrlState.mixed}
+                                onChange={handleElementImage}
+                            />
                             {fillType === 'pattern' ? (
                                 <>
-                                    <SliderRow label='Pattern Scale' min={0.1} max={4} step={0.05} value={activeElementProps.patternScale ?? 1} onChange={(next) => handleElementPropChange('patternScale', next)} />
+                                    <SliderRow
+                                        label='Pattern Scale'
+                                        min={0.1}
+                                        max={4}
+                                        step={0.05}
+                                        value={
+                                            typeof patternScaleControl.value === 'number'
+                                                ? patternScaleControl.value
+                                                : 1
+                                        }
+                                        mixed={patternScaleControl.mixed}
+                                        onChange={(next) => handleElementPropChange('patternScale', next)}
+                                    />
                                     <div className='grid grid-cols-2 gap-3'>
-                                        <SliderRow label='Offset X' min={-500} max={500} step={1} value={activeElementProps.patternOffsetX ?? 0} onChange={(next) => handleElementPropChange('patternOffsetX', next)} />
-                                        <SliderRow label='Offset Y' min={-500} max={500} step={1} value={activeElementProps.patternOffsetY ?? 0} onChange={(next) => handleElementPropChange('patternOffsetY', next)} />
+                                        <SliderRow
+                                            label='Offset X'
+                                            min={-500}
+                                            max={500}
+                                            step={1}
+                                            value={
+                                                typeof patternOffsetXControl.value === 'number'
+                                                    ? patternOffsetXControl.value
+                                                    : 0
+                                            }
+                                            mixed={patternOffsetXControl.mixed}
+                                            onChange={(next) => handleElementPropChange('patternOffsetX', next)}
+                                        />
+                                        <SliderRow
+                                            label='Offset Y'
+                                            min={-500}
+                                            max={500}
+                                            step={1}
+                                            value={
+                                                typeof patternOffsetYControl.value === 'number'
+                                                    ? patternOffsetYControl.value
+                                                    : 0
+                                            }
+                                            mixed={patternOffsetYControl.mixed}
+                                            onChange={(next) => handleElementPropChange('patternOffsetY', next)}
+                                        />
                                     </div>
-                                    <SelectRow label='Repeat' value={activeElementProps.patternRepeat ?? 'repeat'} options={PATTERN_REPEAT_OPTIONS} onChange={(next) => handleElementPropChange('patternRepeat', next)} />
+                                    <SelectRow
+                                        label='Repeat'
+                                        value={
+                                            selectionCount > 1 && patternRepeatState.mixed
+                                                ? ''
+                                                : patternRepeatState.value ?? 'repeat'
+                                        }
+                                        mixed={selectionCount > 1 && patternRepeatState.mixed}
+                                        options={PATTERN_REPEAT_OPTIONS}
+                                        onChange={(next) => handleElementPropChange('patternRepeat', next)}
+                                    />
                                 </>
                             ) : (
-                                <SelectRow label='Object Fit' value={activeElementProps.backgroundFit ?? 'cover'} options={IMAGE_FIT_OPTIONS} onChange={(next) => handleElementPropChange('backgroundFit', next)} />
+                                <SelectRow
+                                    label='Object Fit'
+                                    value={
+                                        selectionCount > 1 && backgroundFitState.mixed
+                                            ? ''
+                                            : backgroundFitState.value ?? 'cover'
+                                    }
+                                    mixed={selectionCount > 1 && backgroundFitState.mixed}
+                                    options={IMAGE_FIT_OPTIONS}
+                                    onChange={(next) => handleElementPropChange('backgroundFit', next)}
+                                />
                             )}
                         </div>
                     ) : null}
@@ -617,10 +1043,27 @@ export default function InspectorPanel() {
                             </div>
                             {showCornerDetails ? (
                                 <div className='grid grid-cols-2 gap-3'>
-                                    <SliderRow label='Top Left' min={0} max={320} step={1} value={getCornerValue('topLeft')} onChange={(next) => handleCornerRadiusChange('topLeft', next)} />
-                                    <SliderRow label='Top Right' min={0} max={320} step={1} value={getCornerValue('topRight')} onChange={(next) => handleCornerRadiusChange('topRight', next)} />
-                                    <SliderRow label='Bottom Left' min={0} max={320} step={1} value={getCornerValue('bottomLeft')} onChange={(next) => handleCornerRadiusChange('bottomLeft', next)} />
-                                    <SliderRow label='Bottom Right' min={0} max={320} step={1} value={getCornerValue('bottomRight')} onChange={(next) => handleCornerRadiusChange('bottomRight', next)} />
+                                    {CORNER_KEYS.map((cornerKey) => {
+                                        const cornerState = getCornerValue(cornerKey);
+                                        const labelMap = {
+                                            topLeft: 'Top Left',
+                                            topRight: 'Top Right',
+                                            bottomLeft: 'Bottom Left',
+                                            bottomRight: 'Bottom Right',
+                                        };
+                                        return (
+                                            <SliderRow
+                                                key={cornerKey}
+                                                label={labelMap[cornerKey]}
+                                                min={0}
+                                                max={320}
+                                                step={1}
+                                                value={cornerState.value}
+                                                mixed={cornerState.mixed}
+                                                onChange={(next) => handleCornerRadiusChange(cornerKey, next)}
+                                            />
+                                        );
+                                    })}
                                 </div>
                             ) : (
                                 <SliderRow
@@ -628,22 +1071,48 @@ export default function InspectorPanel() {
                                     min={0}
                                     max={320}
                                     step={1}
-                                    value={
-                                        Number.isFinite(activeElementProps.cornerRadius)
-                                            ? activeElementProps.cornerRadius
-                                            : getCornerValue('topLeft')
-                                    }
+                                    value={uniformCornerState.value}
+                                    mixed={uniformCornerState.mixed}
                                     onChange={(next) => handleElementPropChange('cornerRadius', Math.max(0, next))}
                                 />
                             )}
                         </div>
                     ) : null}
                     <div className='grid grid-cols-2 gap-3'>
-                        <ColorRow label='Stroke Color' value={activeElementProps.stroke ?? '#FFFFFF'} onChange={(next) => handleElementPropChange('stroke', next)} />
-                        <SliderRow label='Stroke Width' min={0} max={24} step={0.5} value={activeElementProps.strokeWidth ?? 0} onChange={(next) => handleElementPropChange('strokeWidth', next)} />
+                        <ColorRow
+                            label='Stroke Color'
+                            value={strokeColorState.value ?? '#FFFFFF'}
+                            mixed={selectionCount > 1 && strokeColorState.mixed}
+                            onChange={(next) => handleElementPropChange('stroke', next)}
+                        />
+                        <SliderRow
+                            label='Stroke Width'
+                            min={0}
+                            max={24}
+                            step={0.5}
+                            value={typeof strokeWidthControl.value === 'number' ? strokeWidthControl.value : 0}
+                            mixed={strokeWidthControl.mixed}
+                            onChange={(next) => handleElementPropChange('strokeWidth', next)}
+                        />
                     </div>
-                    <SelectRow label='Blend Mode' value={activeElementProps.blendMode ?? 'normal'} options={BLEND_MODE_OPTIONS} onChange={(next) => handleElementPropChange('blendMode', next)} />
-                    <SelectRow label='Background Blend' value={activeElementProps.backgroundBlendMode ?? 'normal'} options={BACKGROUND_BLEND_OPTIONS} onChange={(next) => handleElementPropChange('backgroundBlendMode', next)} />
+                    <SelectRow
+                        label='Blend Mode'
+                        value={selectionCount > 1 && blendModeState.mixed ? '' : blendModeState.value ?? 'normal'}
+                        mixed={selectionCount > 1 && blendModeState.mixed}
+                        options={BLEND_MODE_OPTIONS}
+                        onChange={(next) => handleElementPropChange('blendMode', next)}
+                    />
+                    <SelectRow
+                        label='Background Blend'
+                        value={
+                            selectionCount > 1 && backgroundBlendState.mixed
+                                ? ''
+                                : backgroundBlendState.value ?? 'normal'
+                        }
+                        mixed={selectionCount > 1 && backgroundBlendState.mixed}
+                        options={BACKGROUND_BLEND_OPTIONS}
+                        onChange={(next) => handleElementPropChange('backgroundBlendMode', next)}
+                    />
                     <button
                         type='button'
                         onClick={() => setActiveToolOverlay('ai-style')}
@@ -833,15 +1302,73 @@ export default function InspectorPanel() {
             return <p className='text-xs text-[rgba(148,163,184,0.7)]'>Select an element to configure shadows, blur, and filters.</p>;
         }
 
+        const shadowColorState = getSelectionPropState('shadowColor', activeElementProps.shadowColor ?? '#000000');
+        const shadowOffsetXControl = getControlState('shadowOffsetX', activeElementProps.shadowOffsetX ?? 0);
+        const shadowOffsetYControl = getControlState('shadowOffsetY', activeElementProps.shadowOffsetY ?? 0);
+        const shadowBlurControl = getControlState('shadowBlur', activeElementProps.shadowBlur ?? 0);
+        const shadowSpreadControl = getControlState('shadowSpread', activeElementProps.shadowSpread ?? 0);
+        const glowColorState = getSelectionPropState('glowColor', activeElementProps.glowColor ?? '#8B5CF6');
+        const glowBlurControl = getControlState('glowBlur', activeElementProps.glowBlur ?? 24);
+        const blurControl = getControlState('blur', activeElementProps.blur ?? 0);
+        const brightnessControl = getControlState('brightness', activeElementProps.brightness ?? 100);
+        const contrastControl = getControlState('contrast', activeElementProps.contrast ?? 100);
+        const saturationControl = getControlState('saturation', activeElementProps.saturation ?? 100);
+        const hueRotateControl = getControlState('hueRotate', activeElementProps.hueRotate ?? 0);
+
         return (
             <div className='space-y-4'>
-                <ColorRow label='Shadow Color' value={activeElementProps.shadowColor ?? '#000000'} onChange={(next) => handleElementPropChange('shadowColor', next)} />
+                <ColorRow
+                    label='Shadow Color'
+                    value={shadowColorState.value ?? '#000000'}
+                    mixed={selectionCount > 1 && shadowColorState.mixed}
+                    onChange={(next) => handleElementPropChange('shadowColor', next)}
+                />
                 <div className='grid grid-cols-2 gap-3'>
-                    <SliderRow label='Offset X' min={-200} max={200} step={1} value={activeElementProps.shadowOffsetX ?? 0} onChange={(next) => handleElementPropChange('shadowOffsetX', next)} />
-                    <SliderRow label='Offset Y' min={-200} max={200} step={1} value={activeElementProps.shadowOffsetY ?? 0} onChange={(next) => handleElementPropChange('shadowOffsetY', next)} />
+                    <SliderRow
+                        label='Offset X'
+                        min={-200}
+                        max={200}
+                        step={1}
+                        value={
+                            typeof shadowOffsetXControl.value === 'number' ? shadowOffsetXControl.value : 0
+                        }
+                        mixed={shadowOffsetXControl.mixed}
+                        onChange={(next) => handleElementPropChange('shadowOffsetX', next)}
+                    />
+                    <SliderRow
+                        label='Offset Y'
+                        min={-200}
+                        max={200}
+                        step={1}
+                        value={
+                            typeof shadowOffsetYControl.value === 'number' ? shadowOffsetYControl.value : 0
+                        }
+                        mixed={shadowOffsetYControl.mixed}
+                        onChange={(next) => handleElementPropChange('shadowOffsetY', next)}
+                    />
                 </div>
-                <SliderRow label='Shadow Blur' min={0} max={200} step={1} value={activeElementProps.shadowBlur ?? 0} onChange={(next) => handleElementPropChange('shadowBlur', next)} />
-                <SliderRow label='Shadow Spread' min={-50} max={50} step={1} value={activeElementProps.shadowSpread ?? 0} onChange={(next) => handleElementPropChange('shadowSpread', next)} />
+                <SliderRow
+                    label='Shadow Blur'
+                    min={0}
+                    max={200}
+                    step={1}
+                    value={
+                        typeof shadowBlurControl.value === 'number' ? shadowBlurControl.value : 0
+                    }
+                    mixed={shadowBlurControl.mixed}
+                    onChange={(next) => handleElementPropChange('shadowBlur', next)}
+                />
+                <SliderRow
+                    label='Shadow Spread'
+                    min={-50}
+                    max={50}
+                    step={1}
+                    value={
+                        typeof shadowSpreadControl.value === 'number' ? shadowSpreadControl.value : 0
+                    }
+                    mixed={shadowSpreadControl.mixed}
+                    onChange={(next) => handleElementPropChange('shadowSpread', next)}
+                />
                 <button
                     type='button'
                     onClick={() => setShowShadowDetails((value) => !value)}
@@ -851,11 +1378,32 @@ export default function InspectorPanel() {
                 </button>
                 {showShadowDetails ? (
                     <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
-                        <ColorRow label='Glow Color' value={activeElementProps.glowColor ?? '#8B5CF6'} onChange={(next) => handleElementPropChange('glowColor', next)} />
-                        <SliderRow label='Glow Blur' min={0} max={200} step={1} value={activeElementProps.glowBlur ?? 24} onChange={(next) => handleElementPropChange('glowBlur', next)} />
+                        <ColorRow
+                            label='Glow Color'
+                            value={glowColorState.value ?? '#8B5CF6'}
+                            mixed={selectionCount > 1 && glowColorState.mixed}
+                            onChange={(next) => handleElementPropChange('glowColor', next)}
+                        />
+                        <SliderRow
+                            label='Glow Blur'
+                            min={0}
+                            max={200}
+                            step={1}
+                            value={typeof glowBlurControl.value === 'number' ? glowBlurControl.value : 24}
+                            mixed={glowBlurControl.mixed}
+                            onChange={(next) => handleElementPropChange('glowBlur', next)}
+                        />
                     </div>
                 ) : null}
-                <SliderRow label='Gaussian Blur' min={0} max={100} step={1} value={activeElementProps.blur ?? 0} onChange={(next) => handleElementPropChange('blur', next)} />
+                <SliderRow
+                    label='Gaussian Blur'
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={typeof blurControl.value === 'number' ? blurControl.value : 0}
+                    mixed={blurControl.mixed}
+                    onChange={(next) => handleElementPropChange('blur', next)}
+                />
                 <button
                     type='button'
                     onClick={() => setShowFilterDetails((value) => !value)}
@@ -865,10 +1413,50 @@ export default function InspectorPanel() {
                 </button>
                 {showFilterDetails ? (
                     <div className='grid grid-cols-2 gap-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
-                        <SliderRow label='Brightness' min={0} max={200} step={1} value={activeElementProps.brightness ?? 100} onChange={(next) => handleElementPropChange('brightness', next)} />
-                        <SliderRow label='Contrast' min={0} max={200} step={1} value={activeElementProps.contrast ?? 100} onChange={(next) => handleElementPropChange('contrast', next)} />
-                        <SliderRow label='Saturation' min={0} max={200} step={1} value={activeElementProps.saturation ?? 100} onChange={(next) => handleElementPropChange('saturation', next)} />
-                        <SliderRow label='Hue Rotate' min={-180} max={180} step={1} value={activeElementProps.hueRotate ?? 0} onChange={(next) => handleElementPropChange('hueRotate', next)} />
+                        <SliderRow
+                            label='Brightness'
+                            min={0}
+                            max={200}
+                            step={1}
+                            value={
+                                typeof brightnessControl.value === 'number' ? brightnessControl.value : 100
+                            }
+                            mixed={brightnessControl.mixed}
+                            onChange={(next) => handleElementPropChange('brightness', next)}
+                        />
+                        <SliderRow
+                            label='Contrast'
+                            min={0}
+                            max={200}
+                            step={1}
+                            value={
+                                typeof contrastControl.value === 'number' ? contrastControl.value : 100
+                            }
+                            mixed={contrastControl.mixed}
+                            onChange={(next) => handleElementPropChange('contrast', next)}
+                        />
+                        <SliderRow
+                            label='Saturation'
+                            min={0}
+                            max={200}
+                            step={1}
+                            value={
+                                typeof saturationControl.value === 'number' ? saturationControl.value : 100
+                            }
+                            mixed={saturationControl.mixed}
+                            onChange={(next) => handleElementPropChange('saturation', next)}
+                        />
+                        <SliderRow
+                            label='Hue Rotate'
+                            min={-180}
+                            max={180}
+                            step={1}
+                            value={
+                                typeof hueRotateControl.value === 'number' ? hueRotateControl.value : 0
+                            }
+                            mixed={hueRotateControl.mixed}
+                            onChange={(next) => handleElementPropChange('hueRotate', next)}
+                        />
                     </div>
                 ) : null}
                 <button
@@ -891,8 +1479,23 @@ export default function InspectorPanel() {
             );
         }
 
-        const textFillType = activeElementProps.textFillType ?? 'solid';
-        const alignValue = activeElementProps.align ?? 'left';
+        const fontFamilyState = getSelectionPropState('fontFamily', '');
+        const textFillTypeState = getSelectionPropState('textFillType', 'solid');
+        const alignState = getSelectionPropState('align', 'left');
+        const textTransformState = getSelectionPropState('textTransform', 'none');
+        const fontSizeControl = getControlState('fontSize', 16);
+        const fontWeightControl = getControlState('fontWeight', activeElementProps.fontWeight ?? 400);
+        const lineHeightControl = getControlState('lineHeight', 1.2);
+        const letterSpacingControl = getControlState('letterSpacing', 0);
+        const textColorState = getSelectionPropState('fill', '#ECE9FE');
+        const gradientStartState = getSelectionPropState('textGradientStart', '#8B5CF6');
+        const gradientEndState = getSelectionPropState('textGradientEnd', '#3B82F6');
+        const gradientAngleControl = getControlState('textGradientAngle', 45);
+        const textShadowColorState = getSelectionPropState('textShadowColor', '#000000');
+        const textShadowBlurControl = getControlState('textShadowBlur', 0);
+        const textShadowXControl = getControlState('textShadowX', 0);
+        const textShadowYControl = getControlState('textShadowY', 0);
+        const textFillType = textFillTypeState.value ?? 'solid';
 
         return (
             <div className='space-y-4'>
@@ -900,19 +1503,41 @@ export default function InspectorPanel() {
                     <span>Font Family</span>
                     <input
                         type='text'
-                        value={activeElementProps.fontFamily ?? ''}
+                        value={
+                            selectionCount > 1 && fontFamilyState.mixed
+                                ? ''
+                                : (fontFamilyState.value ?? '')
+                        }
                         onChange={(event) => handleElementPropChange('fontFamily', event.target.value)}
-                        placeholder='Inter, Satoshi, etc.'
+                        placeholder={
+                            selectionCount > 1 && fontFamilyState.mixed
+                                ? 'Mixed value'
+                                : 'Inter, Satoshi, etc.'
+                        }
                         className='rounded-lg border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.7)] px-3 py-2 text-sm text-[rgba(236,233,254,0.9)] placeholder:text-[rgba(148,163,184,0.6)]'
                     />
                 </label>
-                <SliderRow label='Font Size' min={8} max={180} value={activeElementProps.fontSize ?? 16} onChange={(next) => handleElementPropChange('fontSize', next)} />
+                <SliderRow
+                    label='Font Size'
+                    min={8}
+                    max={180}
+                    value={typeof fontSizeControl.value === 'number' ? fontSizeControl.value : 16}
+                    mixed={fontSizeControl.mixed}
+                    onChange={(next) => handleElementPropChange('fontSize', next)}
+                />
                 <SliderRow
                     label='Font Weight'
                     min={100}
                     max={900}
                     step={100}
-                    value={activeElementProps.fontWeight ?? (activeElementProps.fontStyle?.includes('bold') ? 600 : 400)}
+                    value={
+                        typeof fontWeightControl.value === 'number'
+                            ? fontWeightControl.value
+                            : activeElementProps.fontStyle?.includes('bold')
+                                ? 600
+                                : 400
+                    }
+                    mixed={fontWeightControl.mixed}
                     onChange={(next) => handleElementPropChange('fontWeight', next)}
                 />
                 <div className='grid grid-cols-2 gap-3'>
@@ -921,7 +1546,8 @@ export default function InspectorPanel() {
                         min={0.5}
                         max={3}
                         step={0.05}
-                        value={activeElementProps.lineHeight ?? 1.2}
+                        value={typeof lineHeightControl.value === 'number' ? lineHeightControl.value : 1.2}
+                        mixed={lineHeightControl.mixed}
                         onChange={(next) => handleElementPropChange('lineHeight', next)}
                     />
                     <SliderRow
@@ -929,35 +1555,76 @@ export default function InspectorPanel() {
                         min={-10}
                         max={20}
                         step={0.25}
-                        value={activeElementProps.letterSpacing ?? 0}
+                        value={
+                            typeof letterSpacingControl.value === 'number' ? letterSpacingControl.value : 0
+                        }
+                        mixed={letterSpacingControl.mixed}
                         onChange={(next) => handleElementPropChange('letterSpacing', next)}
                     />
                 </div>
                 <SegmentedControl
                     label='Text Fill'
-                    value={textFillType}
+                    value={selectionCount > 1 && textFillTypeState.mixed ? null : textFillType}
                     options={TEXT_FILL_TYPE_OPTIONS}
+                    mixed={selectionCount > 1 && textFillTypeState.mixed}
                     onChange={(next) => handleElementPropChange('textFillType', next)}
                 />
                 {textFillType === 'solid' ? (
-                    <ColorRow label='Text Color' value={activeElementProps.fill ?? '#ECE9FE'} onChange={(next) => handleElementPropChange('fill', next)} />
+                    <ColorRow
+                        label='Text Color'
+                        value={textColorState.value ?? '#ECE9FE'}
+                        mixed={selectionCount > 1 && textColorState.mixed}
+                        onChange={(next) => handleElementPropChange('fill', next)}
+                    />
                 ) : (
                     <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
-                        <ColorRow label='Gradient Start' value={activeElementProps.textGradientStart ?? '#8B5CF6'} onChange={(next) => handleElementPropChange('textGradientStart', next)} />
-                        <ColorRow label='Gradient End' value={activeElementProps.textGradientEnd ?? '#3B82F6'} onChange={(next) => handleElementPropChange('textGradientEnd', next)} />
-                        <SliderRow label='Gradient Angle' min={0} max={360} step={1} value={activeElementProps.textGradientAngle ?? 45} onChange={(next) => handleElementPropChange('textGradientAngle', next)} />
+                        <ColorRow
+                            label='Gradient Start'
+                            value={gradientStartState.value ?? '#8B5CF6'}
+                            mixed={selectionCount > 1 && gradientStartState.mixed}
+                            onChange={(next) => handleElementPropChange('textGradientStart', next)}
+                        />
+                        <ColorRow
+                            label='Gradient End'
+                            value={gradientEndState.value ?? '#3B82F6'}
+                            mixed={selectionCount > 1 && gradientEndState.mixed}
+                            onChange={(next) => handleElementPropChange('textGradientEnd', next)}
+                        />
+                        <SliderRow
+                            label='Gradient Angle'
+                            min={0}
+                            max={360}
+                            step={1}
+                            value={
+                                typeof gradientAngleControl.value === 'number'
+                                    ? gradientAngleControl.value
+                                    : 45
+                            }
+                            mixed={gradientAngleControl.mixed}
+                            onChange={(next) => handleElementPropChange('textGradientAngle', next)}
+                        />
                     </div>
                 )}
                 <SegmentedControl
                     label='Alignment'
-                    value={alignValue}
+                    value={
+                        selectionCount > 1 && alignState.mixed
+                            ? null
+                            : (alignState.value ?? 'left')
+                    }
                     options={TEXT_ALIGN_OPTIONS}
+                    mixed={selectionCount > 1 && alignState.mixed}
                     onChange={(next) => handleElementPropChange('align', next)}
                 />
                 <SelectRow
                     label='Text Transform'
-                    value={activeElementProps.textTransform ?? 'none'}
+                    value={
+                        selectionCount > 1 && textTransformState.mixed
+                            ? ''
+                            : (textTransformState.value ?? 'none')
+                    }
                     options={TEXT_TRANSFORM_OPTIONS}
+                    mixed={selectionCount > 1 && textTransformState.mixed}
                     onChange={(next) => handleElementPropChange('textTransform', next)}
                 />
                 <button
@@ -969,11 +1636,46 @@ export default function InspectorPanel() {
                 </button>
                 {showTypographyAdvanced ? (
                     <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
-                        <ColorRow label='Text Shadow' value={activeElementProps.textShadowColor ?? '#000000'} onChange={(next) => handleElementPropChange('textShadowColor', next)} />
+                        <ColorRow
+                            label='Text Shadow'
+                            value={textShadowColorState.value ?? '#000000'}
+                            mixed={selectionCount > 1 && textShadowColorState.mixed}
+                            onChange={(next) => handleElementPropChange('textShadowColor', next)}
+                        />
                         <div className='grid grid-cols-3 gap-3'>
-                            <SliderRow label='Blur' min={0} max={60} step={1} value={activeElementProps.textShadowBlur ?? 0} onChange={(next) => handleElementPropChange('textShadowBlur', next)} />
-                            <SliderRow label='Offset X' min={-50} max={50} step={1} value={activeElementProps.textShadowX ?? 0} onChange={(next) => handleElementPropChange('textShadowX', next)} />
-                            <SliderRow label='Offset Y' min={-50} max={50} step={1} value={activeElementProps.textShadowY ?? 0} onChange={(next) => handleElementPropChange('textShadowY', next)} />
+                            <SliderRow
+                                label='Blur'
+                                min={0}
+                                max={60}
+                                step={1}
+                                value={
+                                    typeof textShadowBlurControl.value === 'number' ? textShadowBlurControl.value : 0
+                                }
+                                mixed={textShadowBlurControl.mixed}
+                                onChange={(next) => handleElementPropChange('textShadowBlur', next)}
+                            />
+                            <SliderRow
+                                label='Offset X'
+                                min={-50}
+                                max={50}
+                                step={1}
+                                value={
+                                    typeof textShadowXControl.value === 'number' ? textShadowXControl.value : 0
+                                }
+                                mixed={textShadowXControl.mixed}
+                                onChange={(next) => handleElementPropChange('textShadowX', next)}
+                            />
+                            <SliderRow
+                                label='Offset Y'
+                                min={-50}
+                                max={50}
+                                step={1}
+                                value={
+                                    typeof textShadowYControl.value === 'number' ? textShadowYControl.value : 0
+                                }
+                                mixed={textShadowYControl.mixed}
+                                onChange={(next) => handleElementPropChange('textShadowY', next)}
+                            />
                         </div>
                     </div>
                 ) : null}
@@ -1452,7 +2154,7 @@ export default function InspectorPanel() {
                                 ) : null}
                                 <SegmentedControl
                                     label='Align Self'
-                                    value={currentAlignSelf === 'mixed' ? 'auto' : currentAlignSelf}
+                                    value={currentAlignSelf === 'mixed' ? null : currentAlignSelf}
                                     options={[
                                         { value: 'auto', label: 'Auto' },
                                         { value: 'stretch', label: 'Stretch' },
@@ -1460,6 +2162,7 @@ export default function InspectorPanel() {
                                         { value: 'center', label: 'Center' },
                                         { value: 'end', label: 'End' },
                                     ]}
+                                    mixed={currentAlignSelf === 'mixed'}
                                     onChange={(next) =>
                                         applyLayoutToSelection({
                                             alignSelf: next === 'auto' ? null : next,

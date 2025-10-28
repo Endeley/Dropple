@@ -1,16 +1,32 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { useCanvasStore } from './context/CanvasStore';
 import { fabricService } from './fabric/fabricServiceSingleton';
 import { resolveTool } from './utils/toolBehaviors';
 import { createElement } from './utils/elementFactory';
 import { findFrameAtPoint } from './utils/frameUtils';
+import { MODE_CANVAS_BEHAVIOR } from './modeConfig';
 import { attachMetadata, elementToFabric } from './fabric/fabricAdapters';
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 4;
+
+const snapValueToGrid = (value, grid) => {
+    if (!grid || grid <= 0) return value;
+    return Math.round(value / grid) * grid;
+};
+
+const applySnappingToPoint = (point, snapping = {}) => {
+    if (!snapping) return point;
+    const next = { ...point };
+    if (snapping.grid) {
+        next.x = snapValueToGrid(next.x, snapping.grid);
+        next.y = snapValueToGrid(next.y, snapping.grid);
+    }
+    return next;
+};
 
 export default function FabricCanvas() {
     const containerRef = useRef(null);
@@ -34,6 +50,9 @@ export default function FabricCanvas() {
     const updateFrame = useCanvasStore((state) => state.updateFrame);
     const gridVisible = useCanvasStore((state) => state.gridVisible);
     const gridSize = useCanvasStore((state) => state.gridSize);
+    const getFrameById = useCanvasStore((state) => state.getFrameById);
+    const mode = useCanvasStore((state) => state.mode);
+    const canvasBehavior = MODE_CANVAS_BEHAVIOR[mode] ?? MODE_CANVAS_BEHAVIOR.default;
 
     const gridBackground = useMemo(() => {
         if (!gridVisible || gridSize <= 0) {
@@ -60,8 +79,34 @@ export default function FabricCanvas() {
         input.click();
     }, [pendingImageElement]);
 
+    const historyHotkeyHandler = useCallback((event) => {
+        const store = useCanvasStore.getState();
+        if (event.metaKey || event.ctrlKey) {
+            const key = event.key.toLowerCase();
+            if (key === 'z') {
+                event.preventDefault();
+                if (event.shiftKey) {
+                    store.redoCanvas();
+                } else {
+                    store.undoCanvas();
+                }
+            }
+        }
+    }, []);
+
     useEffect(() => {
         let disposed = false;
+        let hydrationResolved = false;
+        const handleAfterRender = () => {
+            if (hydrationResolved) return;
+            const store = useCanvasStore.getState();
+            if (store.isSceneHydrating) {
+                hydrationResolved = true;
+                store.finishSceneHydration();
+                fabricCanvasRef.current?.off('after:render', handleAfterRender);
+            }
+        };
+        window.addEventListener('keydown', historyHotkeyHandler);
         let fabricCanvas = null;
 
         const initialise = async () => {
@@ -79,6 +124,7 @@ export default function FabricCanvas() {
             });
             fabricCanvas.setBackgroundColor('#020617', () => fabricCanvas.renderAll());
             fabricCanvasRef.current = fabricCanvas;
+            fabricCanvas.on('after:render', handleAfterRender);
 
             fabricService.updateConfig({
                 onSelectionChange: ({ frameIds, elementIds }) => {
@@ -109,9 +155,17 @@ export default function FabricCanvas() {
                         source: 'fabric',
                     });
                 },
+                onElementsChange: (frameId, entries) => {
+                    const store = useCanvasStore.getState();
+                    store.updateElementsPropsBatch(
+                        frameId,
+                        entries,
+                        { historyLabel: 'Fabric: Update elements', source: 'fabric' },
+                    );
+                },
+                getFrameById,
             });
             fabricService.setCanvas(fabricCanvas);
-            window.addEventListener('keydown', handleKeyDown);
 
             fabricCanvas.on('mouse:down', (event) => {
                 const originalEvent = event?.e;
@@ -119,18 +173,20 @@ export default function FabricCanvas() {
 
                 const store = useCanvasStore.getState();
                 const currentTool = store.selectedTool || 'pointer';
-                const action = resolveTool(currentTool);
+                const action = resolveTool(currentTool, store.mode);
                 const pointer = fabricCanvas.getPointer(originalEvent, true);
                 const primaryButton = originalEvent.button === 0;
 
                 if (primaryButton && action.type !== 'pointer') {
                     if (action.type === 'frame') {
-                        const width = action.width ?? 960;
-                        const height = action.height ?? 640;
+                        const defaults = canvasBehavior.frameDefaults ?? {};
+                        const width = action.width ?? defaults.width ?? 960;
+                        const height = action.height ?? defaults.height ?? 640;
+                        const snappedPointer = applySnappingToPoint(pointer, canvasBehavior.snapping);
                         const newFrame = store.addFrameAt(
                             {
-                                x: pointer.x - width / 2,
-                                y: pointer.y - height / 2,
+                                x: snappedPointer.x - width / 2,
+                                y: snappedPointer.y - height / 2,
                             },
                             { width, height },
                         );
@@ -144,17 +200,22 @@ export default function FabricCanvas() {
                     if (action.type === 'element') {
                         let targetFrame = findFrameAtPoint(store.frames, pointer);
                         if (!targetFrame) {
+                            const fallbackPointer = applySnappingToPoint(pointer, canvasBehavior.snapping);
                             targetFrame = store.addFrameAt(
                                 {
-                                    x: pointer.x - 480,
-                                    y: pointer.y - 320,
+                                    x: fallbackPointer.x - 480,
+                                    y: fallbackPointer.y - 320,
                                 },
                                 { width: 960, height: 640 },
                             );
                         }
 
                         if (targetFrame) {
-                            const element = createElement(action.elementType, targetFrame, pointer);
+                            const snappedPointer = applySnappingToPoint(pointer, canvasBehavior.snapping);
+                            const element = createElement(action.elementType, targetFrame, snappedPointer, {
+                                mode: store.mode,
+                                preset: action.preset,
+                            });
                             store.addElementToFrame(targetFrame.id, element);
                             store.setSelectedElement(targetFrame.id, element.id);
                             if (currentTool === 'image') {
@@ -288,14 +349,15 @@ export default function FabricCanvas() {
             });
             elementObjectsRef.current.clear();
             if (fabricCanvasRef.current) {
+                fabricCanvasRef.current.off('after:render', handleAfterRender);
                 fabricCanvasRef.current.dispose();
             }
             fabricService.setCanvas(null);
             fabricCanvasRef.current = null;
             fabricNamespaceRef.current = null;
-            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keydown', historyHotkeyHandler);
         };
-    }, [setPosition, setScale, setSelectedFrame, updateFrame]);
+    }, [historyHotkeyHandler, setPosition, setScale, setSelectedFrame, updateFrame, getFrameById]);
 
     const handleImageFileChange = (event) => {
         const current = pendingImageElement;
@@ -384,7 +446,7 @@ export default function FabricCanvas() {
                 let fabricObject = elementMap.get(element.id);
                 if (!fabricObject) {
                     if (element.type === 'image' && element.props?.imageUrl) {
-                        fabricNamespace.fabric.Image.fromURL(
+                        fabricNamespace.Image.fromURL(
                             element.props.imageUrl,
                             (image) => {
                                 if (!image) return;
@@ -410,7 +472,7 @@ export default function FabricCanvas() {
                         );
                         return;
                     } else {
-                        fabricObject = elementToFabric(element, frame, fabricNamespace.fabric);
+                        fabricObject = elementToFabric(element, frame, fabricNamespace);
                         if (fabricObject) {
                             attachMetadata(fabricObject, {
                                 droppleId: element.id,
@@ -434,6 +496,11 @@ export default function FabricCanvas() {
                         left,
                         top,
                         opacity: props.opacity ?? fabricObject.opacity ?? 1,
+                        angle: props.rotation ?? 0,
+                        scaleX: 1,
+                        scaleY: 1,
+                        skewX: props.skewX ?? 0,
+                        skewY: props.skewY ?? 0,
                     });
 
                     if (element.type === 'rect' || element.type === 'shape' || element.type === 'overlay' || element.type === 'clip') {
@@ -457,10 +524,13 @@ export default function FabricCanvas() {
                             charSpacing:
                                 ((props.letterSpacing ?? 0) * 1000) /
                                 (props.fontSize ?? fabricObject.fontSize ?? 24),
+                            fontWeight: props.fontWeight ?? fabricObject.fontWeight ?? '500',
+                            textAlign: props.align ?? fabricObject.textAlign ?? 'left',
                         });
                     } else if (element.type === 'image' && props.width && props.height) {
                         fabricObject.scaleToWidth(props.width);
                         fabricObject.scaleToHeight(props.height);
+                        fabricObject.set({ scaleX: 1, scaleY: 1, width: props.width, height: props.height });
                     }
 
                     fabricObject.setCoords();

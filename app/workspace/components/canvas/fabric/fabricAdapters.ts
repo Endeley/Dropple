@@ -122,22 +122,92 @@ export function elementToFabric(
     }
 }
 
-export function fabricToElement(target: FabricObject, base: Partial<CanvasElement> = {}): Partial<CanvasElement> {
+export function fabricToElement(
+    target: FabricObject,
+    base: Partial<CanvasElement> = {},
+    frame?: CanvasFrame,
+): Partial<CanvasElement> {
     const metadata = extractMetadata(target);
     if (!metadata) return base;
-    const width = (target.width ?? 0) * (target.scaleX ?? 1);
-    const height = (target.height ?? 0) * (target.scaleY ?? 1);
+    const frameOffsetX = frame?.x ?? 0;
+    const frameOffsetY = frame?.y ?? 0;
+    const scaleX = target.scaleX ?? 1;
+    const scaleY = target.scaleY ?? 1;
+    const width = (target.width ?? 0) * scaleX;
+    const height = (target.height ?? 0) * scaleY;
+    const left = (target.left ?? frameOffsetX) - frameOffsetX;
+    const top = (target.top ?? frameOffsetY) - frameOffsetY;
+
+    const props: Record<string, unknown> = {
+        ...(base.props ?? {}),
+        x: left,
+        y: top,
+        width,
+        height,
+    };
+
+    const angle = target.angle ?? (base.props as any)?.rotation;
+    if (angle !== undefined) {
+        props.rotation = angle;
+    }
+
+    if (target.opacity !== undefined) {
+        props.opacity = target.opacity;
+    }
+
+    if (metadata.elementType === 'rect' || metadata.elementType === 'shape' || metadata.elementType === 'overlay' || metadata.elementType === 'clip') {
+        if (typeof (target as any).fill === 'string') {
+            props.fill = (target as any).fill;
+        }
+        if (typeof (target as any).stroke === 'string' || (target as any).stroke === null) {
+            props.stroke = (target as any).stroke ?? null;
+        }
+        if (typeof (target as any).strokeWidth === 'number') {
+            props.strokeWidth = (target as any).strokeWidth;
+        }
+        const rx = (target as any).rx ?? (target as any).ry ?? (base.props as any)?.cornerRadius ?? 0;
+        if (typeof rx === 'number') {
+            props.cornerRadius = rx;
+        }
+    } else if (metadata.elementType === 'text' || metadata.elementType === 'script') {
+        const fabricText = target as any;
+        if (typeof fabricText.text === 'string') {
+            props.text = fabricText.text;
+        }
+        if (typeof fabricText.fontSize === 'number') {
+            props.fontSize = fabricText.fontSize;
+        }
+        if (typeof fabricText.fontFamily === 'string') {
+            props.fontFamily = fabricText.fontFamily;
+        }
+        if (fabricText.fontWeight !== undefined) {
+            props.fontWeight = fabricText.fontWeight;
+        }
+        if (typeof fabricText.lineHeight === 'number') {
+            props.lineHeight = fabricText.lineHeight;
+        }
+        if (typeof fabricText.charSpacing === 'number') {
+            const fontSize = typeof fabricText.fontSize === 'number' ? fabricText.fontSize : 16;
+            props.letterSpacing = (fabricText.charSpacing / 1000) * fontSize;
+        }
+        if (typeof fabricText.textAlign === 'string') {
+            props.align = fabricText.textAlign;
+        }
+    }
+
+    target.set({
+        scaleX: 1,
+        scaleY: 1,
+        width,
+        height,
+    });
+    target.setCoords();
+
     return {
         ...base,
         id: metadata.droppleId,
         type: metadata.elementType ?? base.type ?? 'rect',
-        props: {
-            ...(base.props ?? {}),
-            x: target.left ?? base.props?.x ?? 0,
-            y: target.top ?? base.props?.y ?? 0,
-            width,
-            height,
-        },
+        props,
     };
 }
 

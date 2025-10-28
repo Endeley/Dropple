@@ -14,6 +14,16 @@ const ELEMENT_LABELS = {
     character: 'Character',
 };
 
+const BASE_PROPS = {
+    rotation: 0,
+    opacity: 1,
+    scaleX: 1,
+    scaleY: 1,
+    skewX: 0,
+    skewY: 0,
+    align: 'left',
+};
+
 const DEFAULTS = {
     rect: {
         width: 240,
@@ -41,12 +51,68 @@ const DEFAULTS = {
         cornerRadius: 24,
         imageUrl: null,
         backgroundFit: 'cover',
-        opacity: 0.95,
+        opacity: 1,
     },
 };
 
-export function createElement(elementType, frame, point) {
-    const preset = DEFAULTS[elementType] ?? DEFAULTS.rect;
+const MODE_ELEMENT_OVERRIDES = {
+    graphics: {
+        rect: {
+            width: 360,
+            height: 240,
+            fill: '#2E1F4E',
+        },
+    },
+    ux: {
+        rect: {
+            width: 320,
+            height: 240,
+            fill: '#0F172A',
+            cornerRadius: 24,
+        },
+        text: {
+            width: 360,
+            height: 120,
+            fontSize: 20,
+            fill: '#111827',
+            lineHeight: 1.4,
+        },
+    },
+    animation: {
+        rect: {
+            width: 200,
+            height: 200,
+            fill: '#1E1B4B',
+        },
+    },
+    video: {
+        overlay: {
+            width: 320,
+            height: 140,
+            fill: 'rgba(15,23,42,0.85)',
+            cornerRadius: 18,
+        },
+    },
+    podcast: {
+        script: {
+            width: 520,
+            height: 320,
+            fontSize: 20,
+            fill: '#F8FAFC',
+            lineHeight: 1.6,
+        },
+    },
+};
+
+export function createElement(elementType, frame, point, options = {}) {
+    const { mode = null, preset: customPreset = null } = options;
+    const basePreset = DEFAULTS[elementType] ?? DEFAULTS.rect;
+    const modePreset = mode && MODE_ELEMENT_OVERRIDES[mode]?.[elementType] ? MODE_ELEMENT_OVERRIDES[mode][elementType] : null;
+    const preset = {
+        ...basePreset,
+        ...(modePreset ?? {}),
+        ...(customPreset ?? {}),
+    };
     const width = preset.width ?? 200;
     const height = preset.height ?? 120;
     const localX = point.x - frame.x - width / 2;
@@ -62,6 +128,7 @@ export function createElement(elementType, frame, point) {
             y: localY,
             width,
             height,
+            ...BASE_PROPS,
             ...preset,
         },
     };
