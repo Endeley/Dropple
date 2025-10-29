@@ -12,18 +12,18 @@ function SliderRow({ label, min = 0, max = 100, step = 1, value = 0, onChange, m
 
     return (
         <div className='space-y-1'>
-            <div className='flex items-center justify-between text-xs text-[rgba(226,232,240,0.65)]'>
+            <div className='flex items-center justify-between text-xs text-[var(--mode-text-muted)]'>
                 <span>
                     {label}
                     {mixed ? (
-                        <span className='ml-2 rounded bg-[rgba(148,163,184,0.18)] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.2em] text-[rgba(148,163,184,0.75)]'>
+                        <span className='ml-2 rounded bg-[var(--mode-accent-soft)] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.2em] text-[var(--mode-text-muted)]'>
                             Mixed
                         </span>
                     ) : null}
                 </span>
                 <input
                     type='number'
-                    className='w-16 rounded-md border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.7)] px-1 py-0.5 text-right text-[rgba(236,233,254,0.9)]'
+                    className='w-16 rounded-md border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-1 py-0.5 text-right text-[var(--mode-text)]'
                     value={Number.isFinite(value) ? Number(value).toFixed(step < 1 ? 2 : 0) : ''}
                     onChange={(event) => {
                         const next = Number(event.target.value);
@@ -31,9 +31,9 @@ function SliderRow({ label, min = 0, max = 100, step = 1, value = 0, onChange, m
                     }}
                 />
             </div>
-            <div className='relative h-2 w-full overflow-hidden rounded-full bg-[rgba(148,163,184,0.15)]'>
+            <div className='relative h-2 w-full overflow-hidden rounded-full bg-[var(--mode-accent-soft)]'>
                 <div
-                    className='absolute left-0 top-0 h-full rounded-full bg-[rgba(139,92,246,0.75)]'
+                    className='absolute left-0 top-0 h-full rounded-full bg-[var(--mode-accent)]'
                     style={{ width: `${clampedProgress}%` }}
                 />
                 <input
@@ -79,14 +79,14 @@ function NumberInputRow({
     return (
         <label
             className={clsx(
-                'flex items-center justify-between gap-3 text-xs text-[rgba(226,232,240,0.7)]',
+                'flex items-center justify-between gap-3 text-xs text-[var(--mode-text-muted)]',
                 disabled && 'opacity-60',
             )}
         >
             <span className='uppercase tracking-[0.2em]'>
                 {label}
                 {mixed ? (
-                    <span className='ml-2 rounded bg-[rgba(148,163,184,0.18)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>
+                    <span className='ml-2 rounded bg-[var(--mode-accent-soft)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>
                         Mixed
                     </span>
                 ) : null}
@@ -101,12 +101,12 @@ function NumberInputRow({
                     onChange={handleChange}
                     disabled={disabled}
                     className={clsx(
-                        'w-20 rounded-md border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.65)] px-2 py-1 text-right text-[rgba(236,233,254,0.9)]',
+                        'w-20 rounded-md border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-2 py-1 text-right text-[var(--mode-text)]',
                         disabled && 'cursor-not-allowed',
                     )}
                     placeholder={mixed ? '—' : undefined}
                 />
-                {suffix ? <span className='text-[rgba(148,163,184,0.8)]'>{suffix}</span> : null}
+                {suffix ? <span className='text-[var(--mode-text-muted)]'>{suffix}</span> : null}
             </div>
         </label>
     );
@@ -117,16 +117,16 @@ function ColorRow({ label, value = '#ffffff', onChange, mixed = false }) {
 
     return (
         <div className='space-y-2'>
-            <div className='flex items-center justify-between text-xs text-[rgba(226,232,240,0.65)]'>
+            <div className='flex items-center justify-between text-xs text-[var(--mode-text-muted)]'>
                 <span>
                     {label}
                     {mixed ? (
-                        <span className='ml-2 rounded bg-[rgba(148,163,184,0.18)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>
+                        <span className='ml-2 rounded bg-[var(--mode-accent-soft)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>
                             Mixed
                         </span>
                     ) : null}
                 </span>
-                <span className='rounded-md border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.65)] px-2 py-0.5 text-[rgba(236,233,254,0.9)]'>
+                <span className='rounded-md border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-2 py-0.5 text-[var(--mode-text)]'>
                     {safeValue.toUpperCase()}
                 </span>
             </div>
@@ -134,7 +134,7 @@ function ColorRow({ label, value = '#ffffff', onChange, mixed = false }) {
                 type='color'
                 value={safeValue}
                 onChange={(event) => onChange?.(event.target.value)}
-                className='h-10 w-full cursor-pointer rounded-lg border border-[rgba(148,163,184,0.2)] bg-transparent'
+                className='h-10 w-full cursor-pointer rounded-lg border border-[var(--mode-border)] bg-transparent'
             />
         </div>
     );
@@ -156,11 +156,11 @@ function ImageInputRow({ label, value, onChange, mixed = false }) {
 
     return (
         <div className='space-y-2'>
-            <div className='flex items-center justify-between text-xs text-[rgba(226,232,240,0.65)]'>
+            <div className='flex items-center justify-between text-xs text-[var(--mode-text-muted)]'>
                 <span>
                     {label}
                     {mixed ? (
-                        <span className='ml-2 rounded bg-[rgba(148,163,184,0.18)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>
+                        <span className='ml-2 rounded bg-[var(--mode-accent-soft)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>
                             Mixed
                         </span>
                     ) : null}
@@ -169,7 +169,7 @@ function ImageInputRow({ label, value, onChange, mixed = false }) {
                     <button
                         type='button'
                         onClick={() => onChange?.(null)}
-                        className='rounded-md border border-[rgba(139,92,246,0.35)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[rgba(236,233,254,0.85)] transition-colors hover:border-[rgba(236,233,254,0.7)]'
+                        className='rounded-md border border-[var(--mode-accent)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                     >
                         Clear
                     </button>
@@ -180,9 +180,9 @@ function ImageInputRow({ label, value, onChange, mixed = false }) {
                 value={mixed ? '' : value ?? ''}
                 onChange={(event) => onChange?.(event.target.value || null)}
                 placeholder={mixed ? 'Mixed value' : 'https://... or drop a file'}
-                className='w-full rounded-md border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.65)] px-3 py-2 text-sm text-[rgba(236,233,254,0.9)] placeholder:text-[rgba(148,163,184,0.6)]'
+                className='w-full rounded-md border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-2 text-sm text-[var(--mode-text)] placeholder:text-[var(--mode-text-muted)]'
             />
-            <label className='flex cursor-pointer items-center justify-center rounded-md border border-dashed border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.35)] px-3 py-2 text-xs font-medium text-[rgba(148,163,184,0.8)] hover:border-[rgba(139,92,246,0.45)] hover:text-[rgba(236,233,254,0.85)]'>
+            <label className='flex cursor-pointer items-center justify-center rounded-md border border-dashed border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-2 text-xs font-medium text-[var(--mode-text-muted)] hover:border-[var(--mode-accent)] hover:text-[var(--mode-text)]'>
                 Upload image
                 <input type='file' accept='image/*' className='hidden' onChange={handleFile} />
             </label>
@@ -192,11 +192,11 @@ function ImageInputRow({ label, value, onChange, mixed = false }) {
 
 function SelectRow({ label, value = '', options = [], onChange, mixed = false }) {
     return (
-        <label className='flex flex-col gap-1 text-xs text-[rgba(226,232,240,0.7)]'>
+        <label className='flex flex-col gap-1 text-xs text-[var(--mode-text-muted)]'>
             <span>
                 {label}
                 {mixed ? (
-                    <span className='ml-2 rounded bg-[rgba(148,163,184,0.18)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>
+                    <span className='ml-2 rounded bg-[var(--mode-accent-soft)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>
                         Mixed
                     </span>
                 ) : null}
@@ -204,7 +204,7 @@ function SelectRow({ label, value = '', options = [], onChange, mixed = false })
             <select
                 value={mixed ? '' : value ?? ''}
                 onChange={(event) => onChange?.(event.target.value)}
-                className='rounded-lg border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.7)] px-3 py-2 text-sm text-[rgba(236,233,254,0.9)]'
+                className='rounded-lg border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-2 text-sm text-[var(--mode-text)]'
             >
                 {mixed ? (
                     <option value='' disabled>
@@ -225,10 +225,10 @@ function SegmentedControl({ label, value, options = [], onChange, mixed = false 
     return (
         <div className='space-y-2'>
             {label ? (
-                <div className='text-xs font-medium uppercase tracking-[0.15em] text-[rgba(148,163,184,0.7)]'>
+                <div className='text-xs font-medium uppercase tracking-[0.15em] text-[var(--mode-text-muted)]'>
                     {label}
                     {mixed ? (
-                        <span className='ml-2 rounded bg-[rgba(148,163,184,0.18)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>
+                        <span className='ml-2 rounded bg-[var(--mode-accent-soft)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>
                             Mixed
                         </span>
                     ) : null}
@@ -245,8 +245,8 @@ function SegmentedControl({ label, value, options = [], onChange, mixed = false 
                             className={clsx(
                                 'flex flex-1 items-center justify-center gap-1 rounded-lg border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors',
                                 isActive
-                                    ? 'border-[rgba(236,233,254,0.85)] bg-[rgba(139,92,246,0.25)] text-white shadow-[0_0_0_1px_rgba(236,233,254,0.35)]'
-                                    : 'border-[rgba(148,163,184,0.25)] text-[rgba(226,232,240,0.75)] hover:border-[rgba(236,233,254,0.6)]',
+                                    ? 'border-[var(--mode-accent)] bg-[var(--mode-accent-soft)] text-[var(--mode-text)] shadow-[0_0_0_1px_var(--mode-accent-soft)]'
+                                    : 'border-[var(--mode-border)] text-[var(--mode-text-muted)] hover:border-[var(--mode-accent)]',
                             )}
                         >
                             {option.icon ? <span>{option.icon}</span> : null}
@@ -346,11 +346,21 @@ const FLEX_WRAP_OPTIONS = [
     { value: 'wrap-reverse', label: 'Wrap Reverse' },
 ];
 
+const EMPTY_OBJECT = Object.freeze({});
+const EMPTY_ARRAY = Object.freeze([]);
+
 export default function InspectorPanel() {
+    const textPrimary = 'text-[var(--mode-text)]';
+    const textMuted = 'text-[var(--mode-text-muted)]';
+    const borderColor = 'border-[var(--mode-border)]';
+    const panelBg = 'bg-[var(--mode-panel-bg)]';
+    const accentBorder = 'border-[var(--mode-accent)]';
+    const accentBg = 'bg-[var(--mode-accent-soft)]';
     const mode = useCanvasStore((state) => state.mode);
-    const frames = useCanvasStore((state) => state.frames);
+    const rawFrames = useCanvasStore((state) => state.frames);
+    const frames = Array.isArray(rawFrames) ? rawFrames : EMPTY_ARRAY;
     const selectedFrameId = useCanvasStore((state) => state.selectedFrameId);
-    const selectedElementIds = useCanvasStore((state) => state.selectedElementIds);
+    const selectedElementIds = useCanvasStore((state) => state.selectedElementIds) ?? EMPTY_ARRAY;
     const updateFrame = useCanvasStore((state) => state.updateFrame);
     const updateElementProps = useCanvasStore((state) => state.updateElementProps);
     const updateElementsPropsBatch = useCanvasStore((state) => state.updateElementsPropsBatch);
@@ -616,7 +626,7 @@ export default function InspectorPanel() {
 
     const renderTransformControls = () => {
         if (!activeFrame) {
-            return <p className='text-xs text-[rgba(148,163,184,0.7)]'>Select a frame to edit transform values.</p>;
+            return <p className='text-xs text-[var(--mode-text-muted)]'>Select a frame to edit transform values.</p>;
         }
 
         if (activeElement) {
@@ -636,7 +646,7 @@ export default function InspectorPanel() {
             return (
                 <div className='space-y-4'>
                     {selectionCount > 1 ? (
-                        <p className='rounded-md border border-[rgba(139,92,246,0.25)] bg-[rgba(139,92,246,0.12)] px-3 py-2 text-xs text-[rgba(236,233,254,0.75)]'>
+                        <p className='rounded-md border border-[var(--mode-accent)] bg-[var(--mode-accent-soft)] px-3 py-2 text-xs text-[var(--mode-text)]'>
                             Editing applies to {selectionCount} elements. Values will update each selected layer together.
                         </p>
                     ) : null}
@@ -737,21 +747,21 @@ export default function InspectorPanel() {
                         <button
                             type='button'
                             onClick={() => handleFlip('horizontal')}
-                            className='flex-1 rounded-lg border border-[rgba(148,163,184,0.25)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(226,232,240,0.78)] transition-colors hover:border-[rgba(236,233,254,0.65)]'
+                            className='flex-1 rounded-lg border border-[var(--mode-border)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                         >
                             Flip H
                         </button>
                         <button
                             type='button'
                             onClick={() => handleFlip('vertical')}
-                            className='flex-1 rounded-lg border border-[rgba(148,163,184,0.25)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(226,232,240,0.78)] transition-colors hover:border-[rgba(236,233,254,0.65)]'
+                            className='flex-1 rounded-lg border border-[var(--mode-border)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                         >
                             Flip V
                         </button>
                         <button
                             type='button'
                             onClick={handleVisibilityToggle}
-                            className='flex-1 rounded-lg border border-[rgba(59,130,246,0.35)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(191,219,254,0.92)] transition-colors hover:border-[rgba(191,219,254,0.75)]'
+                            className='flex-1 rounded-lg border border-[var(--mode-accent)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                         >
                             {activeElementProps.visible === false ? 'Show Element' : 'Hide Element'}
                         </button>
@@ -760,28 +770,28 @@ export default function InspectorPanel() {
                         <button
                             type='button'
                             onClick={() => handleLayerAction(sendElementBackward)}
-                            className='rounded-lg border border-[rgba(148,163,184,0.25)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(226,232,240,0.78)] transition-colors hover:border-[rgba(236,233,254,0.65)]'
+                            className='rounded-lg border border-[var(--mode-border)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                         >
                             Send Backward
                         </button>
                         <button
                             type='button'
                             onClick={() => handleLayerAction(bringElementForward)}
-                            className='rounded-lg border border-[rgba(148,163,184,0.25)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(226,232,240,0.78)] transition-colors hover:border-[rgba(236,233,254,0.65)]'
+                            className='rounded-lg border border-[var(--mode-border)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                         >
                             Bring Forward
                         </button>
                         <button
                             type='button'
                             onClick={() => handleLayerAction(sendElementToBack)}
-                            className='rounded-lg border border-[rgba(148,163,184,0.25)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(226,232,240,0.78)] transition-colors hover:border-[rgba(236,233,254,0.65)]'
+                            className='rounded-lg border border-[var(--mode-border)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                         >
                             Send to Back
                         </button>
                         <button
                             type='button'
                             onClick={() => handleLayerAction(bringElementToFront)}
-                            className='rounded-lg border border-[rgba(148,163,184,0.25)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(226,232,240,0.78)] transition-colors hover:border-[rgba(236,233,254,0.65)]'
+                            className='rounded-lg border border-[var(--mode-border)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                         >
                             Bring to Front
                         </button>
@@ -804,7 +814,7 @@ export default function InspectorPanel() {
         if (activeElement) {
             if (activeElement.type === 'text') {
                 return (
-                    <div className='rounded-lg border border-dashed border-[rgba(148,163,184,0.25)] bg-[rgba(30,41,59,0.45)] px-3 py-2 text-[11px] text-[rgba(148,163,184,0.7)]'>
+                    <div className='rounded-lg border border-dashed border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-2 text-[11px] text-[var(--mode-text-muted)]'>
                         Typography controls below manage text color, gradients, and effects.
                     </div>
                 );
@@ -900,7 +910,7 @@ export default function InspectorPanel() {
                         onChange={(next) => handleElementPropChange('fillType', next)}
                     />
                     {fillTypeMixed ? (
-                        <p className='rounded-md border border-[rgba(139,92,246,0.25)] bg-[rgba(139,92,246,0.15)] px-3 py-2 text-[11px] uppercase tracking-[0.25em] text-[rgba(236,233,254,0.75)]'>
+                        <p className='rounded-md border border-[var(--mode-accent)] bg-[var(--mode-accent-soft)] px-3 py-2 text-[11px] uppercase tracking-[0.25em] text-[var(--mode-text)]'>
                             Mixed fill types — choose a fill type to unify selection.
                         </p>
                     ) : (
@@ -912,7 +922,7 @@ export default function InspectorPanel() {
                         />
                     )}
                     {!fillTypeMixed && fillType === 'gradient' ? (
-                        <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
+                        <div className='space-y-3 rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-3'>
                             <SelectRow
                                 label='Gradient Type'
                                 value={
@@ -952,7 +962,7 @@ export default function InspectorPanel() {
                         </div>
                     ) : null}
                     {!fillTypeMixed && ['image', 'pattern'].includes(fillType) ? (
-                        <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
+                        <div className='space-y-3 rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-3'>
                             <ImageInputRow
                                 label='Image Source'
                                 value={imageUrlState.value ?? null}
@@ -1031,12 +1041,12 @@ export default function InspectorPanel() {
                     ) : null}
                     {['rect', 'image', 'group'].includes(activeElement.type) ? (
                         <div className='space-y-2'>
-                            <div className='flex items-center justify-between text-xs font-medium uppercase tracking-[0.2em] text-[rgba(148,163,184,0.7)]'>
+                            <div className='flex items-center justify-between text-xs font-medium uppercase tracking-[0.2em] text-[var(--mode-text-muted)]'>
                                 <span>Corner Radius</span>
                                 <button
                                     type='button'
                                     onClick={() => setShowCornerDetails((value) => !value)}
-                                    className='rounded-md border border-[rgba(148,163,184,0.25)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgba(226,232,240,0.75)] hover:border-[rgba(236,233,254,0.65)]'
+                                    className='rounded-md border border-[var(--mode-border)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--mode-text-muted)] hover:border-[var(--mode-accent)]'
                                 >
                                     {showCornerDetails ? 'Uniform' : 'Per Corner'}
                                 </button>
@@ -1116,7 +1126,7 @@ export default function InspectorPanel() {
                     <button
                         type='button'
                         onClick={() => setActiveToolOverlay('ai-style')}
-                        className='w-full rounded-lg border border-[rgba(139,92,246,0.45)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(236,233,254,0.9)] transition-colors hover:border-[rgba(236,233,254,0.85)]'
+                        className='w-full rounded-lg border border-[var(--mode-accent)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                     >
                         AI Match Brand Theme
                     </button>
@@ -1143,7 +1153,7 @@ export default function InspectorPanel() {
                 />
                 <ColorRow label='Background Color' value={activeFrame.backgroundColor ?? '#0F172A'} onChange={handleFrameBackgroundColor} />
                 {frameFillType === 'gradient' ? (
-                    <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
+                    <div className='space-y-3 rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-3'>
                         <SelectRow
                             label='Gradient Type'
                             value={activeFrame.backgroundGradientType ?? 'linear'}
@@ -1191,7 +1201,7 @@ export default function InspectorPanel() {
                     </div>
                 ) : null}
                 {['image', 'pattern'].includes(frameFillType) ? (
-                    <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
+                    <div className='space-y-3 rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-3'>
                         <ImageInputRow
                             label='Background Image'
                             value={activeFrame.backgroundImage ?? null}
@@ -1281,7 +1291,7 @@ export default function InspectorPanel() {
                 <button
                     type='button'
                     onClick={() => setActiveToolOverlay('ai-style')}
-                    className='w-full rounded-lg border border-[rgba(139,92,246,0.45)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(236,233,254,0.9)] transition-colors hover:border-[rgba(236,233,254,0.85)]'
+                    className='w-full rounded-lg border border-[var(--mode-accent)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                 >
                     AI Tune Background
                 </button>
@@ -1299,7 +1309,7 @@ export default function InspectorPanel() {
 
     const renderEffectsControls = () => {
         if (!activeElement) {
-            return <p className='text-xs text-[rgba(148,163,184,0.7)]'>Select an element to configure shadows, blur, and filters.</p>;
+            return <p className='text-xs text-[var(--mode-text-muted)]'>Select an element to configure shadows, blur, and filters.</p>;
         }
 
         const shadowColorState = getSelectionPropState('shadowColor', activeElementProps.shadowColor ?? '#000000');
@@ -1372,12 +1382,12 @@ export default function InspectorPanel() {
                 <button
                     type='button'
                     onClick={() => setShowShadowDetails((value) => !value)}
-                    className='w-full rounded-lg border border-[rgba(148,163,184,0.25)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(226,232,240,0.78)] transition-colors hover:border-[rgba(236,233,254,0.65)]'
+                    className='w-full rounded-lg border border-[var(--mode-border)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                 >
                     {showShadowDetails ? 'Hide Glow Controls' : 'Show Glow Controls'}
                 </button>
                 {showShadowDetails ? (
-                    <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
+                    <div className='space-y-3 rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-3'>
                         <ColorRow
                             label='Glow Color'
                             value={glowColorState.value ?? '#8B5CF6'}
@@ -1407,12 +1417,12 @@ export default function InspectorPanel() {
                 <button
                     type='button'
                     onClick={() => setShowFilterDetails((value) => !value)}
-                    className='w-full rounded-lg border border-[rgba(148,163,184,0.25)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(226,232,240,0.78)] transition-colors hover:border-[rgba(236,233,254,0.65)]'
+                    className='w-full rounded-lg border border-[var(--mode-border)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                 >
                     {showFilterDetails ? 'Hide Color Adjustments' : 'Show Color Adjustments'}
                 </button>
                 {showFilterDetails ? (
-                    <div className='grid grid-cols-2 gap-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
+                    <div className='grid grid-cols-2 gap-3 rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-3'>
                         <SliderRow
                             label='Brightness'
                             min={0}
@@ -1462,7 +1472,7 @@ export default function InspectorPanel() {
                 <button
                     type='button'
                     onClick={() => setActiveToolOverlay('ai-effects')}
-                    className='w-full rounded-lg border border-[rgba(59,130,246,0.45)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(191,219,254,0.95)] transition-colors hover:border-[rgba(191,219,254,0.85)]'
+                    className='w-full rounded-lg border border-[var(--mode-accent)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                 >
                     AI Auto Enhance
                 </button>
@@ -1473,7 +1483,7 @@ export default function InspectorPanel() {
     const renderTypographyControls = () => {
         if (!activeElement || activeElement.type !== 'text') {
             return (
-                <p className='text-xs text-[rgba(148,163,184,0.7)]'>
+                <p className='text-xs text-[var(--mode-text-muted)]'>
                     Select a text element to edit typography settings.
                 </p>
             );
@@ -1499,7 +1509,7 @@ export default function InspectorPanel() {
 
         return (
             <div className='space-y-4'>
-                <label className='flex flex-col gap-1 text-xs text-[rgba(226,232,240,0.7)]'>
+                <label className='flex flex-col gap-1 text-xs text-[var(--mode-text-muted)]'>
                     <span>Font Family</span>
                     <input
                         type='text'
@@ -1514,7 +1524,7 @@ export default function InspectorPanel() {
                                 ? 'Mixed value'
                                 : 'Inter, Satoshi, etc.'
                         }
-                        className='rounded-lg border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.7)] px-3 py-2 text-sm text-[rgba(236,233,254,0.9)] placeholder:text-[rgba(148,163,184,0.6)]'
+                        className='rounded-lg border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-2 text-sm text-[var(--mode-text)] placeholder:text-[var(--mode-text-muted)]'
                     />
                 </label>
                 <SliderRow
@@ -1577,7 +1587,7 @@ export default function InspectorPanel() {
                         onChange={(next) => handleElementPropChange('fill', next)}
                     />
                 ) : (
-                    <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
+                    <div className='space-y-3 rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-3'>
                         <ColorRow
                             label='Gradient Start'
                             value={gradientStartState.value ?? '#8B5CF6'}
@@ -1630,12 +1640,12 @@ export default function InspectorPanel() {
                 <button
                     type='button'
                     onClick={() => setShowTypographyAdvanced((value) => !value)}
-                    className='w-full rounded-lg border border-[rgba(148,163,184,0.25)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(226,232,240,0.78)] transition-colors hover:border-[rgba(236,233,254,0.65)]'
+                    className='w-full rounded-lg border border-[var(--mode-border)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                 >
                     {showTypographyAdvanced ? 'Hide Shadow Controls' : 'Show Shadow Controls'}
                 </button>
                 {showTypographyAdvanced ? (
-                    <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
+                    <div className='space-y-3 rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-3'>
                         <ColorRow
                             label='Text Shadow'
                             value={textShadowColorState.value ?? '#000000'}
@@ -1682,7 +1692,7 @@ export default function InspectorPanel() {
                 <button
                     type='button'
                     onClick={() => setActiveToolOverlay('ai-typography')}
-                    className='w-full rounded-lg border border-[rgba(139,92,246,0.45)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(236,233,254,0.9)] transition-colors hover:border-[rgba(236,233,254,0.85)]'
+                    className='w-full rounded-lg border border-[var(--mode-accent)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                 >
                     AI Suggest Font Pair
                 </button>
@@ -1692,7 +1702,7 @@ export default function InspectorPanel() {
 
     const renderLayoutControls = () => {
         if (!activeFrame) {
-            return <p className='text-xs text-[rgba(148,163,184,0.7)]'>Select a frame and elements to align.</p>;
+            return <p className='text-xs text-[var(--mode-text-muted)]'>Select a frame and elements to align.</p>;
         }
 
         const isGroupContainer = activeElement?.type === 'group';
@@ -1773,10 +1783,10 @@ export default function InspectorPanel() {
 
         const alignButtonClass = (disabled) =>
             clsx(
-                'rounded-lg border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgba(226,232,240,0.78)] transition-colors',
+                'rounded-lg border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors',
                 disabled
-                    ? 'cursor-not-allowed border-[rgba(148,163,184,0.2)] text-[rgba(148,163,184,0.5)]'
-                    : 'border-[rgba(148,163,184,0.25)] hover:border-[rgba(236,233,254,0.65)]',
+                    ? 'cursor-not-allowed border-[var(--mode-border)] text-[var(--mode-text-muted)]'
+                    : 'border-[var(--mode-border)] hover:border-[var(--mode-accent)]',
             );
 
         const frameLayoutOptions = [
@@ -1845,8 +1855,8 @@ export default function InspectorPanel() {
 
         return (
             <div className='space-y-6'>
-                <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.45)] px-3 py-3'>
-                    <h4 className='text-[11px] font-semibold uppercase tracking-[0.25em] text-[rgba(148,163,184,0.75)]'>{layoutSectionLabel}</h4>
+                <div className='space-y-3 rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-3'>
+                    <h4 className='text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>{layoutSectionLabel}</h4>
                     <SegmentedControl
                         value={containerLayoutMode}
                         options={frameLayoutOptions}
@@ -1883,7 +1893,7 @@ export default function InspectorPanel() {
                                 />
                             ) : null}
                             {isGridLayout ? (
-                                <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.55)] px-3 py-3'>
+                                <div className='space-y-3 rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-3'>
                                     <SelectRow
                                         label='Column Behavior'
                                         value={layoutGridAutoFit}
@@ -1934,7 +1944,7 @@ export default function InspectorPanel() {
                                 </div>
                             ) : null}
                             <div className='space-y-2'>
-                                <p className='text-[10px] font-semibold uppercase tracking-[0.32em] text-[rgba(148,163,184,0.65)]'>Padding</p>
+                                <p className='text-[10px] font-semibold uppercase tracking-[0.32em] text-[var(--mode-text-muted)]'>Padding</p>
                                 <div className='grid grid-cols-2 gap-2'>
                                     <NumberInputRow
                                         label='Top'
@@ -1967,12 +1977,12 @@ export default function InspectorPanel() {
                 </div>
 
                 {selectionCount > 0 && isAutoLayout ? (
-                    <div className='space-y-3 rounded-xl border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.45)] px-3 py-3'>
-                        <h4 className='text-[11px] font-semibold uppercase tracking-[0.25em] text-[rgba(148,163,184,0.75)]'>
+                    <div className='space-y-3 rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-3'>
+                        <h4 className='text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>
                             Auto Layout (Selected)
                         </h4>
                         {selectionCount > 1 ? (
-                            <p className='text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.6)]'>
+                            <p className='text-[10px] uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>
                                 Applying changes to {selectionCount} elements.
                             </p>
                         ) : null}
@@ -2063,7 +2073,7 @@ export default function InspectorPanel() {
                                             }
                                         />
                                         <div className='grid grid-cols-2 gap-3'>
-                                            <div className='flex flex-col gap-1 text-xs text-[rgba(226,232,240,0.7)]'>
+                                            <div className='flex flex-col gap-1 text-xs text-[var(--mode-text-muted)]'>
                                                 <span className='uppercase tracking-[0.2em]'>Column Start</span>
                                                 <div className='flex items-center gap-2'>
                                                     <input
@@ -2091,7 +2101,7 @@ export default function InspectorPanel() {
                                                                 gridColumnStart: Math.max(1, Math.floor(parsed)),
                                                             });
                                                         }}
-                                                        className='w-full rounded-md border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.65)] px-2 py-1 text-right text-[rgba(236,233,254,0.9)]'
+                                                        className='w-full rounded-md border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-2 py-1 text-right text-[var(--mode-text)]'
                                                     />
                                                     <button
                                                         type='button'
@@ -2100,13 +2110,13 @@ export default function InspectorPanel() {
                                                                 gridColumnStart: null,
                                                             })
                                                         }
-                                                        className='rounded-md border border-[rgba(148,163,184,0.35)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(226,232,240,0.75)] transition-colors hover:border-[rgba(236,233,254,0.6)]'
+                                                        className='rounded-md border border-[var(--mode-border)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--mode-text-muted)] transition-colors hover:border-[var(--mode-accent)]'
                                                     >
                                                         Auto
                                                     </button>
                                                 </div>
                                             </div>
-                                            <div className='flex flex-col gap-1 text-xs text-[rgba(226,232,240,0.7)]'>
+                                            <div className='flex flex-col gap-1 text-xs text-[var(--mode-text-muted)]'>
                                                 <span className='uppercase tracking-[0.2em]'>Row Start</span>
                                                 <div className='flex items-center gap-2'>
                                                     <input
@@ -2134,7 +2144,7 @@ export default function InspectorPanel() {
                                                                 gridRowStart: Math.max(1, Math.floor(parsed)),
                                                             });
                                                         }}
-                                                        className='w-full rounded-md border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.65)] px-2 py-1 text-right text-[rgba(236,233,254,0.9)]'
+                                                        className='w-full rounded-md border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-2 py-1 text-right text-[var(--mode-text)]'
                                                     />
                                                     <button
                                                         type='button'
@@ -2143,7 +2153,7 @@ export default function InspectorPanel() {
                                                                 gridRowStart: null,
                                                             })
                                                         }
-                                                        className='rounded-md border border-[rgba(148,163,184,0.35)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(226,232,240,0.75)] transition-colors hover:border-[rgba(236,233,254,0.6)]'
+                                                        className='rounded-md border border-[var(--mode-border)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--mode-text-muted)] transition-colors hover:border-[var(--mode-accent)]'
                                                     >
                                                         Auto
                                                     </button>
@@ -2170,7 +2180,7 @@ export default function InspectorPanel() {
                                     }
                                 />
                                 {currentAlignSelf === 'mixed' ? (
-                                    <p className='text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.6)]'>
+                                    <p className='text-[10px] uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>
                                         Mixed values — choose an option to unify.
                                     </p>
                                 ) : null}
@@ -2182,7 +2192,7 @@ export default function InspectorPanel() {
                 {!isGroupContainer ? (
                     <>
                         <div className='space-y-2'>
-                            <p className='text-[11px] font-semibold uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>Quick Align</p>
+                            <p className='text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>Quick Align</p>
                             <div className='grid grid-cols-3 gap-2'>
                                 <button type='button' disabled={disableAlign} onClick={() => alignElements('left')} className={alignButtonClass(disableAlign)}>
                                     Align Left
@@ -2206,7 +2216,7 @@ export default function InspectorPanel() {
                         </div>
 
                         <div className='space-y-2'>
-                            <p className='text-[11px] font-semibold uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>Distribute</p>
+                            <p className='text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>Distribute</p>
                             <div className='grid grid-cols-2 gap-2'>
                                 <button type='button' disabled={disableDistribute} onClick={() => distributeElements('horizontal')} className={alignButtonClass(disableDistribute)}>
                                     Horizontal
@@ -2216,7 +2226,7 @@ export default function InspectorPanel() {
                                 </button>
                             </div>
                             {disableDistribute ? (
-                                <p className='text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.55)]'>Select three or more elements to distribute.</p>
+                                <p className='text-[10px] uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>Select three or more elements to distribute.</p>
                             ) : null}
                         </div>
                     </>
@@ -2232,12 +2242,12 @@ export default function InspectorPanel() {
 
         return (
             <div className='space-y-3'>
-                <label className='flex flex-col gap-1 text-xs text-[rgba(226,232,240,0.7)]'>
-                    <span className='uppercase tracking-[0.2em] text-[rgba(148,163,184,0.75)]'>Prototype link</span>
+                <label className='flex flex-col gap-1 text-xs text-[var(--mode-text-muted)]'>
+                    <span className='uppercase tracking-[0.2em] text-[var(--mode-text-muted)]'>Prototype link</span>
                     <select
                         value={activeElementProps.linkTarget ?? ''}
                         onChange={(event) => setElementLink(activeFrame.id, activeElement.id, event.target.value || null)}
-                        className='rounded-lg border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.65)] px-3 py-2 text-sm text-[rgba(236,233,254,0.9)]'
+                        className='rounded-lg border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-2 text-sm text-[var(--mode-text)]'
                     >
                         <option value=''>No link</option>
                         {options.map((frame) => (
@@ -2247,7 +2257,7 @@ export default function InspectorPanel() {
                         ))}
                     </select>
                 </label>
-                <p className='text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.6)]'>
+                <p className='text-[10px] uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>
                     Linked elements navigate in prototype preview.
                 </p>
             </div>
@@ -2264,7 +2274,7 @@ export default function InspectorPanel() {
                     key='group'
                     type='button'
                     onClick={() => groupSelectedElements()}
-                    className='rounded-lg border border-[rgba(139,92,246,0.35)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(236,233,254,0.85)] transition-colors hover:border-[rgba(236,233,254,0.7)]'
+                    className='rounded-lg border border-[var(--mode-accent)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                 >
                     Group {selectionCount}
                 </button>,
@@ -2276,7 +2286,7 @@ export default function InspectorPanel() {
                     key='ungroup'
                     type='button'
                     onClick={() => ungroupElement(activeFrame.id, activeElement.id)}
-                    className='rounded-lg border border-[rgba(59,130,246,0.35)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(191,219,254,0.9)] transition-colors hover:border-[rgba(191,219,254,0.75)]'
+                    className='rounded-lg border border-[var(--mode-accent)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)]'
                 >
                     Ungroup
                 </button>,
@@ -2288,7 +2298,7 @@ export default function InspectorPanel() {
                     key='lift'
                     type='button'
                     onClick={() => liftElementOutOfGroup(activeFrame.id, activeElement.id)}
-                    className='rounded-lg border border-[rgba(148,163,184,0.3)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(226,232,240,0.8)] transition-colors hover:border-[rgba(226,232,240,0.7)]'
+                    className='rounded-lg border border-[var(--mode-border)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--mode-text-muted)] transition-colors hover:border-[var(--mode-accent)]'
                 >
                     Lift from group
                 </button>,
@@ -2307,14 +2317,16 @@ export default function InspectorPanel() {
         : activeFrame?.name ?? 'Nothing selected';
 
     return (
-        <aside className='pointer-events-auto hidden h-full max-h-screen w-80 overflow-y-auto border-l border-[rgba(148,163,184,0.15)] bg-[rgba(15,23,42,0.78)] px-5 py-6 text-sm text-[rgba(226,232,240,0.8)] backdrop-blur lg:flex lg:flex-col'>
+        <aside
+            className='pointer-events-auto hidden h-full max-h-screen w-80 overflow-y-auto border-l px-5 py-6 text-sm backdrop-blur lg:flex lg:flex-col'
+            style={{ background: 'var(--mode-sidebar-bg)', borderColor: 'var(--mode-border)', color: 'var(--mode-text-muted)' }}>
             <header className='mb-6 space-y-2'>
                 <div>
-                    <p className='text-xs font-semibold uppercase tracking-[0.25em] text-[rgba(148,163,184,0.65)]'>Inspector</p>
+                    <p className='text-xs font-semibold uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>Inspector</p>
                 </div>
-                <div className='rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.6)] px-3 py-2'>
-                    <p className='text-sm font-medium text-white'>{inspectorTitle}</p>
-                    <p className='text-xs text-[rgba(226,232,240,0.55)]'>
+                <div className='rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-2'>
+                    <p className='text-sm font-medium text-[var(--mode-text)]'>{inspectorTitle}</p>
+                    <p className='text-xs text-[var(--mode-text-muted)]'>
                         {selectionCount > 1 ? `${selectionCount} elements selected` : activeElement?.id || activeFrame?.id || 'Choose a frame or element'}
                     </p>
                 </div>
@@ -2322,16 +2334,16 @@ export default function InspectorPanel() {
             </header>
 
             <div className='space-y-4 pr-2'>
-                <section className='rounded-xl border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.55)] p-4'>
-                    <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.7)]'>Transform</h3>
+                <section className='rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] p-4'>
+                    <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[var(--mode-text-muted)]'>Transform</h3>
                     <div className='mt-3 space-y-4'>{renderTransformControls()}</div>
                 </section>
 
                 {inspectorSections.map((section) => {
                     if (['style', 'appearance'].includes(section.id)) {
                         return (
-                            <section key={section.id} className='rounded-xl border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.55)] p-4'>
-                                <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.7)]'>{section.title}</h3>
+                            <section key={section.id} className='rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] p-4'>
+                                <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[var(--mode-text-muted)]'>{section.title}</h3>
                                 <div className='mt-3 space-y-4'>{renderStyleControls()}</div>
                             </section>
                         );
@@ -2339,8 +2351,8 @@ export default function InspectorPanel() {
 
                     if (section.id === 'effects') {
                         return (
-                            <section key={section.id} className='rounded-xl border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.55)] p-4'>
-                                <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.7)]'>{section.title}</h3>
+                            <section key={section.id} className='rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] p-4'>
+                                <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[var(--mode-text-muted)]'>{section.title}</h3>
                                 <div className='mt-3 space-y-4'>{renderEffectsControls()}</div>
                             </section>
                         );
@@ -2348,8 +2360,8 @@ export default function InspectorPanel() {
 
                     if (section.id === 'typography') {
                         return (
-                            <section key={section.id} className='rounded-xl border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.55)] p-4'>
-                                <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.7)]'>{section.title}</h3>
+                            <section key={section.id} className='rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] p-4'>
+                                <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[var(--mode-text-muted)]'>{section.title}</h3>
                                 <div className='mt-3 space-y-4'>{renderTypographyControls()}</div>
                             </section>
                         );
@@ -2357,8 +2369,8 @@ export default function InspectorPanel() {
 
                     if (section.id === 'layout') {
                         return (
-                            <section key={section.id} className='rounded-xl border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.55)] p-4'>
-                                <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.7)]'>{section.title}</h3>
+                            <section key={section.id} className='rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] p-4'>
+                                <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[var(--mode-text-muted)]'>{section.title}</h3>
                                 <div className='mt-3 space-y-4'>{renderLayoutControls()}</div>
                             </section>
                         );
@@ -2366,8 +2378,8 @@ export default function InspectorPanel() {
 
                     if (section.id === 'interaction') {
                         return (
-                            <section key={section.id} className='rounded-xl border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.55)] p-4'>
-                                <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.7)]'>{section.title}</h3>
+                            <section key={section.id} className='rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] p-4'>
+                                <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[var(--mode-text-muted)]'>{section.title}</h3>
                                 <div className='mt-3 space-y-4'>{renderInteractionControls()}</div>
                             </section>
                         );
@@ -2375,18 +2387,18 @@ export default function InspectorPanel() {
 
                     if (section.id === 'export') {
                         return (
-                            <section key={section.id} className='rounded-xl border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.55)] p-4'>
-                                <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.7)]'>{section.title}</h3>
+                            <section key={section.id} className='rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] p-4'>
+                                <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[var(--mode-text-muted)]'>{section.title}</h3>
                                 <div className='mt-3 space-y-2'>
                                     {section.items?.map((item) => (
                                         <button
                                             key={item}
                                             type='button'
                                             onClick={() => handleInspectorAction(section.id, item)}
-                                            className='flex w-full items-center justify-between rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.6)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[rgba(226,232,240,0.85)] transition-colors hover:border-[rgba(236,233,254,0.35)] hover:bg-[rgba(139,92,246,0.18)] hover:text-white'
+                                            className='flex w-full items-center justify-between rounded-lg border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)] hover:bg-[var(--mode-accent-soft)] hover:text-[var(--mode-text)]'
                                         >
                                             <span>{item}</span>
-                                            <span className='text-[rgba(236,233,254,0.85)]'>Export</span>
+                                            <span className='text-[var(--mode-text)]'>Export</span>
                                         </button>
                                     ))}
                                 </div>
@@ -2395,18 +2407,18 @@ export default function InspectorPanel() {
                     }
                     if (section.id === 'code') {
                         return (
-                            <section key={section.id} className='rounded-xl border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.55)] p-4'>
-                                <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.7)]'>{section.title}</h3>
+                            <section key={section.id} className='rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] p-4'>
+                                <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[var(--mode-text-muted)]'>{section.title}</h3>
                                 <div className='mt-3 space-y-2'>
                                     {section.items?.map((item) => (
                                         <button
                                             key={item}
                                             type='button'
                                             onClick={() => handleInspectorAction(section.id, item)}
-                                            className='flex w-full items-center justify-between rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.6)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[rgba(226,232,240,0.85)] transition-colors hover:border-[rgba(236,233,254,0.35)] hover:bg-[rgba(59,130,246,0.18)] hover:text-white'
+                                            className='flex w-full items-center justify-between rounded-lg border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)] hover:bg-[var(--mode-accent-soft)] hover:text-[var(--mode-text)]'
                                         >
                                             <span>{item}</span>
-                                            <span className='text-[rgba(236,233,254,0.85)]'>Preview</span>
+                                            <span className='text-[var(--mode-text)]'>Preview</span>
                                         </button>
                                     ))}
                                 </div>
@@ -2415,8 +2427,8 @@ export default function InspectorPanel() {
                     }
 
                     return (
-                        <section key={section.id} className='rounded-xl border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.55)] p-4'>
-                            <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.7)]'>{section.title}</h3>
+                        <section key={section.id} className='rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] p-4'>
+                            <h3 className='text-xs font-semibold uppercase tracking-[0.2em] text-[var(--mode-text-muted)]'>{section.title}</h3>
                             <ul className='mt-3 space-y-3'>
                                 {section.items?.map((item) => {
                                     const itemId = item.toString().toLowerCase().replace(/\s+/g, '-');
@@ -2424,15 +2436,15 @@ export default function InspectorPanel() {
                                     return (
                                         <li
                                             key={item}
-                                            className='rounded-lg border border-[rgba(148,163,184,0.12)] bg-[rgba(15,23,42,0.6)] px-3 py-3 text-xs text-[rgba(226,232,240,0.78)]'
+                                            className='rounded-lg border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-3 text-xs text-[var(--mode-text)]'
                                         >
                                             <div className='flex items-center justify-between'>
-                                                <span className='uppercase tracking-[0.16em] text-[rgba(226,232,240,0.72)]'>{item}</span>
-                                                <span className='font-semibold text-[rgba(236,233,254,0.88)]'>{Math.round(value)}%</span>
+                                                <span className='uppercase tracking-[0.16em] text-[var(--mode-text-muted)]'>{item}</span>
+                                                <span className='font-semibold text-[var(--mode-text)]'>{Math.round(value)}%</span>
                                             </div>
-                                            <div className='relative mt-2 h-2 w-full overflow-hidden rounded-full bg-[rgba(148,163,184,0.18)]'>
+                                            <div className='relative mt-2 h-2 w-full overflow-hidden rounded-full bg-[var(--mode-accent-soft)]'>
                                                 <div
-                                                    className='pointer-events-none absolute inset-0 rounded-full bg-[rgba(139,92,246,0.52)]'
+                                                    className='pointer-events-none absolute inset-0 rounded-full bg-[var(--mode-accent)]'
                                                     style={{ width: `${value}%` }}
                                                 />
                                                 <input

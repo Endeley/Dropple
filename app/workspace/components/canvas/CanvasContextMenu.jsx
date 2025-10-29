@@ -7,40 +7,43 @@ import { useHistoryStatus } from './history/useHistoryStatus';
 
 const MENU_WIDTH = 320;
 
+const EMPTY_ARRAY = Object.freeze([]);
+const NOOP = () => {};
+
 export default function CanvasContextMenu() {
     const contextMenu = useCanvasStore((state) => state.contextMenu);
     const mode = useCanvasStore((state) => state.mode);
     const clipboard = useCanvasStore((state) => state.clipboard);
-    const closeContextMenu = useCanvasStore((state) => state.closeContextMenu);
-    const copyElement = useCanvasStore((state) => state.copyElement);
-    const duplicateElement = useCanvasStore((state) => state.duplicateElement);
-    const pasteElement = useCanvasStore((state) => state.pasteElement);
-    const removeElement = useCanvasStore((state) => state.removeElement);
-    const copyFrame = useCanvasStore((state) => state.copyFrame);
-    const duplicateFrame = useCanvasStore((state) => state.duplicateFrame);
-    const pasteFrame = useCanvasStore((state) => state.pasteFrame);
-    const removeFrame = useCanvasStore((state) => state.removeFrame);
-    const bringElementForward = useCanvasStore((state) => state.bringElementForward);
-    const bringElementToFront = useCanvasStore((state) => state.bringElementToFront);
-    const sendElementBackward = useCanvasStore((state) => state.sendElementBackward);
-    const sendElementToBack = useCanvasStore((state) => state.sendElementToBack);
-    const groupSelectedElements = useCanvasStore((state) => state.groupSelectedElements);
-    const ungroupElement = useCanvasStore((state) => state.ungroupElement);
-    const liftElementOutOfGroup = useCanvasStore((state) => state.liftElementOutOfGroup);
-    const alignSelectedElements = useCanvasStore((state) => state.alignSelectedElements);
-    const distributeSelectedElements = useCanvasStore((state) => state.distributeSelectedElements);
-    const setActiveToolOverlay = useCanvasStore((state) => state.setActiveToolOverlay);
-    const frames = useCanvasStore((state) => state.frames);
-    const selectedElementIds = useCanvasStore((state) => state.selectedElementIds);
+    const closeContextMenu = useCanvasStore((state) => state.closeContextMenu) ?? NOOP;
+    const copyElement = useCanvasStore((state) => state.copyElement) ?? NOOP;
+    const duplicateElement = useCanvasStore((state) => state.duplicateElement) ?? NOOP;
+    const pasteElement = useCanvasStore((state) => state.pasteElement) ?? NOOP;
+    const removeElement = useCanvasStore((state) => state.removeElement) ?? NOOP;
+    const copyFrame = useCanvasStore((state) => state.copyFrame) ?? NOOP;
+    const duplicateFrame = useCanvasStore((state) => state.duplicateFrame) ?? NOOP;
+    const pasteFrame = useCanvasStore((state) => state.pasteFrame) ?? NOOP;
+    const removeFrame = useCanvasStore((state) => state.removeFrame) ?? NOOP;
+    const bringElementForward = useCanvasStore((state) => state.bringElementForward) ?? NOOP;
+    const bringElementToFront = useCanvasStore((state) => state.bringElementToFront) ?? NOOP;
+    const sendElementBackward = useCanvasStore((state) => state.sendElementBackward) ?? NOOP;
+    const sendElementToBack = useCanvasStore((state) => state.sendElementToBack) ?? NOOP;
+    const groupSelectedElements = useCanvasStore((state) => state.groupSelectedElements) ?? NOOP;
+    const ungroupElement = useCanvasStore((state) => state.ungroupElement) ?? NOOP;
+    const liftElementOutOfGroup = useCanvasStore((state) => state.liftElementOutOfGroup) ?? NOOP;
+    const alignSelectedElements = useCanvasStore((state) => state.alignSelectedElements) ?? NOOP;
+    const distributeSelectedElements = useCanvasStore((state) => state.distributeSelectedElements) ?? NOOP;
+    const setActiveToolOverlay = useCanvasStore((state) => state.setActiveToolOverlay) ?? NOOP;
+    const frames = useCanvasStore((state) => state.frames) ?? EMPTY_ARRAY;
+    const selectedElementIds = useCanvasStore((state) => state.selectedElementIds) ?? EMPTY_ARRAY;
     const selectedFrameId = useCanvasStore((state) => state.selectedFrameId);
-    const setScale = useCanvasStore((state) => state.setScale);
-    const setPosition = useCanvasStore((state) => state.setPosition);
-    const toggleGrid = useCanvasStore((state) => state.toggleGrid);
-    const setMode = useCanvasStore((state) => state.setMode);
-    const sendModeIntent = useCanvasStore((state) => state.sendModeIntent);
-    const previewAutoLayoutSuggestion = useCanvasStore((state) => state.previewAutoLayoutSuggestion);
-    const undoCanvas = useCanvasStore((state) => state.undoCanvas);
-    const redoCanvas = useCanvasStore((state) => state.redoCanvas);
+    const setScale = useCanvasStore((state) => state.setScale) ?? NOOP;
+    const setPosition = useCanvasStore((state) => state.setPosition) ?? NOOP;
+    const toggleGrid = useCanvasStore((state) => state.toggleGrid) ?? NOOP;
+    const setMode = useCanvasStore((state) => state.setMode) ?? NOOP;
+    const sendModeIntent = useCanvasStore((state) => state.sendModeIntent) ?? NOOP;
+    const previewAutoLayoutSuggestion = useCanvasStore((state) => state.previewAutoLayoutSuggestion) ?? NOOP;
+    const undoCanvas = useCanvasStore((state) => state.undoCanvas) ?? NOOP;
+    const redoCanvas = useCanvasStore((state) => state.redoCanvas) ?? NOOP;
     const { canUndo, canRedo } = useHistoryStatus();
 
     useEffect(() => {
@@ -1311,19 +1314,24 @@ export default function CanvasContextMenu() {
     return (
         <div
             data-canvas-context-menu
-            className='fixed z-50 min-w-[240px] rounded-xl border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.96)] shadow-2xl shadow-[rgba(15,23,42,0.45)] backdrop-blur'
-            style={{ top: menuPosition.top, left: menuPosition.left }}
+            className='fixed z-50 min-w-[240px] rounded-xl border shadow-2xl backdrop-blur'
+            style={{ top: menuPosition.top, left: menuPosition.left, background: 'var(--mode-panel-bg)', borderColor: 'var(--mode-border)', color: 'var(--mode-text)' }}
         >
-            <div className='border-b border-[rgba(148,163,184,0.2)] p-2'>
+            <div className='border-b p-2' style={{ borderColor: 'var(--mode-border)', color: 'var(--mode-text)' }}>
                 <div className='relative'>
-                    <span className='pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[rgba(148,163,184,0.65)]'>
+                    <span className='pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--mode-text-muted)]'>
                         🔍
                     </span>
                     <input
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
                         placeholder='Type a command…'
-                        className='w-full rounded-lg border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.85)] py-2 pl-8 pr-3 text-sm text-[rgba(226,232,240,0.9)] placeholder:text-[rgba(148,163,184,0.55)] focus:border-[rgba(139,92,246,0.65)] focus:outline-none'
+                        className='w-full rounded-lg border py-2 pl-8 pr-3 text-sm focus:outline-none'
+                        style={{
+                            borderColor: 'var(--mode-border)',
+                            background: 'var(--mode-sidebar-bg)',
+                            color: 'var(--mode-text)',
+                        }}
                     />
                 </div>
             </div>
@@ -1331,11 +1339,11 @@ export default function CanvasContextMenu() {
                 {sectionsToRender.map((section) => (
                     <div key={section.key} className='py-2'>
                         {section.items.length > 0 ? (
-                            <p className='mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-[rgba(148,163,184,0.6)]'>
+                            <p className='mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--mode-text-muted)]'>
                                 {section.title}
                             </p>
                         ) : (
-                            <p className='px-2 text-sm text-[rgba(148,163,184,0.65)]'>{section.title}</p>
+                            <p className='px-2 text-sm text-[color:var(--mode-text-muted)]'>{section.title}</p>
                         )}
                         {section.items.map((item) => {
                             const isDisabled = item.disabled;
@@ -1351,10 +1359,10 @@ export default function CanvasContextMenu() {
                                     className={clsx(
                                         'group flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors',
                                         isDisabled
-                                            ? 'cursor-not-allowed text-[rgba(148,163,184,0.45)]'
+                                            ? 'cursor-not-allowed text-[color:var(--mode-text-muted)] opacity-60'
                                             : item.danger
                                                 ? 'text-[rgba(248,113,113,0.85)] hover:bg-[rgba(248,113,113,0.15)]'
-                                                : 'text-[rgba(226,232,240,0.9)] hover:bg-[rgba(139,92,246,0.18)] hover:text-white',
+                                                : 'text-[var(--mode-text)] hover:bg-[var(--mode-accent-soft)]',
                                     )}
                                 >
                                     <div className='flex items-center gap-2'>
@@ -1362,7 +1370,7 @@ export default function CanvasContextMenu() {
                                         <span>{item.label}</span>
                                     </div>
                                     {item.description ? (
-                                        <span className='text-[10px] uppercase tracking-[0.2em] text-[rgba(148,163,184,0.55)] group-hover:text-[rgba(226,232,240,0.65)]'>
+                                        <span className='text-[10px] uppercase tracking-[0.2em] text-[color:var(--mode-text-muted)] group-hover:text-[color:var(--mode-text)]'>
                                             {item.description}
                                         </span>
                                     ) : null}

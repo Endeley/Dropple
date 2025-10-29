@@ -17,6 +17,34 @@ const SCALE_STEP = 1.1;
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 4;
 const FALLBACK_ACCENT = '#6366F1';
+const DEFAULT_POSITION = Object.freeze({ x: 0, y: 0 });
+const NOOP = () => {};
+
+const parseColor = (value) => {
+    if (typeof value !== 'string' || !value) {
+        return { r: 99, g: 102, b: 241 };
+    }
+    if (value.startsWith('#')) {
+        const hex = value.replace('#', '');
+        const normalized = hex.length === 3 ? hex.split('').map((char) => char + char).join('') : hex;
+        const r = parseInt(normalized.slice(0, 2), 16);
+        const g = parseInt(normalized.slice(2, 4), 16);
+        const b = parseInt(normalized.slice(4, 6), 16);
+        return { r, g, b };
+    }
+    const match = value.match(/rgba?\(([^)]+)\)/);
+    if (match) {
+        const [r = '99', g = '102', b = '241'] = match[1].split(',').map((segment) => segment.trim());
+        return { r: Number(r), g: Number(g), b: Number(b) };
+    }
+    return { r: 99, g: 102, b: 241 };
+};
+
+const toRgba = (value, alpha = 1) => {
+    const { r, g, b } = parseColor(value);
+    const safeAlpha = Math.max(0, Math.min(1, alpha));
+    return `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${safeAlpha})`;
+};
 
 const humanizeModeName = (value) => {
     if (!value) return 'Mode';
@@ -74,10 +102,11 @@ export default function CanvasContainer() {
         canvasBehavior.usesFabric || canvasKind === 'fabric' || canvasKind === 'timeline' || canvasKind === 'frame',
     );
     const timelineBehavior = canvasBehavior.timeline ?? null;
-    const scale = useCanvasStore((state) => state.scale);
-    const setScale = useCanvasStore((state) => state.setScale);
-    const position = useCanvasStore((state) => state.position);
-    const setPosition = useCanvasStore((state) => state.setPosition);
+    const scale = useCanvasStore((state) => state.scale ?? 1);
+    const setScale = useCanvasStore((state) => state.setScale) ?? NOOP;
+    const rawPosition = useCanvasStore((state) => state.position);
+    const position = rawPosition && typeof rawPosition === 'object' ? rawPosition : DEFAULT_POSITION;
+    const setPosition = useCanvasStore((state) => state.setPosition) ?? NOOP;
     const selectedTool = useCanvasStore((state) => state.selectedTool);
     const gridVisible = useCanvasStore((state) => state.gridVisible);
     const gridSize = useCanvasStore((state) => state.gridSize);
@@ -235,6 +264,21 @@ export default function CanvasContainer() {
         [position, scale, setPosition, setScale],
     );
 
+    useEffect(() => {
+        if (useFabricCanvas) return undefined;
+        const viewport = viewportRef.current;
+        if (!viewport) return undefined;
+
+        const listener = (event) => {
+            handleWheel(event);
+        };
+
+        viewport.addEventListener('wheel', listener, { passive: false });
+        return () => {
+            viewport.removeEventListener('wheel', listener);
+        };
+    }, [handleWheel, useFabricCanvas]);
+
     const handlePointerDown = (event) => {
         const store = useCanvasStore.getState();
         const currentTool = store.selectedTool || 'pointer';
@@ -389,6 +433,9 @@ export default function CanvasContainer() {
         });
     }, []);
 
+    const modeAsset = MODE_ASSETS[mode] ?? {};
+    const accentColor = modeTransitionIntent?.accent ?? modeAsset.accent ?? FALLBACK_ACCENT;
+
     const gridBackground = useMemo(() => {
         if (!gridVisible || gridSize <= 0) {
             return {};
@@ -396,18 +443,16 @@ export default function CanvasContainer() {
         const scaledSize = gridSize * scale;
         const offsetX = ((position.x % scaledSize) + scaledSize) % scaledSize;
         const offsetY = ((position.y % scaledSize) + scaledSize) % scaledSize;
-        const lineColor = 'rgba(139,92,246,0.1)';
-        const strongLine = 'rgba(139,92,246,0.25)';
+        const lineColor = toRgba(accentColor, 0.14);
+        const strongLine = toRgba(accentColor, 0.32);
         const major = gridSize * 4 * scale;
         return {
             backgroundImage: `linear-gradient(to right, ${lineColor} 1px, transparent 1px), linear-gradient(to bottom, ${lineColor} 1px, transparent 1px), linear-gradient(to right, ${strongLine} 1px, transparent 1px), linear-gradient(to bottom, ${strongLine} 1px, transparent 1px)`,
             backgroundSize: `${scaledSize}px ${scaledSize}px, ${scaledSize}px ${scaledSize}px, ${major}px ${major}px, ${major}px ${major}px`,
             backgroundPosition: `${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px`,
         };
-    }, [gridVisible, gridSize, position.x, position.y, scale]);
+    }, [gridVisible, gridSize, position.x, position.y, scale, accentColor]);
     const showOverlay = overlayEngaged || isTransitioning;
-    const modeAsset = MODE_ASSETS[mode] ?? {};
-    const accentColor = modeTransitionIntent?.accent ?? modeAsset.accent ?? FALLBACK_ACCENT;
     const thumbnail = modeTransitionIntent?.thumbnail ?? modeAsset.thumbnail ?? null;
     const modeConfig = MODE_CONFIG[mode] ?? null;
     const modeLabel = modeTransitionIntent?.label ?? modeConfig?.label ?? humanizeModeName(mode);
@@ -417,7 +462,7 @@ export default function CanvasContainer() {
         (isSceneHydrating ? 'Restoring saved scene…' : 'Preparing tools & panels…');
     const overlayBadge = modeTransitionIntent?.badge ?? null;
     const canvasShellClass = clsx(
-        'relative h-full w-full overflow-hidden bg-[var(--color-canvas)] transform-gpu transition-[opacity,transform,filter] duration-300 ease-out will-change-transform',
+        'relative h-full w-full overflow-hidden bg-[var(--mode-canvas-bg)] transform-gpu transition-[opacity,transform,filter] duration-300 ease-out will-change-transform',
         showOverlay ? 'pointer-events-none opacity-0 scale-95 blur-sm' : 'opacity-100 scale-100',
     );
     const overlayElement = (
@@ -472,7 +517,6 @@ export default function CanvasContainer() {
                     ...gridBackground,
                     overscrollBehavior: 'none',
                 }}
-                onWheel={handleWheel}
                 onPointerDown={handlePointerDown}
                 onContextMenu={handleCanvasContextMenu}
             >
@@ -482,7 +526,10 @@ export default function CanvasContainer() {
                 >
                     <CanvasLayer />
                 </div>
-                <div className='pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(139,92,246,0.08),transparent55%)]' />
+                <div
+                    className='pointer-events-none absolute inset-0'
+                    style={{ background: `radial-gradient(circle at top, ${toRgba(accentColor, canvasBehavior.heavy ? 0.22 : 0.12)}, transparent 55%)` }}
+                />
                 {overlayElement}
             </div>
         );
@@ -510,26 +557,26 @@ function ModeTransitionOverlay({ active, blocking, accent, label, description, m
     );
     return (
         <div className={overlayClass} style={{ pointerEvents: blocking ? 'auto' : 'none' }} aria-hidden={!blocking}>
-            <div className='w-[min(420px,92%)] rounded-3xl border border-white/10 bg-slate-950/80 p-6 text-white shadow-[0_20px_60px_rgba(8,15,35,0.55)] backdrop-blur-xl'>
+            <div className='w-[min(420px,92%)] rounded-3xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] p-6 text-[var(--mode-text)] shadow-[0_20px_60px_rgba(8,15,35,0.55)] backdrop-blur-xl'>
                 <div className='flex flex-col gap-5'>
                     <div className='flex items-start gap-4'>
-                        <div className='relative h-20 w-28 overflow-hidden rounded-2xl border border-white/10 bg-slate-900/70'>
+                        <div className='relative h-20 w-28 overflow-hidden rounded-2xl border border-[var(--mode-border)] bg-slate-900/70'>
                             <ModePreviewMedia thumbnail={thumbnail} accent={accent} scene={scene} />
                         </div>
                         <div className='flex flex-1 flex-col gap-1'>
                             <div className='flex items-center gap-2'>
-                                <span className='text-[11px] uppercase tracking-[0.45em] text-white/45'>Mode Switch</span>
+                                <span className='text-[11px] uppercase tracking-[0.45em] text-[var(--mode-text)]/45'>Mode Switch</span>
                                 {badge ? (
-                                    <span className='rounded-full border border-white/15 bg-white/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-[0.35em] text-white/70'>
+                                    <span className='rounded-full border border-white/15 bg-white/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-[0.35em] text-[var(--mode-text)]/70'>
                                         {badge}
                                     </span>
                                 ) : null}
                             </div>
                             <p className='text-lg font-semibold leading-tight'>{`Entering ${label}`}</p>
-                            <p className='text-xs text-white/70 leading-relaxed'>{description}</p>
+                            <p className='text-xs text-[var(--mode-text)]/70 leading-relaxed'>{description}</p>
                         </div>
                     </div>
-                    <div className='flex items-center gap-3 rounded-2xl border border-white/5 bg-white/5 px-4 py-3 text-xs text-white/80 sm:text-sm'>
+                    <div className='flex items-center gap-3 rounded-2xl border border-white/5 bg-white/5 px-4 py-3 text-xs text-[var(--mode-text)]/80 sm:text-sm'>
                         <span className='relative flex h-2 w-2 shrink-0'>
                             <span
                                 className='absolute inline-flex h-full w-full animate-ping rounded-full opacity-60'
@@ -564,7 +611,7 @@ function ModePreviewMedia({ thumbnail, accent, scene }) {
                 {scene.slice(0, 3).map((frame, index) => (
                     <div
                         key={frame.id ?? index}
-                        className='absolute rounded-xl border border-white/10 bg-slate-800/70 shadow-lg'
+                        className='absolute rounded-xl border border-[var(--mode-border)] bg-slate-800/70 shadow-lg'
                         style={{
                             top: 8 + index * 6,
                             left: 8 + index * 10,
@@ -588,7 +635,7 @@ function ModePreviewMedia({ thumbnail, accent, scene }) {
         <div className='absolute inset-0 bg-linear-to-br from-slate-800/80 via-slate-900/80 to-slate-950/90'>
             <div
                 className='absolute inset-0 opacity-70'
-                style={{ background: `radial-gradient(circle at 20% 20%, ${accent}26, transparent 60%)` }}
+                style={{ background: `radial-gradient(circle at 20% 20%, ${accent}40, transparent 60%)` }}
             />
         </div>
     );
@@ -642,7 +689,9 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
 
     if (!resolvedFrame) {
         return (
-            <div className='border-t border-[rgba(148,163,184,0.18)] bg-[rgba(7,11,22,0.92)] px-5 py-4 text-xs text-[rgba(226,232,240,0.72)]'>
+            <div
+                className='border-t px-5 py-4 text-xs'
+                style={{ borderColor: 'var(--mode-border)', background: 'var(--mode-panel-bg)', color: 'var(--mode-text-muted)' }}>
                 Create a frame to start building your timeline.
             </div>
         );
@@ -663,7 +712,9 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
     };
 
     return (
-        <div className='border-t border-[rgba(148,163,184,0.18)] bg-[rgba(7,11,22,0.92)] px-5 py-4 text-xs text-[rgba(226,232,240,0.78)]'>
+        <div
+            className='border-t px-5 py-4 text-xs'
+            style={{ borderColor: 'var(--mode-border)', background: 'var(--mode-panel-bg)', color: 'var(--mode-text)' }}>
             <div className='flex flex-wrap items-center justify-between gap-3'>
                 <div className='flex items-center gap-3'>
                     <button
@@ -674,7 +725,8 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
                                 handleSelectFrame(frames[currentIndex - 1].id);
                             }
                         }}
-                        className='rounded-md border border-[rgba(148,163,184,0.25)] px-2 py-1 text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)] hover:border-[rgba(236,233,254,0.75)] hover:text-white'
+                        className='rounded-md border px-2 py-1 text-[10px] uppercase tracking-[0.25em] transition-colors hover:bg-[var(--mode-accent-soft)]'
+                        style={{ borderColor: 'var(--mode-border)', color: 'var(--mode-text)' }}
                     >
                         Prev
                     </button>
@@ -686,15 +738,18 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
                                 handleSelectFrame(frames[currentIndex + 1].id);
                             }
                         }}
-                        className='rounded-md border border-[rgba(148,163,184,0.25)] px-2 py-1 text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)] hover:border-[rgba(236,233,254,0.75)] hover:text-white'
+                        className='rounded-md border px-2 py-1 text-[10px] uppercase tracking-[0.25em] transition-colors hover:bg-[var(--mode-accent-soft)]'
+                        style={{ borderColor: 'var(--mode-border)', color: 'var(--mode-text)' }}
                     >
                         Next
                     </button>
-                    <span className='rounded-full border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.7)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[rgba(191,219,254,0.85)]'>
+                    <span
+                        className='rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.3em]'
+                        style={{ borderColor: 'var(--mode-border)', background: 'var(--mode-sidebar-bg)', color: 'var(--mode-text)' }}>
                         {resolvedFrame.name ?? 'Frame'}
                     </span>
                 </div>
-                <div className='flex items-center gap-2 text-[rgba(191,219,254,0.85)]'>
+                <div className='flex items-center gap-2 text-[var(--mode-text)]'>
                     <button
                         type='button'
                         onClick={() => {
@@ -704,7 +759,7 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
                                 playTimeline(resolvedFrame.id);
                             }
                         }}
-                        className='rounded-md border border-[rgba(236,233,254,0.35)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-white hover:border-[rgba(236,233,254,0.6)]'
+                        className='rounded-md border border-[var(--mode-accent)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[var(--mode-text)] hover:border-[var(--mode-accent)]'
                         style={{ backgroundColor: isPlaying ? 'rgba(236,233,254,0.1)' : 'transparent' }}
                     >
                         {isPlaying ? 'Pause' : 'Play'}
@@ -715,21 +770,21 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
                             setTimelinePlayhead(resolvedFrame.id, 0, { resetTick: true });
                             pauseTimeline();
                         }}
-                        className='rounded-md border border-[rgba(148,163,184,0.35)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[rgba(191,219,254,0.85)] hover:border-[rgba(236,233,254,0.6)]'
+                        className='rounded-md border border-[var(--mode-border)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[var(--mode-text)] hover:border-[var(--mode-accent)]'
                     >
                         Stop
                     </button>
                     <button
                         type='button'
                         onClick={() => setTimelineLoop(!timelinePlayback.loop)}
-                        className='rounded-md border border-[rgba(148,163,184,0.35)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[rgba(191,219,254,0.85)] hover:border-[rgba(236,233,254,0.6)]'
+                        className='rounded-md border border-[var(--mode-border)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[var(--mode-text)] hover:border-[var(--mode-accent)]'
                     >
                         Loop {timelinePlayback.loop ? 'On' : 'Off'}
                     </button>
                     <select
                         value={timelinePlayback.speed ?? 1}
                         onChange={(event) => setTimelineSpeed(Number(event.target.value) || 1)}
-                        className='rounded-md border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.7)] px-2 py-1 text-[10px] text-[rgba(236,233,254,0.92)] focus:border-[rgba(139,92,246,0.6)]'
+                        className='rounded-md border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-2 py-1 text-[10px] text-[var(--mode-text)] focus:border-[var(--mode-accent)]'
                     >
                         {[0.5, 1, 1.5, 2].map((speed) => (
                             <option key={speed} value={speed}>
@@ -738,7 +793,7 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
                         ))}
                     </select>
                 </div>
-                <div className='flex items-center gap-2 text-[rgba(191,219,254,0.85)]'>
+                <div className='flex items-center gap-2 text-[var(--mode-text)]'>
                     <span>{formatSecondsValue(timelinePlayback.playhead ?? 0)}</span>
                     <span>/</span>
                     <span>{formatSecondsValue(totalDuration)}</span>
@@ -783,7 +838,7 @@ function WaveformWorkspace({ timelineBehavior, accent }) {
 
     if (!resolvedFrame) {
         return (
-            <div className='flex h-full w-full items-center justify-center bg-[rgba(5,10,18,0.95)] text-sm text-[rgba(226,232,240,0.65)]'>
+            <div className='flex h-full w-full items-center justify-center bg-[var(--mode-panel-bg)] text-sm text-[var(--mode-text-muted)]'>
                 Start by adding a segment to build your episode timeline.
             </div>
         );
@@ -804,10 +859,10 @@ function WaveformWorkspace({ timelineBehavior, accent }) {
     const isPlaying = timelinePlayback.frameId === resolvedFrame.id && timelinePlayback.isPlaying;
 
     return (
-        <div className='flex h-full w-full flex-col bg-[rgba(5,10,18,0.95)]'>
-            <div className='flex items-center justify-between gap-3 border-b border-[rgba(148,163,184,0.2)] px-5 py-4 text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>
+        <div className='flex h-full w-full flex-col bg-[var(--mode-panel-bg)]'>
+            <div className='flex items-center justify-between gap-3 border-b border-[var(--mode-border)] px-5 py-4 text-[10px] uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>
                 <div className='flex items-center gap-3'>
-                    <span className='rounded-full border border-[rgba(148,163,184,0.25)] bg-[rgba(17,24,39,0.85)] px-3 py-1 text-[rgba(236,233,254,0.85)]'>
+                    <span className='rounded-full border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-1 text-[var(--mode-text)]'>
                         {resolvedFrame.name ?? 'Episode'}
                     </span>
                     <button
@@ -819,33 +874,33 @@ function WaveformWorkspace({ timelineBehavior, accent }) {
                                 playTimeline(resolvedFrame.id);
                             }
                         }}
-                        className='rounded-md border border-[rgba(148,163,184,0.25)] px-3 py-1 text-[rgba(236,233,254,0.85)] hover:border-[rgba(236,233,254,0.6)]'
+                        className='rounded-md border border-[var(--mode-border)] px-3 py-1 text-[var(--mode-text)] hover:border-[var(--mode-accent)]'
                     >
                         {isPlaying ? 'Pause' : 'Play'}
                     </button>
                 </div>
-                <div className='flex items-center gap-2 text-[rgba(191,219,254,0.85)]'>
+                <div className='flex items-center gap-2 text-[var(--mode-text)]'>
                     <span>{formatSecondsValue(timelinePlayback.playhead ?? 0)}</span>
                     <span>/</span>
                     <span>{formatSecondsValue(totalDuration)}</span>
                 </div>
             </div>
-            <div className='grid gap-3 px-5 py-4 text-xs text-[rgba(226,232,240,0.85)] md:grid-cols-2 lg:grid-cols-3'>
+            <div className='grid gap-3 px-5 py-4 text-xs text-[var(--mode-text)] md:grid-cols-2 lg:grid-cols-3'>
                 {segments.map((segment) => (
-                    <div key={segment.id} className='rounded-xl border border-[rgba(48,72,102,0.35)] bg-[rgba(12,23,41,0.85)] p-3'>
-                        <p className='text-sm font-semibold text-white'>{segment.label ?? 'Segment'}</p>
-                        <p className='text-[11px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.65)]'>
+                    <div key={segment.id} className='rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] p-3'>
+                        <p className='text-sm font-semibold text-[var(--mode-text)]'>{segment.label ?? 'Segment'}</p>
+                        <p className='text-[11px] uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>
                             {formatSecondsValue(segment.duration ?? 0)} · start {formatSecondsValue(segment.offset ?? 0)}
                         </p>
                     </div>
                 ))}
                 {voiceClips.length === 0 ? (
-                    <div className='rounded-xl border border-dashed border-[rgba(48,72,102,0.35)] bg-[rgba(12,23,41,0.6)] p-3 text-[rgba(148,163,184,0.7)]'>
+                    <div className='rounded-xl border border-dashed border-[var(--mode-border)] bg-[var(--mode-panel-bg)] p-3 text-[var(--mode-text-muted)]'>
                         Use the Record or Sound tools to add voice and music clips.
                     </div>
                 ) : null}
             </div>
-            <div className='border-t border-[rgba(148,163,184,0.18)] px-5 py-5'>
+            <div className='border-t px-5 py-5'>
                 <TimelineBar
                     frameId={resolvedFrame.id}
                     assets={frameAssets}

@@ -400,18 +400,18 @@ export const MODE_CONFIG = {
 
 export const MODE_LIST = ['design', 'graphics', 'image', 'ux', 'video', 'podcast', 'cartoon', 'ai-studio', 'docs', 'dev', 'classroom', 'brand'];
 export const MODE_ASSETS = {
-    design: { thumbnail: '/modes/design.png', accent: '#A855F7' },
-    graphics: { thumbnail: '/modes/graphics.png', accent: '#7C3AED' },
-    image: { thumbnail: '/modes/image.png', accent: '#F59E0B' },
-    ux: { thumbnail: '/modes/ux.png', accent: '#0EA5E9' },
-    video: { thumbnail: '/modes/video.png', accent: '#EF4444', heavy: true },
-    podcast: { thumbnail: '/modes/podcast.png', accent: '#10B981', heavy: true },
-    cartoon: { thumbnail: '/modes/cartoon.png', accent: '#F97316' },
-    'ai-studio': { thumbnail: '/modes/ai-studio.png', accent: '#9CA3AF', heavy: true },
-    docs: { thumbnail: '/modes/docs.png', accent: '#3B82F6' },
-    dev: { thumbnail: '/modes/dev.png', accent: '#6366F1' },
-    classroom: { thumbnail: '/modes/classroom.png', accent: '#22C55E', heavy: true },
-    brand: { thumbnail: '/modes/brand.png', accent: '#F472B6' },
+    design: { thumbnail: '/images/wksp.png', accent: '#A855F7' },
+    graphics: { thumbnail: '/images/ui1.png', accent: '#7C3AED' },
+    image: { thumbnail: '/images/ai1.png', accent: '#F59E0B' },
+    ux: { thumbnail: '/images/uxdesign.png', accent: '#0EA5E9' },
+    video: { thumbnail: '/images/p1.png', accent: '#EF4444', heavy: true },
+    podcast: { thumbnail: '/images/p2.png', accent: '#10B981', heavy: true },
+    cartoon: { thumbnail: '/images/p3.png', accent: '#F97316' },
+    'ai-studio': { thumbnail: '/images/magicstudio.png', accent: '#9CA3AF', heavy: true },
+    docs: { thumbnail: '/images/p4.png', accent: '#3B82F6' },
+    dev: { thumbnail: '/images/codeview.png', accent: '#6366F1' },
+    classroom: { thumbnail: '/images/education.png', accent: '#22C55E', heavy: true },
+    brand: { thumbnail: '/images/Digitalmarketing.png', accent: '#F472B6' },
 };
 
 export const MODE_CANVAS_BEHAVIOR = {

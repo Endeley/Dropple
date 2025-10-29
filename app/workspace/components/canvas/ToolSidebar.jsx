@@ -147,13 +147,16 @@ function getFramePreviewStyle(frame) {
 
 export default function ToolSidebar() {
     const mode = useCanvasStore((state) => state.mode);
-    const frames = useCanvasStore((state) => state.frames);
+    const rawFrames = useCanvasStore((state) => state.frames);
+    const frames = Array.isArray(rawFrames) ? rawFrames : [];
     const selectedTool = useCanvasStore((state) => state.selectedTool);
     const activeToolOverlay = useCanvasStore((state) => state.activeToolOverlay);
     const selectedFrameId = useCanvasStore((state) => state.selectedFrameId);
     const selectedElementIds = useCanvasStore((state) => state.selectedElementIds);
-    const assetLibrary = useCanvasStore((state) => state.assetLibrary);
-    const timelineAssets = useCanvasStore((state) => state.timelineAssets);
+    const rawAssetLibrary = useCanvasStore((state) => state.assetLibrary);
+    const assetLibrary = Array.isArray(rawAssetLibrary) ? rawAssetLibrary : [];
+    const rawTimelineAssets = useCanvasStore((state) => state.timelineAssets);
+    const timelineAssets = Array.isArray(rawTimelineAssets) ? rawTimelineAssets : [];
     const uploadAssetToLibrary = useCanvasStore((state) => state.uploadAssetToLibrary);
     const generateAiAsset = useCanvasStore((state) => state.generateAiAsset);
     const placeAssetOnFrame = useCanvasStore((state) => state.placeAssetOnFrame);
@@ -180,6 +183,14 @@ export default function ToolSidebar() {
     const [aiPrompt, setAiPrompt] = useState('');
     const [aiKind, setAiKind] = useState('image');
     const uploadInputRef = useRef(null);
+
+    const textPrimary = 'text-[var(--mode-text)]';
+    const textMuted = 'text-[var(--mode-text-muted)]';
+    const borderColor = 'border-[var(--mode-border)]';
+    const sidebarBg = 'bg-[var(--mode-sidebar-bg)]';
+    const panelBg = 'bg-[var(--mode-panel-bg)]';
+    const accentBorder = 'border-[var(--mode-accent)]';
+    const accentSoftBg = 'bg-[var(--mode-accent-soft)]';
 
     const isTimelineMode = TIMELINE_MODES.has(mode);
     const hasPendingGeneration = useMemo(
@@ -448,8 +459,8 @@ export default function ToolSidebar() {
                         className={clsx(
                             'ml-3 mt-2 flex items-center justify-between rounded-lg border px-3 py-1.5 text-xs uppercase tracking-[0.2em] transition-colors',
                             isSelected
-                                ? 'border-[rgba(139,92,246,0.6)] bg-[rgba(139,92,246,0.25)] text-white'
-                                : 'border-transparent text-[rgba(226,232,240,0.7)] hover:border-[rgba(139,92,246,0.35)] hover:text-white',
+                                ? 'border-[var(--mode-accent)] bg-[var(--mode-accent-soft)] text-[var(--mode-text)]'
+                                : 'border-transparent text-[var(--mode-text-muted)] hover:border-[var(--mode-accent)] hover:text-[var(--mode-text)]',
                         )}
                         style={{ marginLeft: depth * 16 + 12 }}
                     >
@@ -462,11 +473,11 @@ export default function ToolSidebar() {
                                     onChange={(event) => setDraftName(event.target.value)}
                                     onBlur={commitEditing}
                                     onKeyDown={handleNameKeyDown}
-                                    className='flex-1 rounded-md border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.6)] px-2 py-1 text-[rgba(236,233,254,0.92)] focus:border-[rgba(139,92,246,0.6)] focus:outline-none'
+                                    className='flex-1 rounded-md border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-2 py-1 text-[var(--mode-text)] focus:border-[var(--mode-accent)] focus:outline-none'
                                     onClick={(event) => event.stopPropagation()}
                                 />
                             ) : (
-                                <span className='flex-1 truncate text-left normal-case tracking-normal text-sm text-[rgba(236,233,254,0.92)]'>
+                                <span className='flex-1 truncate text-left normal-case tracking-normal text-sm text-[var(--mode-text)]'>
                                     {name}
                                 </span>
                             )}
@@ -478,7 +489,7 @@ export default function ToolSidebar() {
                                     event.stopPropagation();
                                     beginEditElement(frameId, element);
                                 }}
-                                className='ml-2 text-[rgba(148,163,184,0.7)] hover:text-white'
+                                className='ml-2 text-[var(--mode-text-muted)] hover:text-[var(--mode-text)]'
                                 aria-label='Rename element'
                             >
                                 ✏️
@@ -491,12 +502,18 @@ export default function ToolSidebar() {
         });
 
     return (
-        <aside className='pointer-events-auto hidden h-full w-80 flex-col border-r border-[rgba(148,163,184,0.15)] bg-[rgba(15,23,42,0.78)] px-5 py-6 text-sm text-[rgba(226,232,240,0.78)] backdrop-blur lg:flex'>
+        <aside
+            className={clsx(
+                'pointer-events-auto hidden h-full w-80 flex-col border-r px-5 py-6 text-sm backdrop-blur lg:flex',
+                borderColor,
+                sidebarBg,
+                textMuted,
+            )}>
             <section>
                 <div className='flex items-center justify-between'>
                     <div>
-                        <p className='text-xs font-semibold uppercase tracking-[0.25em] text-[rgba(148,163,184,0.65)]'>Pages</p>
-                        <p className='text-xs text-[rgba(226,232,240,0.55)]'>Manage canvas frames and layers.</p>
+                        <p className={clsx('text-xs font-semibold uppercase tracking-[0.25em]', textMuted)}>Pages</p>
+                        <p className={clsx('text-xs', textMuted)}>Manage canvas frames and layers.</p>
                     </div>
                 </div>
                 <ul className='mt-4 space-y-3'>
@@ -508,7 +525,7 @@ export default function ToolSidebar() {
                         const frameTimelineCount = timelineAssets.filter((asset) => asset.frameId === frame.id).length;
 
                         return (
-                            <li key={frame.id} className='rounded-2xl border border-[rgba(148,163,184,0.12)] bg-[rgba(15,23,42,0.6)] p-3'>
+                            <li key={frame.id} className='rounded-2xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] p-3'>
                                 <div
                                     role='button'
                                     tabIndex={0}
@@ -519,11 +536,11 @@ export default function ToolSidebar() {
                                     className={clsx(
                                         'flex flex-col gap-2 rounded-xl border px-3 py-3 transition-colors',
                                         isSelectedFrame
-                                            ? 'border-[rgba(139,92,246,0.6)] bg-[rgba(139,92,246,0.2)] text-white'
-                                            : 'border-transparent hover:border-[rgba(139,92,246,0.35)] hover:text-white',
+                                            ? clsx(accentBorder, accentSoftBg, textPrimary)
+                                            : clsx('border-transparent', 'hover:border-[var(--mode-accent)]', 'hover:text-[var(--mode-text)]'),
                                     )}
                                 >
-                                    <div className='h-14 w-full rounded-lg border border-[rgba(148,163,184,0.2)] shadow-inner' style={previewStyle} />
+                                    <div className={clsx('h-14 w-full rounded-lg border shadow-inner', borderColor)} style={previewStyle} />
                                     {editingFrame ? (
                                         <input
                                             autoFocus
@@ -532,10 +549,10 @@ export default function ToolSidebar() {
                                             onBlur={commitEditing}
                                             onKeyDown={handleNameKeyDown}
                                             onClick={(event) => event.stopPropagation()}
-                                            className='w-full rounded-md border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.6)] px-2 py-1 text-sm text-[rgba(236,233,254,0.92)] focus:border-[rgba(139,92,246,0.6)] focus:outline-none'
+                                            className={clsx('w-full rounded-md border px-2 py-1 text-sm focus:outline-none', borderColor, panelBg, textPrimary)}
                                         />
                                     ) : (
-                                        <div className='flex items-center justify-between text-sm text-[rgba(236,233,254,0.92)]'>
+                                        <div className={clsx('flex items-center justify-between text-sm', textPrimary)}>
                                             <span className='truncate'>{frameName}</span>
                                             <button
                                                 type='button'
@@ -543,14 +560,14 @@ export default function ToolSidebar() {
                                                     event.stopPropagation();
                                                     beginEditFrame(frame);
                                                 }}
-                                                className='text-[rgba(148,163,184,0.7)] hover:text-white'
+                                                className={clsx(textMuted, 'hover:text-[var(--mode-text)]')}
                                                 aria-label='Rename frame'
                                             >
                                                 ✏️
                                             </button>
                                         </div>
                                     )}
-                                    <span className='text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.6)]'>
+                                    <span className='text-[10px] uppercase tracking-[0.25em] text-[color:var(--mode-text-muted)]'>
                                         {Math.round(frame.width)} × {Math.round(frame.height)}
                                     </span>
                                     <div className='mt-2 flex flex-wrap gap-2'>
@@ -560,7 +577,8 @@ export default function ToolSidebar() {
                                                 event.stopPropagation();
                                                 handleFocusFrame(frame);
                                             }}
-                                            className='rounded-md border border-[rgba(148,163,184,0.25)] px-2.5 py-1 text-[10px] uppercase tracking-[0.25em] text-[rgba(236,233,254,0.8)] hover:border-[rgba(139,92,246,0.45)] hover:text-white'
+                                            className='rounded-md border px-2.5 py-1 text-[10px] uppercase tracking-[0.25em] transition-colors hover:bg-[var(--mode-accent-soft)]'
+                                            style={{ borderColor: 'var(--mode-border)', color: 'var(--mode-text)' }}
                                         >
                                             Focus
                                         </button>
@@ -572,7 +590,8 @@ export default function ToolSidebar() {
                                                     setTimelinePlayhead(frame.id, 0, { resetTick: true });
                                                     playTimeline(frame.id);
                                                 }}
-                                                className='rounded-md border border-[rgba(59,130,246,0.35)] px-2.5 py-1 text-[10px] uppercase tracking-[0.25em] text-[rgba(191,219,254,0.85)] hover:border-[rgba(191,219,254,0.7)] hover:text-white'
+                                                className='rounded-md border px-2.5 py-1 text-[10px] uppercase tracking-[0.25em] transition-colors hover:bg-[var(--mode-accent-soft)]'
+                                                style={{ borderColor: 'var(--mode-accent)', color: 'var(--mode-text)' }}
                                             >
                                                 Play timeline · {frameTimelineCount}
                                             </button>
@@ -590,16 +609,16 @@ export default function ToolSidebar() {
                 </ul>
             </section>
 
-            <div className='my-6 h-px border-b border-[rgba(148,163,184,0.18)]' />
+            <div className='my-6 h-px border-b border-[var(--mode-border)]' />
 
     <section className='flex-1 overflow-y-auto'>
         <div className='flex flex-col gap-8 pb-4'>
             <div>
                 <div className='flex flex-col gap-2'>
-                    <p className='text-xs font-semibold uppercase tracking-[0.25em] text-[rgba(148,163,184,0.65)]'>
+                    <p className='text-xs font-semibold uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>
                         Tools
                     </p>
-                    <p className='text-xs text-[rgba(226,232,240,0.55)]'>{modeConfig.description}</p>
+                    <p className='text-xs text-[var(--mode-text-muted)]'>{modeConfig.description}</p>
                 </div>
                 <ul className='mt-4 flex flex-col gap-3'>
                     {tools.map((tool) => {
@@ -616,12 +635,12 @@ export default function ToolSidebar() {
                                     className={clsx(
                                         'w-full rounded-xl border px-3 py-2 text-left transition-colors',
                                         active
-                                            ? 'border-[rgba(139,92,246,0.55)] bg-[rgba(139,92,246,0.2)] text-white'
-                                            : 'border-transparent hover:border-[rgba(139,92,246,0.35)] hover:text-white',
+                                            ? 'border-[var(--mode-accent)] bg-[var(--mode-accent-soft)] text-[var(--mode-text)]'
+                                            : 'border-transparent hover:border-[var(--mode-accent)] hover:text-[var(--mode-text)]',
                                     )}
                                 >
                                     <p className='font-medium'>{tool.name}</p>
-                                    <p className='text-xs text-[rgba(226,232,240,0.55)]'>{tool.description}</p>
+                                    <p className='text-xs text-[var(--mode-text-muted)]'>{tool.description}</p>
                                 </button>
                             </li>
                         );
@@ -632,10 +651,10 @@ export default function ToolSidebar() {
             <div>
                 <div className='flex items-start justify-between gap-2'>
                     <div>
-                        <p className='text-xs font-semibold uppercase tracking-[0.25em] text-[rgba(148,163,184,0.65)]'>
+                        <p className='text-xs font-semibold uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>
                             Asset Library
                         </p>
-                        <p className='text-xs text-[rgba(226,232,240,0.55)]'>
+                        <p className='text-xs text-[var(--mode-text-muted)]'>
                             Drop assets onto the canvas or timeline. Generate new variants with AI.
                         </p>
                     </div>
@@ -643,14 +662,14 @@ export default function ToolSidebar() {
                         <button
                             type='button'
                             onClick={handleUploadClick}
-                            className='rounded-lg border border-[rgba(148,163,184,0.25)] px-3 py-1.5 text-[11px] uppercase tracking-[0.25em] text-[rgba(236,233,254,0.85)] transition-colors hover:border-[rgba(236,233,254,0.75)] hover:text-white'
+                            className='rounded-lg border border-[var(--mode-border)] px-3 py-1.5 text-[11px] uppercase tracking-[0.25em] text-[var(--mode-text)] transition-colors hover:border-[var(--mode-accent)] hover:text-[var(--mode-text)]'
                         >
                             Upload
                         </button>
                         <button
                             type='button'
                             onClick={() => setActiveToolOverlay('components')}
-                            className='rounded-lg border border-[rgba(148,163,184,0.25)] px-3 py-1.5 text-[11px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.75)] transition-colors hover:border-[rgba(139,92,246,0.55)] hover:text-white'
+                            className='rounded-lg border border-[var(--mode-border)] px-3 py-1.5 text-[11px] uppercase tracking-[0.25em] text-[var(--mode-text-muted)] transition-colors hover:border-[var(--mode-accent)] hover:text-[var(--mode-text)]'
                         >
                             Components
                         </button>
@@ -668,8 +687,8 @@ export default function ToolSidebar() {
                                 className={clsx(
                                     'rounded-full border px-3 py-1.5 text-[11px] uppercase tracking-[0.2em] transition-colors',
                                     active
-                                        ? 'border-[rgba(139,92,246,0.6)] bg-[rgba(139,92,246,0.18)] text-white'
-                                        : 'border-[rgba(148,163,184,0.2)] text-[rgba(226,232,240,0.7)] hover:border-[rgba(139,92,246,0.45)] hover:text-white',
+                                        ? 'border-[var(--mode-accent)] bg-[var(--mode-accent-soft)] text-[var(--mode-text)]'
+                                        : 'border-[var(--mode-border)] text-[var(--mode-text-muted)] hover:border-[var(--mode-accent)] hover:text-[var(--mode-text)]',
                                 )}
                             >
                                 {filter.label}
@@ -678,9 +697,9 @@ export default function ToolSidebar() {
                     })}
                 </div>
 
-                <div className='mt-4 rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.68)] p-4'>
+                <div className='mt-4 rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] p-4'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
-                        <p className='text-xs font-semibold uppercase tracking-[0.25em] text-[rgba(148,163,184,0.65)]'>
+                        <p className='text-xs font-semibold uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>
                             AI Generator
                         </p>
                         <div className='flex flex-wrap gap-2'>
@@ -694,8 +713,8 @@ export default function ToolSidebar() {
                                         className={clsx(
                                             'rounded-md border px-2.5 py-1 text-[11px] uppercase tracking-[0.2em]',
                                             active
-                                                ? 'border-[rgba(236,233,254,0.8)] text-white'
-                                                : 'border-[rgba(148,163,184,0.35)] text-[rgba(226,232,240,0.75)] hover:border-[rgba(236,233,254,0.6)] hover:text-white',
+                                                ? 'border-[var(--mode-accent)] text-[var(--mode-text)]'
+                                                : 'border-[var(--mode-border)] text-[var(--mode-text-muted)] hover:border-[var(--mode-accent)] hover:text-[var(--mode-text)]',
                                         )}
                                     >
                                         {option.label}
@@ -709,7 +728,7 @@ export default function ToolSidebar() {
                             value={aiPrompt}
                             onChange={(event) => setAiPrompt(event.target.value)}
                             placeholder='e.g. neon gradient hero background'
-                            className='flex-1 rounded-lg border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.7)] px-3 py-2 text-sm text-[rgba(236,233,254,0.9)] placeholder:text-[rgba(148,163,184,0.6)] focus:border-[rgba(139,92,246,0.6)] focus:outline-none'
+                            className='flex-1 rounded-lg border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-3 py-2 text-sm text-[var(--mode-text)] placeholder:text-[var(--mode-text-muted)] focus:border-[var(--mode-accent)] focus:outline-none'
                         />
                         <button
                             type='button'
@@ -718,21 +737,21 @@ export default function ToolSidebar() {
                             className={clsx(
                                 'rounded-lg px-3 py-2 text-[11px] uppercase tracking-[0.25em] transition-colors',
                                 isGenerating || !aiPrompt.trim()
-                                    ? 'cursor-not-allowed border border-[rgba(148,163,184,0.2)] text-[rgba(148,163,184,0.5)]'
-                                    : 'border border-[rgba(139,92,246,0.6)] bg-[rgba(139,92,246,0.15)] text-white hover:border-[rgba(236,233,254,0.75)]',
+                                    ? 'cursor-not-allowed border border-[var(--mode-border)] text-[var(--mode-text-muted)]'
+                                    : 'border border-[var(--mode-accent)] bg-[var(--mode-accent-soft)] text-[var(--mode-text)] hover:border-[var(--mode-accent)]',
                             )}
                         >
                             {isGenerating ? 'Generating…' : 'Generate'}
                         </button>
                     </div>
                     {aiHistory.length > 0 ? (
-                        <div className='mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.6)]'>
+                        <div className='mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>
                             {aiHistory.map((prompt) => (
                                 <button
                                     key={prompt}
                                     type='button'
                                     onClick={() => setAiPrompt(prompt)}
-                                    className='rounded-full border border-[rgba(148,163,184,0.25)] px-3 py-1 text-[rgba(226,232,240,0.7)] hover:border-[rgba(139,92,246,0.45)] hover:text-white'
+                                    className='rounded-full border border-[var(--mode-border)] px-3 py-1 text-[var(--mode-text-muted)] hover:border-[var(--mode-accent)] hover:text-[var(--mode-text)]'
                                 >
                                     {prompt.length > 36 ? `${prompt.slice(0, 34)}…` : prompt}
                                 </button>
@@ -743,7 +762,7 @@ export default function ToolSidebar() {
 
                 <div className='mt-4 space-y-3'>
                     {orderedAssets.length === 0 ? (
-                        <p className='text-xs text-[rgba(148,163,184,0.65)]'>
+                        <p className='text-xs text-[var(--mode-text-muted)]'>
                             No assets yet. Upload files or run an AI prompt to start building your library.
                         </p>
                     ) : (
@@ -804,8 +823,8 @@ function AssetCard({
     return (
         <div
             className={clsx(
-                'rounded-xl border border-[rgba(148,163,184,0.2)] bg-[rgba(15,23,42,0.65)] p-3 transition-colors',
-                ready ? 'hover:border-[rgba(139,92,246,0.45)]' : 'opacity-70',
+                'rounded-xl border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] p-3 transition-colors',
+                ready ? 'hover:border-[var(--mode-accent)]' : 'opacity-70',
             )}
             draggable={ready}
             onDragStart={(event) => {
@@ -818,12 +837,12 @@ function AssetCard({
                 <div className='min-w-0 flex-1'>
                     <div className='flex items-start justify-between gap-2'>
                         <div className='min-w-0'>
-                            <p className='truncate text-sm font-semibold text-white'>{asset.label}</p>
-                            <p className='truncate text-[11px] text-[rgba(148,163,184,0.7)]'>
+                            <p className='truncate text-sm font-semibold text-[var(--mode-text)]'>{asset.label}</p>
+                            <p className='truncate text-[11px] text-[var(--mode-text-muted)]'>
                                 {ready ? descriptor : 'Generating asset…'}
                             </p>
                             {ready && prompt ? (
-                                <p className='mt-1 truncate text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.55)]'>
+                                <p className='mt-1 truncate text-[10px] uppercase tracking-[0.25em] text-[var(--mode-text-muted)]'>
                                     “{prompt.length > 36 ? `${prompt.slice(0, 34)}…` : prompt}”
                                 </p>
                             ) : null}
@@ -835,8 +854,8 @@ function AssetCard({
                                 className={clsx(
                                     'text-lg leading-none transition-colors',
                                     asset.favorite
-                                        ? 'text-[rgba(236,233,254,0.95)]'
-                                        : 'text-[rgba(148,163,184,0.6)] hover:text-[rgba(236,233,254,0.85)]',
+                                        ? 'text-[var(--mode-text)]'
+                                        : 'text-[var(--mode-text-muted)] hover:text-[var(--mode-text)]',
                                 )}
                                 aria-label={asset.favorite ? 'Unfavorite asset' : 'Favorite asset'}
                             >
@@ -846,7 +865,7 @@ function AssetCard({
                                 <button
                                     type='button'
                                     onClick={onRemove}
-                                    className='text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.6)] hover:text-[rgba(236,233,254,0.75)]'
+                                    className='text-[10px] uppercase tracking-[0.25em] text-[var(--mode-text-muted)] hover:text-[var(--mode-text)]'
                                 >
                                     Remove
                                 </button>
@@ -865,8 +884,8 @@ function AssetCard({
                         className={clsx(
                             'rounded-lg border px-3 py-1.5 text-[11px] uppercase tracking-[0.25em] transition-colors',
                             ready
-                                ? 'border-[rgba(139,92,246,0.45)] text-[rgba(236,233,254,0.85)] hover:border-[rgba(236,233,254,0.75)] hover:text-white'
-                                : 'cursor-not-allowed border-[rgba(148,163,184,0.25)] text-[rgba(148,163,184,0.5)]',
+                                ? 'border-[var(--mode-accent)] text-[var(--mode-text)] hover:border-[var(--mode-accent)] hover:text-[var(--mode-text)]'
+                                : 'cursor-not-allowed border-[var(--mode-border)] text-[var(--mode-text-muted)]',
                         )}
                     >
                         Place on canvas
@@ -880,8 +899,8 @@ function AssetCard({
                         className={clsx(
                             'rounded-lg border px-3 py-1.5 text-[11px] uppercase tracking-[0.25em] transition-colors',
                             ready
-                                ? 'border-[rgba(59,130,246,0.45)] text-[rgba(191,219,254,0.85)] hover:border-[rgba(191,219,254,0.75)] hover:text-white'
-                                : 'cursor-not-allowed border-[rgba(148,163,184,0.25)] text-[rgba(148,163,184,0.5)]',
+                                ? 'border-[var(--mode-accent)] text-[var(--mode-text)] hover:border-[var(--mode-accent)] hover:text-[var(--mode-text)]'
+                                : 'cursor-not-allowed border-[var(--mode-border)] text-[var(--mode-text-muted)]',
                         )}
                     >
                         Add to timeline
@@ -893,8 +912,8 @@ function AssetCard({
                         onClick={() => onInsertCanvas?.()}
                         disabled={!ready}
                         className={clsx(
-                            'rounded-lg border px-3 py-1.5 text-[11px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)] transition-colors hover:border-[rgba(139,92,246,0.35)] hover:text-white',
-                            !ready && 'cursor-not-allowed border-[rgba(148,163,184,0.25)] text-[rgba(148,163,184,0.5)]',
+                            'rounded-lg border px-3 py-1.5 text-[11px] uppercase tracking-[0.25em] text-[var(--mode-text-muted)] transition-colors hover:border-[var(--mode-accent)] hover:text-[var(--mode-text)]',
+                            !ready && 'cursor-not-allowed border-[var(--mode-border)] text-[var(--mode-text-muted)]',
                         )}
                     >
                         Convert to layer
@@ -908,7 +927,7 @@ function AssetCard({
 function AssetPreview({ asset }) {
     if (asset.type === 'timeline') {
         return (
-            <div className='flex h-14 w-16 flex-shrink-0 items-end overflow-hidden rounded-lg border border-[rgba(59,130,246,0.35)] bg-[rgba(15,23,42,0.78)] px-1.5 py-2'>
+            <div className='flex h-14 w-16 flex-shrink-0 items-end overflow-hidden rounded-lg border border-[var(--mode-accent)] bg-[var(--mode-panel-bg)] px-1.5 py-2'>
                 <AssetWaveform waveform={asset.waveform} tone={asset.timelineType} />
             </div>
         );
@@ -933,7 +952,7 @@ function AssetPreview({ asset }) {
 
     return (
         <div
-            className='h-14 w-16 flex-shrink-0 overflow-hidden rounded-lg border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.7)] shadow-[inset_0_0_20px_rgba(8,15,35,0.55)]'
+            className='h-14 w-16 flex-shrink-0 overflow-hidden rounded-lg border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] shadow-[inset_0_0_20px_rgba(8,15,35,0.55)]'
             style={style}
         />
     );

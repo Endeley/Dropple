@@ -1695,7 +1695,7 @@ export const useCanvasStore = create(
             },
             contextMenu: null,
 
-    switchMode: async (nextMode, intentOptions = null) => {
+        switchMode: async (nextMode, intentOptions = null) => {
         const state = get();
         const normalizedIntent = intentOptions ? normalizeModeIntent(nextMode, intentOptions) : null;
         if (state.mode === nextMode) {
@@ -1716,15 +1716,15 @@ export const useCanvasStore = create(
             frames: JSON.parse(JSON.stringify(state.frames ?? [])),
             scene: JSON.parse(JSON.stringify(state.frames ?? [])),
         };
-        set((draft) => {
-            draft.modeState = {
-                ...draft.modeState,
+        set({
+            modeState: {
+                ...(state.modeState ?? {}),
                 [currentMode]: snapshot,
-            };
-            draft.mode = nextMode;
-            draft.isModeSwitching = true;
-            draft.sceneSnapshot = snapshot.scene;
-            draft.modeTransitionIntent = normalizedIntent;
+            },
+            mode: nextMode,
+            isModeSwitching: true,
+            sceneSnapshot: snapshot.scene,
+            modeTransitionIntent: normalizedIntent,
         });
         const saved = state.modeState?.[nextMode];
         const heavyMode = MODE_ASSETS[nextMode]?.heavy ?? false;
@@ -1770,8 +1770,12 @@ export const useCanvasStore = create(
         };
 
         const finishIfNeeded = () => {
-            if (!requireLoader || !heavyMode) {
-                get().finishSceneHydration();
+            if (requireLoader && heavyMode) return;
+            const finishHydration = get().finishSceneHydration;
+            if (typeof finishHydration === 'function') {
+                finishHydration();
+            } else {
+                set({ isSceneHydrating: false, hydrationTimeoutId: null, sceneSnapshot: null });
             }
         };
 
@@ -1801,9 +1805,23 @@ export const useCanvasStore = create(
         set({ isSceneHydrating: false, hydrationTimeoutId: null, sceneSnapshot: null });
     },
     setScale: (value) =>
-        set((state) => ({ scale: typeof value === 'function' ? value(state.scale) : value })),
+        set((state) => {
+            const current = Number.isFinite(state.scale) ? state.scale : 1;
+            if (typeof value === 'function') {
+                const next = value(current);
+                return { scale: Number.isFinite(next) ? next : current };
+            }
+            return { scale: Number.isFinite(value) ? value : current };
+        }),
     setPosition: (value) =>
-        set((state) => ({ position: typeof value === 'function' ? value(state.position) : value })),
+        set((state) => {
+            const current = state.position ?? { x: 0, y: 0 };
+            if (typeof value === 'function') {
+                const next = value(current);
+                return { position: next ?? current };
+            }
+            return { position: value ?? current };
+        }),
     setGridVisible: (visible) => set({ gridVisible: Boolean(visible) }),
     toggleGrid: () => set((state) => ({ gridVisible: !state.gridVisible })),
     setGridSize: (size) => set({ gridSize: Math.max(4, Number(size) || 4) }),
@@ -4298,7 +4316,12 @@ export const useCanvasStore = create(
             setTimeout(() => {
                 const storeAfter = get();
                 if (storeAfter.isSceneHydrating) {
-                    storeAfter.finishSceneHydration();
+                    const finishHydration = storeAfter.finishSceneHydration;
+                    if (typeof finishHydration === 'function') {
+                        finishHydration();
+                    } else {
+                        set({ isSceneHydrating: false, hydrationTimeoutId: null, sceneSnapshot: null });
+                    }
                 }
             }, 240);
         }

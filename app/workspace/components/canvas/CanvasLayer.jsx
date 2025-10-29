@@ -4,8 +4,10 @@ import { useCanvasStore } from './context/CanvasStore';
 import FrameNode from './FrameNode';
 
 export default function CanvasLayer() {
-    const frames = useCanvasStore((state) => state.frames);
-    const activeGuides = useCanvasStore((state) => state.activeGuides);
+    const rawFrames = useCanvasStore((state) => state.frames);
+    const frames = Array.isArray(rawFrames) ? rawFrames : [];
+    const rawGuides = useCanvasStore((state) => state.activeGuides);
+    const activeGuides = Array.isArray(rawGuides) ? rawGuides : [];
 
     return (
         <div className='relative min-h-[4000px] min-w-[4000px]'>

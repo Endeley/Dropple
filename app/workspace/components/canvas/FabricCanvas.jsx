@@ -7,11 +7,14 @@ import { fabricService } from './fabric/fabricServiceSingleton';
 import { resolveTool } from './utils/toolBehaviors';
 import { createElement } from './utils/elementFactory';
 import { findFrameAtPoint } from './utils/frameUtils';
-import { MODE_CANVAS_BEHAVIOR } from './modeConfig';
+import { MODE_ASSETS, MODE_CANVAS_BEHAVIOR } from './modeConfig';
 import { attachMetadata, elementToFabric } from './fabric/fabricAdapters';
+import { deriveModeTheme } from './utils/themeUtils';
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 4;
+const DEFAULT_POSITION = Object.freeze({ x: 0, y: 0 });
+const NOOP = () => {};
 
 const snapValueToGrid = (value, grid) => {
     if (!grid || grid <= 0) return value;
@@ -41,10 +44,10 @@ export default function FabricCanvas() {
     const [pendingImageElement, setPendingImageElement] = useState(null);
 
     const frames = useCanvasStore((state) => state.frames);
-    const scale = useCanvasStore((state) => state.scale);
-    const position = useCanvasStore((state) => state.position);
-    const setScale = useCanvasStore((state) => state.setScale);
-    const setPosition = useCanvasStore((state) => state.setPosition);
+    const scale = useCanvasStore((state) => state.scale ?? 1);
+    const position = useCanvasStore((state) => state.position) ?? DEFAULT_POSITION;
+    const setScale = useCanvasStore((state) => state.setScale) ?? NOOP;
+    const setPosition = useCanvasStore((state) => state.setPosition) ?? NOOP;
     const selectedFrameId = useCanvasStore((state) => state.selectedFrameId);
     const setSelectedFrame = useCanvasStore((state) => state.setSelectedFrame);
     const updateFrame = useCanvasStore((state) => state.updateFrame);
@@ -53,6 +56,8 @@ export default function FabricCanvas() {
     const getFrameById = useCanvasStore((state) => state.getFrameById);
     const mode = useCanvasStore((state) => state.mode);
     const canvasBehavior = MODE_CANVAS_BEHAVIOR[mode] ?? MODE_CANVAS_BEHAVIOR.default;
+    const accentHex = MODE_ASSETS[mode]?.accent ?? '#6366F1';
+    const theme = useMemo(() => deriveModeTheme(accentHex), [accentHex]);
 
     const gridBackground = useMemo(() => {
         if (!gridVisible || gridSize <= 0) {
@@ -61,15 +66,16 @@ export default function FabricCanvas() {
         const scaledSize = gridSize * scale;
         const offsetX = ((position.x % scaledSize) + scaledSize) % scaledSize;
         const offsetY = ((position.y % scaledSize) + scaledSize) % scaledSize;
-        const lineColor = 'rgba(139,92,246,0.1)';
-        const strongLine = 'rgba(139,92,246,0.25)';
+        const { r, g, b } = theme.accentRgb;
+        const lineColor = `rgba(${r}, ${g}, ${b}, 0.14)`;
+        const strongLine = `rgba(${r}, ${g}, ${b}, 0.32)`;
         const major = gridSize * 4 * scale;
         return {
             backgroundImage: `linear-gradient(to right, ${lineColor} 1px, transparent 1px), linear-gradient(to bottom, ${lineColor} 1px, transparent 1px), linear-gradient(to right, ${strongLine} 1px, transparent 1px), linear-gradient(to bottom, ${strongLine} 1px, transparent 1px)`,
             backgroundSize: `${scaledSize}px ${scaledSize}px, ${scaledSize}px ${scaledSize}px, ${major}px ${major}px, ${major}px ${major}px`,
             backgroundPosition: `${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px`,
         };
-    }, [gridVisible, gridSize, position.x, position.y, scale]);
+    }, [gridVisible, gridSize, position.x, position.y, scale, theme]);
 
     useEffect(() => {
         if (!pendingImageElement) return;
@@ -78,6 +84,13 @@ export default function FabricCanvas() {
         input.value = '';
         input.click();
     }, [pendingImageElement]);
+
+    useEffect(() => {
+        const fabricCanvas = fabricCanvasRef.current;
+        if (fabricCanvas) {
+            fabricCanvas.setBackgroundColor(theme.canvasBg, () => fabricCanvas.renderAll());
+        }
+    }, [theme.canvasBg]);
 
     const historyHotkeyHandler = useCallback((event) => {
         const store = useCanvasStore.getState();
@@ -122,7 +135,7 @@ export default function FabricCanvas() {
                 preserveObjectStacking: true,
                 selection: true,
             });
-            fabricCanvas.setBackgroundColor('#020617', () => fabricCanvas.renderAll());
+            fabricCanvas.setBackgroundColor(theme.canvasBg, () => fabricCanvas.renderAll());
             fabricCanvasRef.current = fabricCanvas;
             fabricCanvas.on('after:render', handleAfterRender);
 
@@ -413,8 +426,8 @@ export default function FabricCanvas() {
             let rect = frameMap.get(frame.id);
             if (!rect) {
                 rect = new fabricNamespace.Rect({
-                    fill: frame.backgroundColor ?? 'rgba(15,23,42,0.9)',
-                    stroke: 'rgba(139,92,246,0.4)',
+                    fill: frame.backgroundColor ?? theme.canvasBg,
+                    stroke: theme.accent,
                     strokeWidth: 1.5,
                     rx: frame.cornerRadius ?? 24,
                     ry: frame.cornerRadius ?? 24,
@@ -436,7 +449,7 @@ export default function FabricCanvas() {
                 top: frame.y ?? 0,
                 width: frame.width ?? 960,
                 height: frame.height ?? 640,
-                fill: frame.backgroundColor ?? 'rgba(15,23,42,0.9)',
+                fill: frame.backgroundColor ?? theme.canvasBg,
                 rx: frame.cornerRadius ?? 24,
                 ry: frame.cornerRadius ?? 24,
             });
@@ -608,11 +621,14 @@ export default function FabricCanvas() {
     return (
         <div
             ref={containerRef}
-            className={clsx('relative h-full w-full overflow-hidden bg-[var(--color-canvas)]')}
-            style={{ ...gridBackground, overscrollBehavior: 'none' }}
+            className={clsx('relative h-full w-full overflow-hidden')}
+            style={{ ...gridBackground, overscrollBehavior: 'none', background: theme.canvasBg }}
         >
-            <canvas ref={canvasRef} className='block h-full w-full' />
-            <div className='pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(139,92,246,0.08),transparent55%)]' />
+            <canvas ref={canvasRef} className='relative z-10 block h-full w-full' />
+            <div
+                className='pointer-events-none absolute inset-0'
+                style={{ background: `radial-gradient(circle at top, rgba(${theme.accentRgb.r}, ${theme.accentRgb.g}, ${theme.accentRgb.b}, ${canvasBehavior.heavy ? 0.2 : 0.12}), transparent 55%)` }}
+            />
             <input
                 ref={fileInputRef}
                 type='file'
