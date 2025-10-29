@@ -2,5 +2,6 @@
     "css.lint.unknownAtRules": "ignore",
     "typescript.validate.enable": false,
     "javascript.validate.enable": true,
-    "chatgpt.openOnStartup": true
+    "chatgpt.openOnStartup": true,
+    "cSpell.words": ["Playhead"]
 }

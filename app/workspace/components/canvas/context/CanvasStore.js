@@ -2,8 +2,15 @@
 
 import { nanoid } from 'nanoid';
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { generateFrameExport } from '../utils/exportCode';
+import { snapRectToTargets } from '../utils/alignmentUtils';
+import {
+    resolveAutoLayoutContainer,
+    computeAutoLayoutDrop,
+    createContainerTargets,
+    computeEmptyContainerPreviewRect,
+} from '../utils/autoLayoutUtils';
 import { configureHistory, pushHistory, canUndo, canRedo, undo, redo } from '../history/historyService';
 import { MODE_ASSETS, MODE_CONFIG } from '../modeConfig';
 
@@ -98,6 +105,16 @@ const DEFAULT_GRID_MIN_COLUMN_WIDTH = 240;
 const AUTO_FIT_OPTIONS = ['none', 'auto-fit', 'auto-fill'];
 const DEFAULT_FLEX_WRAP = 'nowrap';
 const FALLBACK_INTENT_ACCENT = '#6366F1';
+const COLLABORATOR_COLORS = [
+    '#6366F1',
+    '#F97316',
+    '#10B981',
+    '#F59E0B',
+    '#EC4899',
+    '#22D3EE',
+    '#A855F7',
+    '#EF4444',
+];
 const DEFAULT_MODE_DESCRIPTION = 'Switching creative environment…';
 
 const humanizeModeName = (value) => {
@@ -378,6 +395,11 @@ function hashSeed(input = '') {
 function pickGradientByPrompt(prompt) {
     const seed = hashSeed(prompt);
     return AI_GRADIENT_PRESETS[seed % AI_GRADIENT_PRESETS.length];
+}
+
+function pickCollaboratorColor(seedInput = '') {
+    const seed = hashSeed(seedInput || `col-${Date.now()}`);
+    return COLLABORATOR_COLORS[seed % COLLABORATOR_COLORS.length];
 }
 
 function generateWaveform(seedInput, length = 24) {
@@ -1623,6 +1645,35 @@ function computeBoundingBox(elements) {
     };
 }
 
+const safeStorage = {
+    getItem: (name) => {
+        try {
+            return globalThis.localStorage?.getItem(name) ?? null;
+        } catch (error) {
+            console.warn('Canvas store persist getItem failed', error);
+            return null;
+        }
+    },
+    setItem: (name, value) => {
+        try {
+            globalThis.localStorage?.setItem(name, value);
+        } catch (error) {
+            if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+                console.warn('Canvas store persisted state skipped (quota exceeded)', error);
+                return;
+            }
+            console.warn('Canvas store persist setItem failed', error);
+        }
+    },
+    removeItem: (name) => {
+        try {
+            globalThis.localStorage?.removeItem(name);
+        } catch (error) {
+            console.warn('Canvas store persist removeItem failed', error);
+        }
+    },
+};
+
 export const useCanvasStore = create(
     persist(
         (set, get) => ({
@@ -1646,6 +1697,16 @@ export const useCanvasStore = create(
             assetLibrary: [...DEFAULT_ASSET_LIBRARY],
             assetUploadQueue: [],
             gradientLibrary: [...DEFAULT_GRADIENT_LIBRARY],
+            collaborators: [
+                {
+                    id: 'collab-local',
+                    name: 'You',
+                    color: '#6366F1',
+                    isMe: true,
+                    presence: 'online',
+                    lastActiveAt: Date.now(),
+                },
+            ],
             timelinePlayback: {
                 frameId: null,
                 isPlaying: false,
@@ -1664,6 +1725,8 @@ export const useCanvasStore = create(
             isModeSwitching: false,
             isSceneHydrating: false,
             hydrationTimeoutId: null,
+            autosaveStatus: 'idle',
+            lastAutosaveAt: null,
             commitHistory: (label, source = 'user') => pushHistory(label, source),
             undoCanvas: () => {
                 const snapshot = undo();
@@ -1716,16 +1779,16 @@ export const useCanvasStore = create(
             frames: JSON.parse(JSON.stringify(state.frames ?? [])),
             scene: JSON.parse(JSON.stringify(state.frames ?? [])),
         };
-        set((draft) => {
-            draft.modeState = {
-                ...draft.modeState,
+        set((state) => ({
+            modeState: {
+                ...state.modeState,
                 [currentMode]: snapshot,
-            };
-            draft.mode = nextMode;
-            draft.isModeSwitching = true;
-            draft.sceneSnapshot = snapshot.scene;
-            draft.modeTransitionIntent = normalizedIntent;
-        });
+            },
+            mode: nextMode,
+            isModeSwitching: true,
+            sceneSnapshot: snapshot.scene,
+            modeTransitionIntent: normalizedIntent,
+        }));
         const saved = state.modeState?.[nextMode];
         const heavyMode = MODE_ASSETS[nextMode]?.heavy ?? false;
         const hasScene = Array.isArray(saved?.scene) && saved.scene.length > 0;
@@ -1810,9 +1873,15 @@ export const useCanvasStore = create(
     setSelectedTool: (tool) => set({ selectedTool: tool }),
     setActiveGuides: (guides) => set({ activeGuides: Array.isArray(guides) ? guides : [] }),
     setAutoLayoutPreview: (preview) => set({ autoLayoutPreview: preview }),
-    clearAutoLayoutPreview: () => set({ autoLayoutPreview: null }),
+    clearAutoLayoutPreview: () => set({ autoLayoutPreview: null, activeGuides: [] }),
     clearActiveGuides: () => set({ activeGuides: [] }),
     setActiveToolOverlay: (overlay) => set({ activeToolOverlay: overlay }),
+    setAutosaveStatus: (status) => {
+        set({ autosaveStatus: status });
+    },
+    markAutosaveComplete: (timestamp = Date.now()) => {
+        set({ autosaveStatus: 'saved', lastAutosaveAt: timestamp });
+    },
     setModeTransitionIntent: (intent) => {
         if (!intent) {
             set({ modeTransitionIntent: null });
@@ -1825,67 +1894,130 @@ export const useCanvasStore = create(
     sendModeIntent: (mode, intent = {}) => get().switchMode(mode, intent),
     previewAutoLayoutSuggestion: (options = {}) => {
         const state = get();
-        const targetFrameId =
-            options.frameId ?? state.selectedFrameId ?? state.frames[0]?.id ?? null;
-        if (!targetFrameId) return null;
-        const frame = state.frames.find((item) => item.id === targetFrameId);
+        const frameId = options.frameId ?? state.selectedFrameId ?? state.frames[0]?.id ?? null;
+        if (!frameId) return null;
+        const frame = state.frames.find((item) => item.id === frameId);
         if (!frame) return null;
-        const width = frame.width ?? 0;
-        const height = frame.height ?? 0;
-        const padding = {
-            top: Number.isFinite(frame.layoutPadding?.top) ? frame.layoutPadding.top : 64,
-            right: Number.isFinite(frame.layoutPadding?.right) ? frame.layoutPadding.right : 64,
-            bottom: Number.isFinite(frame.layoutPadding?.bottom) ? frame.layoutPadding.bottom : 64,
-            left: Number.isFinite(frame.layoutPadding?.left) ? frame.layoutPadding.left : 64,
+
+        const parentId = options.parentId ?? null;
+        const container = resolveAutoLayoutContainer(frame, parentId);
+        if (!container) return null;
+
+        const parentElement = parentId
+            ? frame.elements.find((item) => item.id === parentId)
+            : null;
+        const layoutMode =
+            options.layoutMode ??
+            (parentElement?.layoutMode ?? frame.layoutMode ?? 'flex-column');
+
+        const fallbackRect = computeEmptyContainerPreviewRect(container);
+        const elementWidth =
+            Number.isFinite(options.elementSize?.width)
+                ? options.elementSize.width
+                : Math.max(120, Math.min(fallbackRect.width, 360));
+        const elementHeight =
+            Number.isFinite(options.elementSize?.height)
+                ? options.elementSize.height
+                : Math.max(120, Math.min(fallbackRect.height, layoutMode === 'flex-row' ? fallbackRect.height - (container.gap ?? 0) : fallbackRect.height / 2));
+
+        const columns = Math.max(1, Number.isFinite(options.columns) ? options.columns : 1);
+        const rows = Math.max(1, Number.isFinite(options.rows) ? options.rows : 1);
+
+        const baseRect = options.rect ?? {
+            x: fallbackRect.x,
+            y: fallbackRect.y,
+            width: elementWidth,
+            height: elementHeight,
         };
-        const rect = {
-            x: padding.left,
-            y: padding.top,
-            width: Math.max(0, width - padding.left - padding.right),
-            height: Math.max(0, height - padding.top - padding.bottom),
+
+        const candidatePoint = options.targetPoint ?? {
+            x: baseRect.x + baseRect.width / 2,
+            y: baseRect.y + baseRect.height / 2,
         };
-        const columns = Math.max(2, Number.isFinite(options.columns) ? options.columns : 4);
-        const rows = Math.max(1, Number.isFinite(options.rows) ? options.rows : 3);
-        const guides = [];
-        const columnSlice = columns > 0 ? rect.width / columns : 0;
-        const rowSlice = rows > 0 ? rect.height / rows : 0;
-        for (let index = 1; index < columns; index += 1) {
-            guides.push({
-                orientation: 'vertical',
-                position: rect.x + columnSlice * index,
-            });
-        }
-        for (let index = 1; index < rows; index += 1) {
-            guides.push({
-                orientation: 'horizontal',
-                position: rect.y + rowSlice * index,
-            });
-        }
-        guides.push({
-            orientation: 'vertical',
-            position: rect.x + rect.width / 2,
+
+        const drop = computeAutoLayoutDrop({
+            frame,
+            parentId,
+            elementId: options.elementId ?? null,
+            layoutMode,
+            candidatePoint,
+            container,
         });
-        guides.push({
-            orientation: 'horizontal',
-            position: rect.y + rect.height / 2,
+
+        const previewRect = drop.previewRect ?? baseRect;
+        const targets = createContainerTargets(
+            frame,
+            parentId,
+            options.ignoreId ?? null,
+            container,
+        );
+        const snapped = snapRectToTargets({
+            rect: previewRect,
+            targets,
+            threshold: options.snapThreshold ?? 8,
         });
+
+        const guideOffsetX = container.offsetX ?? 0;
+        const guideOffsetY = container.offsetY ?? 0;
+        const baseGuides = (snapped.guides ?? []).map((guide) => ({
+            orientation: guide.orientation,
+            position:
+                guide.position +
+                (guide.orientation === 'vertical' ? guideOffsetX : guideOffsetY),
+        }));
+
+        const mergedGuides = [...baseGuides];
+        const ensureGuide = (orientation, position) => {
+            if (!Number.isFinite(position)) return;
+            const exists = mergedGuides.some(
+                (guide) => guide.orientation === orientation && Math.abs(guide.position - position) < 0.5,
+            );
+            if (!exists) {
+                mergedGuides.push({ orientation, position });
+            }
+        };
+
+        if (columns > 1) {
+            const slice = fallbackRect.width / columns;
+            for (let index = 1; index < columns; index += 1) {
+                const position = guideOffsetX + fallbackRect.x + slice * index;
+                ensureGuide('vertical', position);
+            }
+        }
+        if (rows > 1) {
+            const slice = fallbackRect.height / rows;
+            for (let index = 1; index < rows; index += 1) {
+                const position = guideOffsetY + fallbackRect.y + slice * index;
+                ensureGuide('horizontal', position);
+            }
+        }
+        ensureGuide('vertical', guideOffsetX + fallbackRect.x + fallbackRect.width / 2);
+        ensureGuide('horizontal', guideOffsetY + fallbackRect.y + fallbackRect.height / 2);
 
         const preview = {
             frameId: frame.id,
-            parentId: null,
-            layoutMode: options.layoutMode ?? frame.layoutMode ?? 'flex-column',
-            rect,
-            beforeId: null,
-            afterId: null,
+            parentId,
+            layoutMode,
+            rect: {
+                ...previewRect,
+                x: snapped.x,
+                y: snapped.y,
+            },
+            beforeId: drop.beforeId,
+            afterId: drop.afterId,
+            targetIndex: drop.index,
             metadata: {
                 columns,
                 rows,
+                ordered: drop.ordered?.map((item) => item.id) ?? [],
             },
         };
+
         set({
             autoLayoutPreview: preview,
-            activeGuides: guides,
+            activeGuides: mergedGuides,
         });
+
         const duration = Number.isFinite(options.duration) ? options.duration : 2200;
         if (typeof window !== 'undefined' && duration > 0) {
             const timeoutId = window.setTimeout(() => {
@@ -1992,6 +2124,43 @@ export const useCanvasStore = create(
         if (noSelection) return;
         set({ selectedFrameId: null, selectedElementId: null, selectedElementIds: [] });
         get().commitHistory('Selection change', 'system');
+    },
+
+    selectAllElements: (frameId = null) => {
+        const state = get();
+        const targetFrameId =
+            frameId ?? state.selectedFrameId ?? state.frames[0]?.id ?? null;
+        if (!targetFrameId) return;
+        const frame = state.getFrameById(targetFrameId);
+        if (!frame) return;
+        const elementIds = frame.elements.map((element) => element.id);
+        if (elementIds.length === 0) return;
+        const primary = elementIds[0] ?? null;
+        const selectionUnchanged =
+            state.selectedFrameId === targetFrameId &&
+            state.selectedElementId === primary &&
+            arraysEqual(state.selectedElementIds, elementIds);
+        if (selectionUnchanged) return;
+        set({
+            selectedFrameId: targetFrameId,
+            selectedElementId: primary,
+            selectedElementIds: elementIds,
+        });
+        get().commitHistory('Select all elements', 'user');
+    },
+
+    removeSelectedElements: () => {
+        const state = get();
+        const { selectedFrameId, selectedElementIds } = state;
+        if (!selectedFrameId || selectedElementIds.length === 0) return;
+        selectedElementIds.forEach((elementId) => {
+            get().removeElement(selectedFrameId, elementId, {
+                skipHistory: true,
+                source: 'user',
+            });
+        });
+        set({ selectedElementId: null, selectedElementIds: [] });
+        get().commitHistory('Remove selection', 'user');
     },
 
     addFrame: (frame) =>
@@ -4077,6 +4246,54 @@ export const useCanvasStore = create(
             ),
         }));
     },
+    addCollaborator: (input) => {
+        const value = typeof input === 'string' ? input.trim() : '';
+        if (!value) return null;
+        const id = `collab-${nanoid(6)}`;
+        const color = pickCollaboratorColor(value);
+        let added = null;
+        set((state) => {
+            const exists = state.collaborators.some(
+                (collaborator) =>
+                    collaborator.name.toLowerCase() === value.toLowerCase() && !collaborator.isMe,
+            );
+            if (exists) return {};
+            const entry = {
+                id,
+                name: value,
+                color,
+                presence: 'invited',
+                lastActiveAt: Date.now(),
+            };
+            added = entry;
+            return {
+                collaborators: [...state.collaborators, entry],
+            };
+        });
+        return added;
+    },
+    removeCollaborator: (id) => {
+        if (!id) return;
+        set((state) => ({
+            collaborators: state.collaborators.filter(
+                (collaborator) => collaborator.id === 'collab-local' || collaborator.id !== id,
+            ),
+        }));
+    },
+    updateCollaboratorPresence: (id, patch = {}) => {
+        if (!id) return;
+        set((state) => ({
+            collaborators: state.collaborators.map((collaborator) =>
+                collaborator.id === id
+                    ? {
+                          ...collaborator,
+                          ...patch,
+                          lastActiveAt: patch.lastActiveAt ?? Date.now(),
+                      }
+                    : collaborator,
+            ),
+        }));
+    },
     uploadAssetToLibrary: ({ name, dataUrl, mime, duration }) => {
         if (!dataUrl) return null;
         const trimmedName = name?.trim();
@@ -4369,6 +4586,76 @@ export const useCanvasStore = create(
         const elementLabel = element.name ?? getDefaultElementName(element.type);
         get().commitHistory(`Duplicate element "${elementLabel}"`, 'user');
     },
+    duplicateSelectedElements: () => {
+        const state = get();
+        const { selectedFrameId, selectedElementIds } = state;
+        if (!selectedFrameId || selectedElementIds.length === 0) return;
+        const frame = state.getFrameById(selectedFrameId);
+        if (!frame) return;
+
+        const selectedSet = new Set(selectedElementIds);
+        const parentsToReflow = new Set();
+        const newIds = [];
+
+        const nextElements = frame.elements.reduce((acc, element) => {
+            acc.push(element);
+            if (!selectedSet.has(element.id)) {
+                return acc;
+            }
+            const props = element.props ?? {};
+            const parent = element.parentId
+                ? frame.elements.find((item) => item.id === element.parentId)
+                : null;
+            const parentLayoutMode = parent?.layoutMode ?? frame.layoutMode ?? 'absolute';
+            const isAutoLayoutParent =
+                parentLayoutMode && parentLayoutMode !== 'absolute';
+
+            if (isAutoLayoutParent) {
+                parentsToReflow.add(parent ? parent.id : '__frame__');
+            }
+
+            const offsetAmount = isAutoLayoutParent ? 0 : element.parentId ? 12 : 32;
+            const newElement = {
+                ...element,
+                id: `el-${nanoid(6)}`,
+                name: `${element.name ?? getDefaultElementName(element.type)} Copy`,
+                props: {
+                    ...props,
+                    x: (props.x ?? 0) + offsetAmount,
+                    y: (props.y ?? 0) + offsetAmount,
+                },
+            };
+            newIds.push(newElement.id);
+            acc.push(newElement);
+            return acc;
+        }, []);
+
+        if (newIds.length === 0) return;
+
+        set({
+            frames: state.frames.map((item) =>
+                item.id === selectedFrameId ? { ...item, elements: nextElements } : item,
+            ),
+            selectedElementId: newIds[0],
+            selectedElementIds: newIds,
+        });
+
+        parentsToReflow.forEach((parentKey) => {
+            if (parentKey === '__frame__') {
+                const latest = get().getFrameById(selectedFrameId);
+                if (latest && latest.layoutMode && latest.layoutMode !== 'absolute') {
+                    get().reflowFrame(selectedFrameId);
+                }
+            } else if (parentKey) {
+                get().reflowGroup(selectedFrameId, parentKey);
+            }
+        });
+
+        get().commitHistory(
+            newIds.length > 1 ? 'Duplicate selection' : 'Duplicate element',
+            'user',
+        );
+    },
     pasteElement: (targetFrameId = null, position = null) => {
         const state = get();
         const { clipboard } = state;
@@ -4490,23 +4777,24 @@ export const useCanvasStore = create(
         {
             name: 'dropple-canvas-state',
             version: 1,
+            storage: createJSONStorage(() => safeStorage),
             partialize: (state) => ({
                 mode: state.mode,
                 scale: state.scale,
                 position: state.position,
                 frames: state.frames,
                 selectedFrameId: state.selectedFrameId,
-                frameLinks: state.frameLinks,
-                comments: state.comments,
-                timelineAssets: state.timelineAssets,
+                selectedElementIds: state.selectedElementIds,
+                selectedTool: state.selectedTool,
                 prototypeMode: state.prototypeMode,
                 activePrototypeFrameId: state.activePrototypeFrameId,
                 gridVisible: state.gridVisible,
                 gridSize: state.gridSize,
-                modeState: state.modeState,
+                collaborators: state.collaborators,
+                lastAutosaveAt: state.lastAutosaveAt,
             }),
-        },
-    ),
+    },
+),
 );
 
 configureHistory(() => {

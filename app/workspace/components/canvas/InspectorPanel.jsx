@@ -4,6 +4,12 @@ import clsx from 'clsx';
 import { useState, useCallback } from 'react';
 import { MODE_CONFIG } from './modeConfig';
 import { useCanvasStore } from './context/CanvasStore';
+import {
+    updateFramePropsViaFabric,
+    updateElementPropsViaFabric,
+    updateElementsPropsBatchViaFabric,
+    setFrameBackgroundViaFabric,
+} from './fabric/canvasApi';
 
 function SliderRow({ label, min = 0, max = 100, step = 1, value = 0, onChange, mixed = false }) {
     const safeValue = Number.isFinite(value) ? value : min;
@@ -351,14 +357,10 @@ export default function InspectorPanel() {
     const frames = useCanvasStore((state) => state.frames);
     const selectedFrameId = useCanvasStore((state) => state.selectedFrameId);
     const selectedElementIds = useCanvasStore((state) => state.selectedElementIds);
-    const updateFrame = useCanvasStore((state) => state.updateFrame);
-    const updateElementProps = useCanvasStore((state) => state.updateElementProps);
-    const updateElementsPropsBatch = useCanvasStore((state) => state.updateElementsPropsBatch);
     const groupSelectedElements = useCanvasStore((state) => state.groupSelectedElements);
     const ungroupElement = useCanvasStore((state) => state.ungroupElement);
     const liftElementOutOfGroup = useCanvasStore((state) => state.liftElementOutOfGroup);
     const setElementLink = useCanvasStore((state) => state.setElementLink);
-    const setFrameBackground = useCanvasStore((state) => state.setFrameBackground);
     const setActiveToolOverlay = useCanvasStore((state) => state.setActiveToolOverlay);
     const bringElementForward = useCanvasStore((state) => state.bringElementForward);
     const sendElementBackward = useCanvasStore((state) => state.sendElementBackward);
@@ -445,11 +447,7 @@ export default function InspectorPanel() {
     const handleFramePropChange = (prop, next) => {
         if (!activeFrame) return;
         const label = `Inspector: Set Frame ${humanizeProp(prop)}`;
-        updateFrame(
-            activeFrame.id,
-            { [prop]: next },
-            { historyLabel: label, source: 'inspector' },
-        );
+        updateFramePropsViaFabric(activeFrame.id, { [prop]: next }, { historyLabel: label, source: 'inspector' });
     };
 
     const handleElementPropChange = (prop, next) => {
@@ -470,23 +468,18 @@ export default function InspectorPanel() {
                 elementId,
                 props: { [prop]: buildValue() },
             }));
-            updateElementsPropsBatch(activeFrame.id, entries, {
+            updateElementsPropsBatchViaFabric(activeFrame.id, entries, {
                 historyLabel: label,
                 source: 'inspector',
             });
         } else if (activeElement) {
-            updateElementProps(
-                activeFrame.id,
-                activeElement.id,
-                { [prop]: next },
-                { historyLabel: label, source: 'inspector' },
-            );
+            updateElementPropsViaFabric(activeFrame.id, activeElement.id, { [prop]: next }, { historyLabel: label, source: 'inspector' });
         }
     };
 
     const applyFrameBackground = (updates, historyLabel) => {
         if (!activeFrame) return;
-        setFrameBackground(activeFrame.id, updates, {
+        setFrameBackgroundViaFabric(activeFrame.id, updates, {
             historyLabel: historyLabel ?? 'Inspector: Update Frame Background',
             source: 'inspector',
         });
@@ -502,7 +495,7 @@ export default function InspectorPanel() {
 
     const handleElementImage = (next) => {
         if (!activeFrame || !activeElement) return;
-        updateElementProps(
+        updateElementPropsViaFabric(
             activeFrame.id,
             activeElement.id,
             { imageUrl: next },

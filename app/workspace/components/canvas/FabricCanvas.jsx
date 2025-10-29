@@ -5,28 +5,12 @@ import clsx from 'clsx';
 import { useCanvasStore } from './context/CanvasStore';
 import { fabricService } from './fabric/fabricServiceSingleton';
 import { resolveTool } from './utils/toolBehaviors';
-import { createElement } from './utils/elementFactory';
-import { findFrameAtPoint } from './utils/frameUtils';
 import { MODE_CANVAS_BEHAVIOR } from './modeConfig';
-import { attachMetadata, elementToFabric } from './fabric/fabricAdapters';
+import { attachMetadata, elementToFabric, extractMetadata } from './fabric/fabricAdapters';
+import { findFrameAtPoint } from './utils/frameUtils';
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 4;
-
-const snapValueToGrid = (value, grid) => {
-    if (!grid || grid <= 0) return value;
-    return Math.round(value / grid) * grid;
-};
-
-const applySnappingToPoint = (point, snapping = {}) => {
-    if (!snapping) return point;
-    const next = { ...point };
-    if (snapping.grid) {
-        next.x = snapValueToGrid(next.x, snapping.grid);
-        next.y = snapValueToGrid(next.y, snapping.grid);
-    }
-    return next;
-};
 
 export default function FabricCanvas() {
     const containerRef = useRef(null);
@@ -109,6 +93,10 @@ export default function FabricCanvas() {
         window.addEventListener('keydown', historyHotkeyHandler);
         let fabricCanvas = null;
 
+        const handleCanvasContextMenu = (event) => {
+            event.preventDefault();
+        };
+
         const initialise = async () => {
             const fabricModule = await fabricService.ensureFabricModule();
             if (disposed) return;
@@ -117,6 +105,8 @@ export default function FabricCanvas() {
 
             const canvasElement = canvasRef.current;
             if (!canvasElement) return;
+
+            canvasElement.addEventListener('contextmenu', handleCanvasContextMenu);
 
             fabricCanvas = new fabric.Canvas(canvasElement, {
                 preserveObjectStacking: true,
@@ -167,6 +157,52 @@ export default function FabricCanvas() {
             });
             fabricService.setCanvas(fabricCanvas);
 
+            const openContextMenu = (originalEvent, fabricTarget, pointer) => {
+                if (!originalEvent || typeof originalEvent.clientX !== 'number') return;
+                originalEvent.preventDefault();
+                const storeState = useCanvasStore.getState();
+                const metadata = fabricTarget ? extractMetadata(fabricTarget) : null;
+                let contextType = 'canvas';
+                const context = {
+                    type: contextType,
+                    position: { x: originalEvent.clientX, y: originalEvent.clientY },
+                    canvasPoint: { x: pointer.x, y: pointer.y },
+                    frameId: null,
+                    elementId: null,
+                };
+
+                if (metadata?.droppleType === 'element') {
+                    contextType = 'element';
+                    context.frameId = fabricTarget?.droppleFrameId ?? null;
+                    context.elementId = metadata.droppleId;
+                    if (context.frameId && context.elementId) {
+                        storeState.setSelectedFrame(context.frameId);
+                        storeState.setSelectedElement(context.frameId, context.elementId);
+                    }
+                } else if (metadata?.droppleType === 'frame') {
+                    contextType = 'frame';
+                    context.frameId = metadata.droppleId;
+                    if (context.frameId) {
+                        storeState.setSelectedFrame(context.frameId);
+                    }
+                } else {
+                    const frames = storeState.frames ?? [];
+                    const frame = findFrameAtPoint(frames, pointer);
+                    context.frameId = frame?.id ?? null;
+                    if (context.frameId) {
+                        storeState.setSelectedFrame(context.frameId);
+                    }
+                }
+
+                storeState.setContextMenu({
+                    type: contextType,
+                    frameId: context.frameId ?? undefined,
+                    elementId: context.elementId ?? undefined,
+                    position: context.position,
+                    canvasPoint: context.canvasPoint,
+                });
+            };
+
             fabricCanvas.on('mouse:down', (event) => {
                 const originalEvent = event?.e;
                 if (!originalEvent) return;
@@ -176,67 +212,31 @@ export default function FabricCanvas() {
                 const action = resolveTool(currentTool, store.mode);
                 const pointer = fabricCanvas.getPointer(originalEvent, true);
                 const primaryButton = originalEvent.button === 0;
+                const isContextClick = originalEvent.button === 2;
+
+                if (isContextClick) {
+                    openContextMenu(originalEvent, event?.target ?? null, pointer);
+                    return;
+                }
 
                 if (primaryButton && action.type !== 'pointer') {
-                    if (action.type === 'frame') {
-                        const defaults = canvasBehavior.frameDefaults ?? {};
-                        const width = action.width ?? defaults.width ?? 960;
-                        const height = action.height ?? defaults.height ?? 640;
-                        const snappedPointer = applySnappingToPoint(pointer, canvasBehavior.snapping);
-                        const newFrame = store.addFrameAt(
-                            {
-                                x: snappedPointer.x - width / 2,
-                                y: snappedPointer.y - height / 2,
-                            },
-                            { width, height },
-                        );
-                        if (newFrame) {
-                            store.setSelectedFrame(newFrame.id);
-                            store.commitHistory('Add frame');
-                        }
-                        return;
-                    }
+                    originalEvent.preventDefault();
+                    if (typeof action.perform === 'function') {
+                        const outcome = action.perform({
+                            pointer,
+                            canvasBehavior,
+                            mode: store.mode,
+                            behavior: action,
+                        });
 
-                    if (action.type === 'element') {
-                        let targetFrame = findFrameAtPoint(store.frames, pointer);
-                        if (!targetFrame) {
-                            const fallbackPointer = applySnappingToPoint(pointer, canvasBehavior.snapping);
-                            targetFrame = store.addFrameAt(
-                                {
-                                    x: fallbackPointer.x - 480,
-                                    y: fallbackPointer.y - 320,
-                                },
-                                { width: 960, height: 640 },
-                            );
-                        }
-
-                        if (targetFrame) {
-                            const snappedPointer = applySnappingToPoint(pointer, canvasBehavior.snapping);
-                            const element = createElement(action.elementType, targetFrame, snappedPointer, {
-                                mode: store.mode,
-                                preset: action.preset,
-                            });
-                            store.addElementToFrame(targetFrame.id, element);
-                            store.setSelectedElement(targetFrame.id, element.id);
-                            if (currentTool === 'image') {
-                                setPendingImageElement({ frameId: targetFrame.id, elementId: element.id });
+                        Promise.resolve(outcome).then((result) => {
+                            if (!result) return;
+                            if (result.requestImageUpload) {
+                                setPendingImageElement(result.requestImageUpload);
                             }
-                            if (currentTool === 'ai-generator') {
-                                const baseWidth = Math.max(360, element.props?.width ?? 320);
-                                const baseHeight = Math.max(160, element.props?.height ?? 160);
-                        const storeAfterInsert = useCanvasStore.getState();
-                        storeAfterInsert.updateElementProps(
-                            targetFrame.id,
-                            element.id,
-                            {
-                                text: 'Generating AI copy…',
-                                width: baseWidth,
-                                height: baseHeight,
-                            },
-                            { skipHistory: true },
-                        );
-
-                        setTimeout(() => {
+                            if (result.aiGenerator) {
+                                const { frameId, elementId, baseWidth, baseHeight } = result.aiGenerator;
+                                setTimeout(() => {
                                     const promptMessage = 'Describe the copy you want generated for this block:';
                                     const defaultPrompt =
                                         'Write a short Dropple landing page headline and supporting sentence.';
@@ -245,16 +245,16 @@ export default function FabricCanvas() {
                                     const instructions =
                                         userInput && userInput.trim().length > 0 ? userInput.trim() : defaultPrompt;
 
-                            const storeAfterPrompt = useCanvasStore.getState();
-                            storeAfterPrompt.updateElementProps(
-                                targetFrame.id,
-                                element.id,
-                                {
-                                    text: 'Generating AI copy…',
-                                    width: baseWidth,
-                                },
-                                { skipHistory: true },
-                            );
+                                    const storeAfterPrompt = useCanvasStore.getState();
+                                    storeAfterPrompt.updateElementProps(
+                                        frameId,
+                                        elementId,
+                                        {
+                                            text: 'Generating AI copy…',
+                                            width: baseWidth,
+                                        },
+                                        { skipHistory: true },
+                                    );
 
                                     fetch('/api/ai', {
                                         method: 'POST',
@@ -275,8 +275,8 @@ export default function FabricCanvas() {
                                         .then((generatedText) => {
                                             const latestStore = useCanvasStore.getState();
                                             latestStore.updateElementProps(
-                                                targetFrame.id,
-                                                element.id,
+                                                frameId,
+                                                elementId,
                                                 {
                                                     text: generatedText,
                                                     width: baseWidth,
@@ -286,10 +286,9 @@ export default function FabricCanvas() {
                                         });
                                 }, 0);
                             }
-                            store.commitHistory(`Add ${action.elementType}`);
-                        }
-                        return;
+                        });
                     }
+                    return;
                 }
 
                 if (originalEvent.button === 1 || originalEvent.button === 2 || originalEvent.altKey) {
@@ -356,6 +355,10 @@ export default function FabricCanvas() {
             fabricCanvasRef.current = null;
             fabricNamespaceRef.current = null;
             window.removeEventListener('keydown', historyHotkeyHandler);
+            const canvasElement = canvasRef.current;
+            if (canvasElement) {
+                canvasElement.removeEventListener('contextmenu', handleCanvasContextMenu);
+            }
         };
     }, [historyHotkeyHandler, setPosition, setScale, setSelectedFrame, updateFrame, getFrameById]);
 
@@ -608,11 +611,10 @@ export default function FabricCanvas() {
     return (
         <div
             ref={containerRef}
-            className={clsx('relative h-full w-full overflow-hidden bg-[var(--color-canvas)]')}
+            className={clsx('relative h-full w-full overflow-hidden bg-[#020617]')}
             style={{ ...gridBackground, overscrollBehavior: 'none' }}
         >
             <canvas ref={canvasRef} className='block h-full w-full' />
-            <div className='pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(139,92,246,0.08),transparent55%)]' />
             <input
                 ref={fileInputRef}
                 type='file'
