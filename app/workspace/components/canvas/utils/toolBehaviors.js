@@ -1,23 +1,21 @@
 'use client';
 
-import { performElementTool, performFrameTool } from '../fabric/canvasApi';
-
 const BASE_TOOL_BEHAVIORS = {
     pointer: { type: 'pointer' },
-    frame: { type: 'frame', width: 960, height: 640, perform: performFrameTool },
-    canvas: { type: 'frame', width: 1280, height: 720, perform: performFrameTool },
-    scene: { type: 'frame', width: 1280, height: 720, perform: performFrameTool },
-    segment: { type: 'frame', width: 960, height: 320, perform: performFrameTool },
-    shape: { type: 'element', elementType: 'rect', perform: performElementTool },
-    rect: { type: 'element', elementType: 'rect', perform: performElementTool },
-    overlay: { type: 'element', elementType: 'rect', perform: performElementTool },
-    clip: { type: 'element', elementType: 'rect', perform: performElementTool },
-    text: { type: 'element', elementType: 'text', perform: performElementTool },
-    script: { type: 'element', elementType: 'text', perform: performElementTool },
-    image: { type: 'element', elementType: 'image', perform: performElementTool },
-    component: { type: 'element', elementType: 'rect', perform: performElementTool },
-    character: { type: 'element', elementType: 'rect', perform: performElementTool },
-    'ai-generator': { type: 'element', elementType: 'text', perform: performElementTool },
+    frame: { type: 'frame', width: 960, height: 640 },
+    canvas: { type: 'frame', width: 1280, height: 720 },
+    scene: { type: 'frame', width: 1280, height: 720 },
+    segment: { type: 'frame', width: 960, height: 320 },
+    shape: { type: 'element', elementType: 'rect' },
+    rect: { type: 'element', elementType: 'rect' },
+    overlay: { type: 'element', elementType: 'rect' },
+    clip: { type: 'element', elementType: 'rect' },
+    text: { type: 'element', elementType: 'text' },
+    script: { type: 'element', elementType: 'text' },
+    image: { type: 'element', elementType: 'image' },
+    component: { type: 'element', elementType: 'rect' },
+    character: { type: 'element', elementType: 'rect' },
+    'ai-generator': { type: 'element', elementType: 'text' },
 };
 
 const POINTER_TOOL_IDS = [
@@ -96,19 +94,9 @@ const createTimelineTool = (assetType, overrides = {}) => ({
 
 const MODE_TOOL_BEHAVIORS = {
     ux: {
-        frame: { type: 'frame', width: 1280, height: 720, perform: performFrameTool },
-        text: {
-            type: 'element',
-            elementType: 'text',
-            preset: { width: 360, height: 96, fontSize: 20 },
-            perform: performElementTool,
-        },
-        component: {
-            type: 'element',
-            elementType: 'component',
-            preset: { width: 320, height: 240 },
-            perform: performElementTool,
-        },
+        frame: { type: 'frame', width: 1280, height: 720 },
+        text: { type: 'element', elementType: 'text', preset: { width: 360, height: 96, fontSize: 20 } },
+        component: { type: 'element', elementType: 'component', preset: { width: 320, height: 240 } },
     },
     animation: {
         clip: createTimelineTool('clip', { label: 'Animation clip', duration: 4 }),
@@ -130,34 +118,14 @@ const MODE_TOOL_BEHAVIORS = {
         segment: createTimelineTool('segment', { label: 'Episode segment', duration: 45 }),
         sound: createTimelineTool('audio', { label: 'FX & Music', duration: 20 }),
         record: createTimelineTool('audio', { label: 'Voice recording', duration: 30, metadata: { source: 'recording' } }),
-        script: {
-            type: 'element',
-            elementType: 'script',
-            preset: { width: 480, height: 320 },
-            perform: performElementTool,
-        },
-        voices: {
-            type: 'element',
-            elementType: 'component',
-            preset: { width: 320, height: 160 },
-            perform: performElementTool,
-        },
+        script: { type: 'element', elementType: 'script', preset: { width: 480, height: 320 } },
+        voices: { type: 'element', elementType: 'component', preset: { width: 320, height: 160 } },
     },
     graphics: {
-        shape: {
-            type: 'element',
-            elementType: 'rect',
-            preset: { width: 320, height: 220 },
-            perform: performElementTool,
-        },
+        shape: { type: 'element', elementType: 'rect', preset: { width: 320, height: 220 } },
     },
     image: {
-        shape: {
-            type: 'element',
-            elementType: 'rect',
-            preset: { width: 260, height: 180 },
-            perform: performElementTool,
-        },
+        shape: { type: 'element', elementType: 'rect', preset: { width: 260, height: 180 } },
         brush: { type: 'pointer' },
     },
 };
@@ -165,16 +133,15 @@ const MODE_TOOL_BEHAVIORS = {
 export const TOOL_BEHAVIORS = BASE_TOOL_BEHAVIORS;
 
 export function resolveTool(toolId, mode) {
-    if (!toolId || toolId === 'pointer') return { ...TOOL_BEHAVIORS.pointer, toolId: 'pointer' };
+    if (!toolId || toolId === 'pointer') return TOOL_BEHAVIORS.pointer;
     const modeBehaviors = mode ? MODE_TOOL_BEHAVIORS[mode] : null;
     if (modeBehaviors && modeBehaviors[toolId]) {
-        return { ...modeBehaviors[toolId], toolId };
+        return modeBehaviors[toolId];
     }
-    if (TOOL_BEHAVIORS[toolId]) return { ...TOOL_BEHAVIORS[toolId], toolId };
-    if (toolId.includes('frame')) return { ...TOOL_BEHAVIORS.frame, toolId };
-    if (toolId.includes('text')) return { ...TOOL_BEHAVIORS.text, toolId };
-    if (toolId.includes('image') || toolId.includes('photo')) return { ...TOOL_BEHAVIORS.image, toolId };
-    if (toolId.includes('shape') || toolId.includes('rect') || toolId.includes('overlay'))
-        return { ...TOOL_BEHAVIORS.shape, toolId };
-    return { ...TOOL_BEHAVIORS.pointer, toolId };
+    if (TOOL_BEHAVIORS[toolId]) return TOOL_BEHAVIORS[toolId];
+    if (toolId.includes('frame')) return TOOL_BEHAVIORS.frame;
+    if (toolId.includes('text')) return TOOL_BEHAVIORS.text;
+    if (toolId.includes('image') || toolId.includes('photo')) return TOOL_BEHAVIORS.image;
+    if (toolId.includes('shape') || toolId.includes('rect') || toolId.includes('overlay')) return TOOL_BEHAVIORS.shape;
+    return TOOL_BEHAVIORS.pointer;
 }

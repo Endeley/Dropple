@@ -39,15 +39,6 @@ export default function CanvasContextMenu() {
     const setMode = useCanvasStore((state) => state.setMode);
     const sendModeIntent = useCanvasStore((state) => state.sendModeIntent);
     const previewAutoLayoutSuggestion = useCanvasStore((state) => state.previewAutoLayoutSuggestion);
-    const addComment = useCanvasStore((state) => state.addComment);
-    const prototypeMode = useCanvasStore((state) => state.prototypeMode);
-    const setPrototypeMode = useCanvasStore((state) => state.setPrototypeMode);
-    const setActivePrototypeFrameId = useCanvasStore((state) => state.setActivePrototypeFrameId);
-    const addFrameLink = useCanvasStore((state) => state.addFrameLink);
-    const removeFrameLink = useCanvasStore((state) => state.removeFrameLink);
-    const frameLinks = useCanvasStore((state) => state.frameLinks);
-    const addCollaborator = useCanvasStore((state) => state.addCollaborator);
-    const updateCollaboratorPresence = useCanvasStore((state) => state.updateCollaboratorPresence);
     const undoCanvas = useCanvasStore((state) => state.undoCanvas);
     const redoCanvas = useCanvasStore((state) => state.redoCanvas);
     const { canUndo, canRedo } = useHistoryStatus();
@@ -116,11 +107,6 @@ export default function CanvasContextMenu() {
         if (!frame || !elementId) return null;
         return frame.elements.find((item) => item.id === elementId) ?? null;
     }, [frame, elementId]);
-
-    const resolvedFrameId = frameId ?? selectedFrameId ?? frames[0]?.id ?? null;
-    const framePrototypeLink = frameId
-        ? frameLinks.find((link) => link.from === frameId) ?? null
-        : null;
 
     const isElementClipboard = clipboard?.type === 'element';
     const isFrameClipboard = clipboard?.type === 'frame';
@@ -200,32 +186,6 @@ export default function CanvasContextMenu() {
                         ? () => duplicateFrame(frameId)
                         : null,
             keywords: ['duplicate', 'clone'],
-        }),
-        createMenuItem({
-            key: 'comment-pin',
-            label: 'Add Comment Pin…',
-            icon: '💬',
-            action:
-                resolvedFrameId
-                    ? () => {
-                          const placeholder = elementId
-                              ? 'Leave feedback on this element'
-                              : 'Leave feedback on this frame';
-                          const input =
-                              typeof window !== 'undefined'
-                                  ? window.prompt('Add a comment', placeholder)
-                                  : null;
-                          if (input && input.trim()) {
-                              addComment({
-                                  frameId: resolvedFrameId,
-                                  elementId: elementId ?? null,
-                                  text: input.trim(),
-                              });
-                          }
-                      }
-                    : null,
-            disabled: !resolvedFrameId,
-            keywords: ['comment', 'feedback', 'pin'],
         }),
         createMenuItem({
             key: 'paste',
@@ -1186,81 +1146,6 @@ export default function CanvasContextMenu() {
             icon: '💾',
             disabled: true,
             keywords: ['save'],
-        }),
-        createMenuItem({
-            key: 'env-invite-collaborator',
-            label: 'Invite Collaborator…',
-            icon: '🤝',
-            action: () => {
-                const input =
-                    typeof window !== 'undefined'
-                        ? window.prompt('Invite collaborator (name or email)', '')
-                        : null;
-                if (input && input.trim()) {
-                    const collaborator = addCollaborator(input.trim());
-                    if (collaborator?.id) {
-                        updateCollaboratorPresence(collaborator.id, { presence: 'online' });
-                    }
-                }
-            },
-            keywords: ['collaborator', 'invite', 'share'],
-        }),
-        createMenuItem({
-            key: 'env-toggle-prototype',
-            label: prototypeMode ? 'Exit Prototype Mode' : 'Enter Prototype Mode',
-            icon: '🧭',
-            action: () => setPrototypeMode(!prototypeMode),
-            keywords: ['prototype', 'mode'],
-        }),
-        createMenuItem({
-            key: 'env-set-prototype-home',
-            label: 'Set as Prototype Start',
-            icon: '🏁',
-            action:
-                frameId
-                    ? () => {
-                          setPrototypeMode(true);
-                          setActivePrototypeFrameId(frameId);
-                      }
-                    : null,
-            disabled: !frameId,
-            keywords: ['prototype', 'start'],
-        }),
-        createMenuItem({
-            key: 'env-link-frame',
-            label: framePrototypeLink ? 'Change Prototype Link…' : 'Link to Frame…',
-            icon: '🔗',
-            action:
-                frameId && frames.length > 1
-                    ? () => {
-                          const candidates = frames.filter((frame) => frame.id !== frameId);
-                          if (candidates.length === 0) return;
-                          const promptMessage = `Link to frame:\n${candidates
-                              .map((frame, index) => `${index + 1}. ${frame.name ?? 'Frame'}`)
-                              .join('\n')}\nEnter number to link.`;
-                          const input =
-                              typeof window !== 'undefined'
-                                  ? window.prompt(promptMessage, '1')
-                                  : null;
-                          const targetIndex = Number.parseInt(input ?? '', 10) - 1;
-                          if (Number.isFinite(targetIndex) && targetIndex >= 0 && targetIndex < candidates.length) {
-                              addFrameLink(frameId, candidates[targetIndex].id);
-                          }
-                      }
-                    : null,
-            disabled: !(frameId && frames.length > 1),
-            keywords: ['prototype', 'link'],
-        }),
-        createMenuItem({
-            key: 'env-remove-link',
-            label: 'Remove Prototype Link',
-            icon: '🗑️',
-            action:
-                frameId && framePrototypeLink
-                    ? () => removeFrameLink(frameId, framePrototypeLink.to)
-                    : null,
-            disabled: !(frameId && framePrototypeLink),
-            keywords: ['prototype', 'remove', 'link'],
         }),
         createMenuItem({
             key: 'env-ask-ai',

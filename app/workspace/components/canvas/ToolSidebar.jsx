@@ -76,29 +76,6 @@ const AI_GENERATOR_OPTIONS = [
     { id: 'overlay', label: 'Overlay' },
 ];
 
-const AI_MODE_INTENTS = {
-    image: {
-        mode: 'image',
-        badge: 'AI Visual',
-        message: 'Opening Image mode so you can refine the generated visual…',
-    },
-    component: {
-        mode: 'ux',
-        badge: 'Component',
-        message: 'Switching to UI/UX mode for component layout & code preview…',
-    },
-    audio: {
-        mode: 'podcast',
-        badge: 'Audio',
-        message: 'Routing to Podcast mode to edit the generated audio timeline…',
-    },
-    overlay: {
-        mode: 'video',
-        badge: 'Timeline',
-        message: 'Loading Video mode to place the overlay on timeline tracks…',
-    },
-};
-
 const formatCategoryLabel = (value) => {
     if (!value) return 'Misc';
     const normalized = value.replace(/[-_]/g, ' ').trim();
@@ -193,7 +170,6 @@ export default function ToolSidebar() {
     const setSelectedElement = useCanvasStore((state) => state.setSelectedElement);
     const setPosition = useCanvasStore((state) => state.setPosition);
     const setScale = useCanvasStore((state) => state.setScale);
-    const sendModeIntent = useCanvasStore((state) => state.sendModeIntent);
 
     const modeConfig = MODE_CONFIG[mode] ?? MODE_CONFIG.design;
     const tools = modeConfig.tools ?? [];
@@ -361,19 +337,10 @@ export default function ToolSidebar() {
     const handleGenerateAsset = useCallback(() => {
         const prompt = aiPrompt.trim();
         if (!prompt) return;
-        const intent = AI_MODE_INTENTS[aiKind];
-        if (intent) {
-            sendModeIntent(intent.mode, {
-                source: 'ai',
-                badge: intent.badge,
-                message: intent.message,
-                payload: { prompt, kind: aiKind },
-            });
-        }
         setIsGenerating(true);
         generateAiAsset({ prompt, kind: aiKind });
         setAiPrompt('');
-    }, [aiPrompt, aiKind, generateAiAsset, sendModeIntent]);
+    }, [aiPrompt, aiKind, generateAiAsset]);
 
     const handleAssetPlace = useCallback(
         (asset, target = 'auto') => {

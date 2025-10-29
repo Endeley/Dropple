@@ -1,16 +1,21 @@
 'use client';
 
 import clsx from 'clsx';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import CanvasLayer from './CanvasLayer';
 import CanvasContextMenu from './CanvasContextMenu';
 import FabricCanvas from './FabricCanvas';
 import TimelineBar from './TimelineBar';
 import { useCanvasStore } from './context/CanvasStore';
-import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
-import { useAutosaveMonitor } from './hooks/useAutosaveMonitor';
+import { resolveTool } from './utils/toolBehaviors';
+import { createElement } from './utils/elementFactory';
+import { findFrameAtPoint, findElementAtPoint } from './utils/frameUtils';
 import { MODE_ASSETS, MODE_CANVAS_BEHAVIOR, MODE_CONFIG } from './modeConfig';
 import { getVideoTimelineStyle, getAnimationTimelineStyle, getPodcastTimelineStyle } from './utils/timelineStyles';
 
+const SCALE_STEP = 1.1;
+const MIN_SCALE = 0.25;
+const MAX_SCALE = 4;
 const FALLBACK_ACCENT = '#6366F1';
 
 const humanizeModeName = (value) => {
@@ -27,6 +32,21 @@ const humanizeModeName = (value) => {
         .join(' ');
 };
 
+const snapValueToGrid = (value, grid) => {
+    if (!grid || grid <= 0) return value;
+    return Math.round(value / grid) * grid;
+};
+
+const applySnappingToPoint = (point, snapping = {}) => {
+    if (!snapping) return point;
+    const next = { ...point };
+    if (snapping.grid) {
+        next.x = snapValueToGrid(next.x, snapping.grid);
+        next.y = snapValueToGrid(next.y, snapping.grid);
+    }
+    return next;
+};
+
 const formatSecondsValue = (value) => {
     const seconds = Math.max(0, Number.isFinite(value) ? value : 0);
     if (seconds >= 60) {
@@ -37,27 +57,12 @@ const formatSecondsValue = (value) => {
     return seconds.toFixed(2);
 };
 
-const formatRelativeTimestamp = (timestamp) => {
-    if (!timestamp) return '';
-    const delta = Date.now() - timestamp;
-    if (delta < 2000) return 'just now';
-    if (delta < 60000) {
-        const seconds = Math.max(1, Math.floor(delta / 1000));
-        return `${seconds}s ago`;
-    }
-    if (delta < 3600000) {
-        const minutes = Math.max(1, Math.floor(delta / 60000));
-        return `${minutes}m ago`;
-    }
-    if (delta < 86400000) {
-        const hours = Math.max(1, Math.floor(delta / 3600000));
-        return `${hours}h ago`;
-    }
-    const days = Math.max(1, Math.floor(delta / 86400000));
-    return `${days}d ago`;
-};
-
 export default function CanvasContainer() {
+    const viewportRef = useRef(null);
+    const isPointerDown = useRef(false);
+    const lastPointer = useRef({ x: 0, y: 0 });
+   const fileInputRef = useRef(null);
+   const [pendingImageElement, setPendingImageElement] = useState(null);
     const [isTransitioning, setIsTransitioning] = useState(false);
 
     const mode = useCanvasStore((state) => state.mode);
@@ -66,18 +71,28 @@ export default function CanvasContainer() {
     const isTimelineWorkspace = canvasKind === 'timeline';
     const isWaveformWorkspace = canvasKind === 'waveform';
     const useFabricCanvas = Boolean(
-        canvasBehavior.usesFabric !== false || canvasKind === 'fabric' || canvasKind === 'timeline' || canvasKind === 'frame',
+        canvasBehavior.usesFabric || canvasKind === 'fabric' || canvasKind === 'timeline' || canvasKind === 'frame',
     );
     const timelineBehavior = canvasBehavior.timeline ?? null;
+    const scale = useCanvasStore((state) => state.scale);
+    const setScale = useCanvasStore((state) => state.setScale);
+    const position = useCanvasStore((state) => state.position);
+    const setPosition = useCanvasStore((state) => state.setPosition);
+    const selectedTool = useCanvasStore((state) => state.selectedTool);
+    const gridVisible = useCanvasStore((state) => state.gridVisible);
+    const gridSize = useCanvasStore((state) => state.gridSize);
     const isModeSwitching = useCanvasStore((state) => state.isModeSwitching);
-    const isSceneHydrating = useCanvasStore((state) => state.isSceneHydrating);
-    const sceneSnapshot = useCanvasStore((state) => state.sceneSnapshot);
+   const isSceneHydrating = useCanvasStore((state) => state.isSceneHydrating);
+   const sceneSnapshot = useCanvasStore((state) => state.sceneSnapshot);
     const modeTransitionIntent = useCanvasStore((state) => state.modeTransitionIntent);
     const clearModeTransitionIntent = useCanvasStore((state) => state.clearModeTransitionIntent);
 
-    useGlobalHotkeys();
-    useAutosaveMonitor();
-
+    const creationCursor = useMemo(() => {
+        if (isTimelineWorkspace || isWaveformWorkspace) return false;
+        return ['shape', 'rect', 'text', 'image', 'ai-generator', 'component', 'overlay', 'clip', 'script', 'comment', 'frame', 'canvas', 'scene', 'segment'].includes(
+            selectedTool,
+        );
+    }, [isTimelineWorkspace, isWaveformWorkspace, selectedTool]);
     const overlayEngaged = isModeSwitching || isSceneHydrating;
 
     useEffect(() => {
@@ -85,19 +100,45 @@ export default function CanvasContainer() {
             setIsTransitioning(true);
             return;
         }
-        const timeoutId = globalThis.setTimeout(() => {
+        const timeoutId = window.setTimeout(() => {
             setIsTransitioning(false);
         }, 240);
-        return () => globalThis.clearTimeout(timeoutId);
+        return () => window.clearTimeout(timeoutId);
     }, [overlayEngaged]);
 
     useEffect(() => {
         if (overlayEngaged || isTransitioning || !modeTransitionIntent) return undefined;
-        const timeoutId = globalThis.setTimeout(() => {
+        const timeoutId = window.setTimeout(() => {
             clearModeTransitionIntent();
         }, 180);
-        return () => globalThis.clearTimeout(timeoutId);
+        return () => window.clearTimeout(timeoutId);
     }, [overlayEngaged, isTransitioning, modeTransitionIntent, clearModeTransitionIntent]);
+
+    useEffect(() => {
+        if (useFabricCanvas) return undefined;
+        const viewport = viewportRef.current;
+        if (!viewport) return undefined;
+
+        const handlePointerMove = (event) => {
+            if (!isPointerDown.current) return;
+            const deltaX = event.clientX - lastPointer.current.x;
+            const deltaY = event.clientY - lastPointer.current.y;
+            setPosition((prev) => ({ x: prev.x + deltaX, y: prev.y + deltaY }));
+            lastPointer.current = { x: event.clientX, y: event.clientY };
+        };
+
+        const handlePointerUp = () => {
+            isPointerDown.current = false;
+        };
+
+        viewport.addEventListener('pointermove', handlePointerMove);
+        window.addEventListener('pointerup', handlePointerUp);
+
+        return () => {
+            viewport.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', handlePointerUp);
+        };
+    }, [setPosition, useFabricCanvas]);
 
     useEffect(() => {
         const handleKeyDown = (event) => {
@@ -110,6 +151,260 @@ export default function CanvasContainer() {
         globalThis.addEventListener('keydown', handleKeyDown);
         return () => globalThis.removeEventListener('keydown', handleKeyDown);
     }, []);
+    useEffect(() => {
+        if (!pendingImageElement) return;
+        const input = fileInputRef.current;
+        if (!input) return;
+
+        // Reset value so selecting the same file twice still triggers change event
+        input.value = '';
+        input.click();
+    }, [pendingImageElement]);
+
+    const handleImageFileChange = useCallback(
+        (event) => {
+            const current = pendingImageElement;
+            const input = event.target;
+            if (!current) {
+                if (input) input.value = '';
+                return;
+            }
+
+            const file = input?.files?.[0];
+            if (!file) {
+                setPendingImageElement(null);
+                if (input) input.value = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = () => {
+                if (typeof reader.result === 'string') {
+                    const store = useCanvasStore.getState();
+                    store.updateElementProps(current.frameId, current.elementId, {
+                        imageUrl: reader.result,
+                        fill: 'transparent',
+                    });
+                }
+                setPendingImageElement(null);
+                if (input) input.value = '';
+            };
+            reader.onerror = () => {
+                setPendingImageElement(null);
+                if (input) input.value = '';
+            };
+            reader.readAsDataURL(file);
+        },
+        [pendingImageElement],
+    );
+
+    const handleWheel = useCallback(
+        (event) => {
+            const viewport = viewportRef.current;
+            if (!viewport) return;
+            event.preventDefault();
+
+            if (event.ctrlKey || event.metaKey) {
+                const rect = viewport.getBoundingClientRect();
+                const pointer = {
+                    x: event.clientX - rect.left,
+                    y: event.clientY - rect.top,
+                };
+                const oldScale = scale;
+                const mousePointTo = {
+                    x: (pointer.x - position.x) / oldScale,
+                    y: (pointer.y - position.y) / oldScale,
+                };
+
+                const direction = event.deltaY > 0 ? -1 : 1;
+                const nextScale = direction > 0 ? oldScale * SCALE_STEP : oldScale / SCALE_STEP;
+                const clampedScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, nextScale));
+
+                setScale(clampedScale);
+                setPosition({
+                    x: pointer.x - mousePointTo.x * clampedScale,
+                    y: pointer.y - mousePointTo.y * clampedScale,
+                });
+            } else {
+                setPosition((prev) => ({
+                    x: prev.x + event.deltaX,
+                    y: prev.y + event.deltaY,
+                }));
+            }
+        },
+        [position, scale, setPosition, setScale],
+    );
+
+    const handlePointerDown = (event) => {
+        const store = useCanvasStore.getState();
+        const currentTool = store.selectedTool || 'pointer';
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+
+        const rect = viewport.getBoundingClientRect();
+        const canvasPoint = {
+            x: (event.clientX - rect.left - store.position.x) / store.scale,
+            y: (event.clientY - rect.top - store.position.y) / store.scale,
+        };
+
+        if (currentTool === 'comment') {
+            const targetFrame = findFrameAtPoint(store.frames, canvasPoint);
+            if (targetFrame) {
+                const targetElement = findElementAtPoint(targetFrame, canvasPoint);
+                if (targetElement) {
+                    store.setSelectedElement(targetFrame.id, targetElement.id);
+                } else {
+                    store.setSelectedFrame(targetFrame.id);
+                }
+                store.setActiveToolOverlay('comment');
+            }
+            return;
+        }
+
+        const action = resolveTool(currentTool, mode);
+        const primaryButton = event.button === 0;
+
+        if (primaryButton && action.type !== 'pointer') {
+            event.preventDefault();
+
+            if (action.type === 'frame') {
+                const defaults = canvasBehavior.frameDefaults ?? {};
+                const width = action.width ?? defaults.width ?? 960;
+                const height = action.height ?? defaults.height ?? 640;
+                const snappedPoint = applySnappingToPoint(canvasPoint, canvasBehavior.snapping);
+                const newFrame = store.addFrameAt(
+                    {
+                        x: snappedPoint.x - width / 2,
+                        y: snappedPoint.y - height / 2,
+                    },
+                    { width, height },
+                );
+                if (newFrame) {
+                    store.setSelectedFrame(newFrame.id);
+                }
+                return;
+            }
+
+            if (action.type === 'element') {
+                let targetFrame = findFrameAtPoint(store.frames, canvasPoint);
+                if (!targetFrame) {
+                    targetFrame = store.addFrameAt(
+                        {
+                            x: canvasPoint.x - 480,
+                            y: canvasPoint.y - 320,
+                        },
+                        { width: 960, height: 640 },
+                    );
+                }
+
+                if (targetFrame) {
+                    const snappedPoint = applySnappingToPoint(canvasPoint, canvasBehavior.snapping);
+                    const element = createElement(action.elementType, targetFrame, snappedPoint, {
+                        mode,
+                        preset: action.preset,
+                    });
+                    store.addElementToFrame(targetFrame.id, element);
+                    store.setSelectedElement(targetFrame.id, element.id);
+                    if (selectedTool === 'image') {
+                        setPendingImageElement({ frameId: targetFrame.id, elementId: element.id });
+                    }
+                    if (selectedTool === 'ai-generator') {
+                        const baseWidth = Math.max(360, element.props?.width ?? 320);
+                        const baseHeight = Math.max(160, element.props?.height ?? 160);
+                        const storeAfterInsert = useCanvasStore.getState();
+                        storeAfterInsert.updateElementProps(targetFrame.id, element.id, {
+                            text: 'Generating AI copy…',
+                            width: baseWidth,
+                            height: baseHeight,
+                        });
+
+                        setTimeout(() => {
+                            const promptMessage = 'Describe the copy you want generated for this block:';
+                            const defaultPrompt =
+                                'Write a short Dropple landing page headline and supporting sentence.';
+                            const userInput =
+                                'window' in globalThis ? globalThis.window.prompt(promptMessage, defaultPrompt) : null;
+                            const instructions =
+                                userInput && userInput.trim().length > 0 ? userInput.trim() : defaultPrompt;
+
+                            const storeAfterPrompt = useCanvasStore.getState();
+                            storeAfterPrompt.updateElementProps(targetFrame.id, element.id, {
+                                text: 'Generating AI copy…',
+                                width: baseWidth,
+                            });
+
+                            fetch('/api/ai', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    type: 'text',
+                                    prompt: instructions,
+                                }),
+                            })
+                                .then(async (response) => {
+                                    if (!response.ok) throw new Error('Failed to generate text');
+                                    const data = await response.json();
+                                    return data.text ?? instructions;
+                                })
+                                .catch(() => instructions)
+                                .then((generatedText) => {
+                                    const latestStore = useCanvasStore.getState();
+                                    latestStore.updateElementProps(targetFrame.id, element.id, {
+                                        text: generatedText,
+                                        width: baseWidth,
+                                    });
+                                });
+                        }, 0);
+                    }
+                }
+                return;
+            }
+        }
+
+        const shouldPan = event.button === 1 || event.button === 2 || event.altKey;
+        if (shouldPan) {
+            isPointerDown.current = true;
+            lastPointer.current = { x: event.clientX, y: event.clientY };
+        } else if (action.type === 'pointer' && primaryButton) {
+            store.clearSelection();
+        }
+    };
+
+    const handleCanvasContextMenu = useCallback((event) => {
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+        event.preventDefault();
+        const storeState = useCanvasStore.getState();
+        const rect = viewport.getBoundingClientRect();
+        const canvasPoint = {
+            x: (event.clientX - rect.left - storeState.position.x) / storeState.scale,
+            y: (event.clientY - rect.top - storeState.position.y) / storeState.scale,
+        };
+        storeState.setContextMenu({
+            type: 'canvas',
+            position: { x: event.clientX, y: event.clientY },
+            canvasPoint,
+        });
+    }, []);
+
+    const gridBackground = useMemo(() => {
+        if (!gridVisible || gridSize <= 0) {
+            return {};
+        }
+        const scaledSize = gridSize * scale;
+        const offsetX = ((position.x % scaledSize) + scaledSize) % scaledSize;
+        const offsetY = ((position.y % scaledSize) + scaledSize) % scaledSize;
+        const lineColor = 'rgba(139,92,246,0.1)';
+        const strongLine = 'rgba(139,92,246,0.25)';
+        const major = gridSize * 4 * scale;
+        return {
+            backgroundImage: `linear-gradient(to right, ${lineColor} 1px, transparent 1px), linear-gradient(to bottom, ${lineColor} 1px, transparent 1px), linear-gradient(to right, ${strongLine} 1px, transparent 1px), linear-gradient(to bottom, ${strongLine} 1px, transparent 1px)`,
+            backgroundSize: `${scaledSize}px ${scaledSize}px, ${scaledSize}px ${scaledSize}px, ${major}px ${major}px, ${major}px ${major}px`,
+            backgroundPosition: `${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px`,
+        };
+    }, [gridVisible, gridSize, position.x, position.y, scale]);
     const showOverlay = overlayEngaged || isTransitioning;
     const modeAsset = MODE_ASSETS[mode] ?? {};
     const accentColor = modeTransitionIntent?.accent ?? modeAsset.accent ?? FALLBACK_ACCENT;
@@ -117,14 +412,27 @@ export default function CanvasContainer() {
     const modeConfig = MODE_CONFIG[mode] ?? null;
     const modeLabel = modeTransitionIntent?.label ?? modeConfig?.label ?? humanizeModeName(mode);
     const modeDescription = modeTransitionIntent?.description ?? modeConfig?.description ?? 'Switching creative environment…';
-    const overlayMessage = modeTransitionIntent?.message ?? (isSceneHydrating ? 'Restoring saved scene…' : 'Preparing tools & panels…');
+    const overlayMessage =
+        modeTransitionIntent?.message ??
+        (isSceneHydrating ? 'Restoring saved scene…' : 'Preparing tools & panels…');
     const overlayBadge = modeTransitionIntent?.badge ?? null;
     const canvasShellClass = clsx(
-        'relative h-full w-full overflow-hidden transform-gpu transition-[opacity,transform,filter] duration-300 ease-out will-change-transform',
-        useFabricCanvas ? 'bg-[#020617]' : 'bg-[var(--color-canvas)]',
+        'relative h-full w-full overflow-hidden bg-[var(--color-canvas)] transform-gpu transition-[opacity,transform,filter] duration-300 ease-out will-change-transform',
         showOverlay ? 'pointer-events-none opacity-0 scale-95 blur-sm' : 'opacity-100 scale-100',
     );
-    const overlayElement = <ModeTransitionOverlay active={showOverlay} blocking={overlayEngaged} accent={accentColor} label={modeLabel} description={modeDescription} message={overlayMessage} badge={overlayBadge} thumbnail={thumbnail} scene={sceneSnapshot} />;
+    const overlayElement = (
+        <ModeTransitionOverlay
+            active={showOverlay}
+            blocking={overlayEngaged}
+            accent={accentColor}
+            label={modeLabel}
+            description={modeDescription}
+            message={overlayMessage}
+            badge={overlayBadge}
+            thumbnail={thumbnail}
+            scene={sceneSnapshot}
+        />
+    );
 
     let workspace = null;
 
@@ -153,8 +461,29 @@ export default function CanvasContainer() {
         );
     } else {
         workspace = (
-            <div className='flex h-full w-full items-center justify-center bg-[rgba(5,10,18,0.95)] text-sm text-[rgba(226,232,240,0.7)]'>
-                This canvas mode is being migrated to Fabric. Please switch modes or try again later.
+            <div
+                ref={viewportRef}
+                data-canvas-viewport
+                className={clsx(
+                    canvasShellClass,
+                    creationCursor ? 'cursor-crosshair' : 'cursor-default',
+                )}
+                style={{
+                    ...gridBackground,
+                    overscrollBehavior: 'none',
+                }}
+                onWheel={handleWheel}
+                onPointerDown={handlePointerDown}
+                onContextMenu={handleCanvasContextMenu}
+            >
+                <div
+                    className='absolute left-0 top-0 origin-top-left'
+                    style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})` }}
+                >
+                    <CanvasLayer />
+                </div>
+                <div className='pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(139,92,246,0.08),transparent55%)]' />
+                {overlayElement}
             </div>
         );
     }
@@ -162,15 +491,23 @@ export default function CanvasContainer() {
     return (
         <>
             {workspace}
+            <input
+                ref={fileInputRef}
+                type='file'
+                accept='image/*'
+                className='hidden'
+                onChange={handleImageFileChange}
+            />
             <CanvasContextMenu />
-            <AutosaveIndicator />
-            <CollaborationStrip />
         </>
     );
 }
 
 function ModeTransitionOverlay({ active, blocking, accent, label, description, message, thumbnail, scene, badge }) {
-    const overlayClass = clsx('pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-300 ease-out', active ? 'opacity-100' : 'opacity-0');
+    const overlayClass = clsx(
+        'pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-300 ease-out',
+        active ? 'opacity-100' : 'opacity-0',
+    );
     return (
         <div className={overlayClass} style={{ pointerEvents: blocking ? 'auto' : 'none' }} aria-hidden={!blocking}>
             <div className='w-[min(420px,92%)] rounded-3xl border border-white/10 bg-slate-950/80 p-6 text-white shadow-[0_20px_60px_rgba(8,15,35,0.55)] backdrop-blur-xl'>
@@ -182,7 +519,11 @@ function ModeTransitionOverlay({ active, blocking, accent, label, description, m
                         <div className='flex flex-1 flex-col gap-1'>
                             <div className='flex items-center gap-2'>
                                 <span className='text-[11px] uppercase tracking-[0.45em] text-white/45'>Mode Switch</span>
-                                {badge ? <span className='rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.35em] text-white/70'>{badge}</span> : null}
+                                {badge ? (
+                                    <span className='rounded-full border border-white/15 bg-white/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-[0.35em] text-white/70'>
+                                        {badge}
+                                    </span>
+                                ) : null}
                             </div>
                             <p className='text-lg font-semibold leading-tight'>{`Entering ${label}`}</p>
                             <p className='text-xs text-white/70 leading-relaxed'>{description}</p>
@@ -190,7 +531,10 @@ function ModeTransitionOverlay({ active, blocking, accent, label, description, m
                     </div>
                     <div className='flex items-center gap-3 rounded-2xl border border-white/5 bg-white/5 px-4 py-3 text-xs text-white/80 sm:text-sm'>
                         <span className='relative flex h-2 w-2 shrink-0'>
-                            <span className='absolute inline-flex h-full w-full animate-ping rounded-full opacity-60' style={{ backgroundColor: accent }} />
+                            <span
+                                className='absolute inline-flex h-full w-full animate-ping rounded-full opacity-60'
+                                style={{ backgroundColor: accent }}
+                            />
                             <span className='relative inline-flex h-2 w-2 rounded-full' style={{ backgroundColor: accent }} />
                         </span>
                         <span className='flex-1 text-left'>{message}</span>
@@ -201,58 +545,14 @@ function ModeTransitionOverlay({ active, blocking, accent, label, description, m
     );
 }
 
-function AutosaveIndicator() {
-    const status = useCanvasStore((state) => state.autosaveStatus);
-    const lastSavedAt = useCanvasStore((state) => state.lastAutosaveAt);
-    if (status === 'idle' && !lastSavedAt) return null;
-
-    let message = null;
-    if (status === 'saving') {
-        message = 'Saving…';
-    } else if (lastSavedAt) {
-        message = `Saved ${formatRelativeTimestamp(lastSavedAt)}`;
-    }
-
-    if (!message) return null;
-
-    const indicatorColor = status === 'saving' ? 'rgba(45,212,191,1)' : 'rgba(124,58,237,1)';
-
-    return (
-        <div className='pointer-events-none fixed bottom-6 right-6 z-40'>
-            <div className='inline-flex items-center gap-2 rounded-full border border-[rgba(148,163,184,0.35)] bg-[rgba(15,23,42,0.85)] px-4 py-2 text-xs font-medium text-[rgba(226,232,240,0.9)] shadow-[0_18px_42px_rgba(8,15,35,0.55)] backdrop-blur'>
-                <span className={clsx('inline-flex h-2 w-2 rounded-full', status === 'saving' ? 'animate-pulse' : '')} style={{ backgroundColor: indicatorColor }} />
-                <span>{message}</span>
-            </div>
-        </div>
-    );
-}
-
-function CollaborationStrip() {
-    const collaborators = useCanvasStore((state) => state.collaborators);
-    if (!Array.isArray(collaborators) || collaborators.length === 0) return null;
-    return (
-        <div className='fixed bottom-6 left-6 z-40 flex flex-wrap items-center gap-2'>
-            {collaborators.map((collaborator) => (
-                <div
-                    key={collaborator.id}
-                    className='pointer-events-none flex items-center gap-2 rounded-full border border-[rgba(148,163,184,0.3)] bg-[rgba(15,23,42,0.78)] px-3 py-1 text-[10px] uppercase tracking-[0.25em] text-[rgba(226,232,240,0.85)] shadow-[0_12px_30px_rgba(8,15,35,0.45)] backdrop-blur'>
-                    <span className='inline-flex h-2.5 w-2.5 rounded-full' style={{ backgroundColor: collaborator.color ?? '#6366F1' }} />
-                    <span className='tracking-[0.18em] text-[rgba(236,233,254,0.9)]'>
-                        {collaborator.name}
-                        {collaborator.isMe ? ' (You)' : ''}
-                    </span>
-                    <span className='text-[9px] tracking-[0.3em] text-[rgba(148,163,184,0.7)]'>{(collaborator.presence ?? 'online').toUpperCase()}</span>
-                </div>
-            ))}
-        </div>
-    );
-}
-
 function ModePreviewMedia({ thumbnail, accent, scene }) {
     if (thumbnail) {
         return (
             <>
-                <div className='absolute inset-0 bg-cover bg-center' style={{ backgroundImage: `url(${thumbnail})` }} />
+                <div
+                    className='absolute inset-0 bg-cover bg-center'
+                    style={{ backgroundImage: `url(${thumbnail})` }}
+                />
                 <div className='absolute inset-0 bg-slate-950/35' />
             </>
         );
@@ -272,7 +572,8 @@ function ModePreviewMedia({ thumbnail, accent, scene }) {
                             height: 52,
                             transform: `scale(${1 - index * 0.08})`,
                             transformOrigin: 'top left',
-                        }}>
+                        }}
+                    >
                         <div className='absolute inset-3 rounded-lg bg-white/8' />
                         <div className='absolute left-4 right-4 top-4 h-1.5 rounded-full bg-white/20' />
                         <div className='absolute left-4 right-6 top-7 h-1.5 rounded-full bg-white/15' />
@@ -285,7 +586,10 @@ function ModePreviewMedia({ thumbnail, accent, scene }) {
 
     return (
         <div className='absolute inset-0 bg-linear-to-br from-slate-800/80 via-slate-900/80 to-slate-950/90'>
-            <div className='absolute inset-0 opacity-70' style={{ background: `radial-gradient(circle at 20% 20%, ${accent}26, transparent 60%)` }} />
+            <div
+                className='absolute inset-0 opacity-70'
+                style={{ background: `radial-gradient(circle at 20% 20%, ${accent}26, transparent 60%)` }}
+            />
         </div>
     );
 }
@@ -304,14 +608,17 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
     const isSceneHydrating = useCanvasStore((state) => state.isSceneHydrating);
     const finishSceneHydration = useCanvasStore((state) => state.finishSceneHydration);
 
-    const resolvedFrame = useMemo(() => frames.find((frame) => frame.id === selectedFrameId) ?? frames[0] ?? null, [frames, selectedFrameId]);
+    const resolvedFrame = useMemo(
+        () => frames.find((frame) => frame.id === selectedFrameId) ?? frames[0] ?? null,
+        [frames, selectedFrameId],
+    );
 
     useEffect(() => {
         if (!isSceneHydrating || !resolvedFrame) return undefined;
-        const timeoutId = globalThis.setTimeout(() => {
+        const timeoutId = window.setTimeout(() => {
             finishSceneHydration();
         }, 200);
-        return () => globalThis.clearTimeout(timeoutId);
+        return () => window.clearTimeout(timeoutId);
     }, [isSceneHydrating, resolvedFrame, finishSceneHydration]);
 
     const frameAssets = useMemo(() => {
@@ -322,7 +629,10 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
     const totalDuration = useMemo(() => {
         if (!resolvedFrame) return 1;
         if (resolvedFrame.timelineDuration) return resolvedFrame.timelineDuration;
-        return frameAssets.reduce((acc, asset) => Math.max(acc, (asset.offset ?? 0) + (asset.duration ?? 0)), 1);
+        return frameAssets.reduce(
+            (acc, asset) => Math.max(acc, (asset.offset ?? 0) + (asset.duration ?? 0)),
+            1,
+        );
     }, [frameAssets, resolvedFrame]);
 
     const styleResolver = useMemo(() => {
@@ -331,7 +641,11 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
     }, [mode]);
 
     if (!resolvedFrame) {
-        return <div className='border-t border-[rgba(148,163,184,0.18)] bg-[rgba(7,11,22,0.92)] px-5 py-4 text-xs text-[rgba(226,232,240,0.72)]'>Create a frame to start building your timeline.</div>;
+        return (
+            <div className='border-t border-[rgba(148,163,184,0.18)] bg-[rgba(7,11,22,0.92)] px-5 py-4 text-xs text-[rgba(226,232,240,0.72)]'>
+                Create a frame to start building your timeline.
+            </div>
+        );
     }
 
     const isActive = timelinePlayback.frameId === resolvedFrame.id;
@@ -360,7 +674,8 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
                                 handleSelectFrame(frames[currentIndex - 1].id);
                             }
                         }}
-                        className='rounded-md border border-[rgba(148,163,184,0.25)] px-2 py-1 text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)] hover:border-[rgba(236,233,254,0.75)] hover:text-white'>
+                        className='rounded-md border border-[rgba(148,163,184,0.25)] px-2 py-1 text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)] hover:border-[rgba(236,233,254,0.75)] hover:text-white'
+                    >
                         Prev
                     </button>
                     <button
@@ -371,10 +686,13 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
                                 handleSelectFrame(frames[currentIndex + 1].id);
                             }
                         }}
-                        className='rounded-md border border-[rgba(148,163,184,0.25)] px-2 py-1 text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)] hover:border-[rgba(236,233,254,0.75)] hover:text-white'>
+                        className='rounded-md border border-[rgba(148,163,184,0.25)] px-2 py-1 text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)] hover:border-[rgba(236,233,254,0.75)] hover:text-white'
+                    >
                         Next
                     </button>
-                    <span className='rounded-full border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.7)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[rgba(191,219,254,0.85)]'>{resolvedFrame.name ?? 'Frame'}</span>
+                    <span className='rounded-full border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.7)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[rgba(191,219,254,0.85)]'>
+                        {resolvedFrame.name ?? 'Frame'}
+                    </span>
                 </div>
                 <div className='flex items-center gap-2 text-[rgba(191,219,254,0.85)]'>
                     <button
@@ -387,7 +705,8 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
                             }
                         }}
                         className='rounded-md border border-[rgba(236,233,254,0.35)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-white hover:border-[rgba(236,233,254,0.6)]'
-                        style={{ backgroundColor: isPlaying ? 'rgba(236,233,254,0.1)' : 'transparent' }}>
+                        style={{ backgroundColor: isPlaying ? 'rgba(236,233,254,0.1)' : 'transparent' }}
+                    >
                         {isPlaying ? 'Pause' : 'Play'}
                     </button>
                     <button
@@ -396,16 +715,22 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
                             setTimelinePlayhead(resolvedFrame.id, 0, { resetTick: true });
                             pauseTimeline();
                         }}
-                        className='rounded-md border border-[rgba(148,163,184,0.35)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[rgba(191,219,254,0.85)] hover:border-[rgba(236,233,254,0.6)]'>
+                        className='rounded-md border border-[rgba(148,163,184,0.35)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[rgba(191,219,254,0.85)] hover:border-[rgba(236,233,254,0.6)]'
+                    >
                         Stop
                     </button>
-                    <button type='button' onClick={() => setTimelineLoop(!timelinePlayback.loop)} className='rounded-md border border-[rgba(148,163,184,0.35)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[rgba(191,219,254,0.85)] hover:border-[rgba(236,233,254,0.6)]'>
+                    <button
+                        type='button'
+                        onClick={() => setTimelineLoop(!timelinePlayback.loop)}
+                        className='rounded-md border border-[rgba(148,163,184,0.35)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[rgba(191,219,254,0.85)] hover:border-[rgba(236,233,254,0.6)]'
+                    >
                         Loop {timelinePlayback.loop ? 'On' : 'Off'}
                     </button>
                     <select
                         value={timelinePlayback.speed ?? 1}
                         onChange={(event) => setTimelineSpeed(Number(event.target.value) || 1)}
-                        className='rounded-md border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.7)] px-2 py-1 text-[10px] text-[rgba(236,233,254,0.92)] focus:border-[rgba(139,92,246,0.6)]'>
+                        className='rounded-md border border-[rgba(148,163,184,0.25)] bg-[rgba(15,23,42,0.7)] px-2 py-1 text-[10px] text-[rgba(236,233,254,0.92)] focus:border-[rgba(139,92,246,0.6)]'
+                    >
                         {[0.5, 1, 1.5, 2].map((speed) => (
                             <option key={speed} value={speed}>
                                 {speed.toFixed(1)}×
@@ -420,7 +745,13 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
                 </div>
             </div>
             <div className='mt-3'>
-                <TimelineBar frameId={resolvedFrame.id} assets={frameAssets} totalDuration={totalDuration} getTimelineStyles={styleResolver} trackConfig={trackConfig} />
+                <TimelineBar
+                    frameId={resolvedFrame.id}
+                    assets={frameAssets}
+                    totalDuration={totalDuration}
+                    getTimelineStyles={styleResolver}
+                    trackConfig={trackConfig}
+                />
             </div>
         </div>
     );
@@ -437,22 +768,30 @@ function WaveformWorkspace({ timelineBehavior, accent }) {
     const isSceneHydrating = useCanvasStore((state) => state.isSceneHydrating);
     const finishSceneHydration = useCanvasStore((state) => state.finishSceneHydration);
 
-    const resolvedFrame = useMemo(() => frames.find((frame) => frame.id === selectedFrameId) ?? frames[0] ?? null, [frames, selectedFrameId]);
+    const resolvedFrame = useMemo(
+        () => frames.find((frame) => frame.id === selectedFrameId) ?? frames[0] ?? null,
+        [frames, selectedFrameId],
+    );
 
     useEffect(() => {
         if (!isSceneHydrating || !resolvedFrame) return undefined;
-        const timeoutId = globalThis.setTimeout(() => {
+        const timeoutId = window.setTimeout(() => {
             finishSceneHydration();
         }, 260);
-        return () => globalThis.clearTimeout(timeoutId);
+        return () => window.clearTimeout(timeoutId);
     }, [isSceneHydrating, resolvedFrame, finishSceneHydration]);
 
     if (!resolvedFrame) {
-        return <div className='flex h-full w-full items-center justify-center bg-[rgba(5,10,18,0.95)] text-sm text-[rgba(226,232,240,0.65)]'>Start by adding a segment to build your episode timeline.</div>;
+        return (
+            <div className='flex h-full w-full items-center justify-center bg-[rgba(5,10,18,0.95)] text-sm text-[rgba(226,232,240,0.65)]'>
+                Start by adding a segment to build your episode timeline.
+            </div>
+        );
     }
 
     const frameAssets = timelineAssets.filter((asset) => asset.frameId === resolvedFrame.id);
-    const totalDuration = resolvedFrame.timelineDuration ?? frameAssets.reduce((acc, asset) => Math.max(acc, (asset.offset ?? 0) + (asset.duration ?? 0)), 1);
+    const totalDuration = resolvedFrame.timelineDuration
+        ?? frameAssets.reduce((acc, asset) => Math.max(acc, (asset.offset ?? 0) + (asset.duration ?? 0)), 1);
 
     const segments = frameAssets.filter((asset) => asset.type === 'segment');
     const voiceClips = frameAssets.filter((asset) => asset.type === 'audio');
@@ -468,7 +807,9 @@ function WaveformWorkspace({ timelineBehavior, accent }) {
         <div className='flex h-full w-full flex-col bg-[rgba(5,10,18,0.95)]'>
             <div className='flex items-center justify-between gap-3 border-b border-[rgba(148,163,184,0.2)] px-5 py-4 text-[10px] uppercase tracking-[0.25em] text-[rgba(148,163,184,0.7)]'>
                 <div className='flex items-center gap-3'>
-                    <span className='rounded-full border border-[rgba(148,163,184,0.25)] bg-[rgba(17,24,39,0.85)] px-3 py-1 text-[rgba(236,233,254,0.85)]'>{resolvedFrame.name ?? 'Episode'}</span>
+                    <span className='rounded-full border border-[rgba(148,163,184,0.25)] bg-[rgba(17,24,39,0.85)] px-3 py-1 text-[rgba(236,233,254,0.85)]'>
+                        {resolvedFrame.name ?? 'Episode'}
+                    </span>
                     <button
                         type='button'
                         onClick={() => {
@@ -478,7 +819,8 @@ function WaveformWorkspace({ timelineBehavior, accent }) {
                                 playTimeline(resolvedFrame.id);
                             }
                         }}
-                        className='rounded-md border border-[rgba(148,163,184,0.25)] px-3 py-1 text-[rgba(236,233,254,0.85)] hover:border-[rgba(236,233,254,0.6)]'>
+                        className='rounded-md border border-[rgba(148,163,184,0.25)] px-3 py-1 text-[rgba(236,233,254,0.85)] hover:border-[rgba(236,233,254,0.6)]'
+                    >
                         {isPlaying ? 'Pause' : 'Play'}
                     </button>
                 </div>
@@ -497,10 +839,20 @@ function WaveformWorkspace({ timelineBehavior, accent }) {
                         </p>
                     </div>
                 ))}
-                {voiceClips.length === 0 ? <div className='rounded-xl border border-dashed border-[rgba(48,72,102,0.35)] bg-[rgba(12,23,41,0.6)] p-3 text-[rgba(148,163,184,0.7)]'>Use the Record or Sound tools to add voice and music clips.</div> : null}
+                {voiceClips.length === 0 ? (
+                    <div className='rounded-xl border border-dashed border-[rgba(48,72,102,0.35)] bg-[rgba(12,23,41,0.6)] p-3 text-[rgba(148,163,184,0.7)]'>
+                        Use the Record or Sound tools to add voice and music clips.
+                    </div>
+                ) : null}
             </div>
             <div className='border-t border-[rgba(148,163,184,0.18)] px-5 py-5'>
-                <TimelineBar frameId={resolvedFrame.id} assets={frameAssets} totalDuration={totalDuration} getTimelineStyles={getPodcastTimelineStyle} trackConfig={trackConfig} />
+                <TimelineBar
+                    frameId={resolvedFrame.id}
+                    assets={frameAssets}
+                    totalDuration={totalDuration}
+                    getTimelineStyles={getPodcastTimelineStyle}
+                    trackConfig={trackConfig}
+                />
             </div>
         </div>
     );

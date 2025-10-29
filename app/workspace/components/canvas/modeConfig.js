@@ -417,12 +417,10 @@ export const MODE_ASSETS = {
 export const MODE_CANVAS_BEHAVIOR = {
     default: {
         kind: 'board',
-        usesFabric: true,
         snapping: { grid: 16, alignCenter: true },
     },
     design: {
         kind: 'board',
-        usesFabric: true,
         snapping: { grid: 16, alignCenter: true },
         frameDefaults: { width: 1080, height: 720 },
     },

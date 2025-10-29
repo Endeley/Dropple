@@ -14,7 +14,7 @@ export default function WorkspacePage() {
     const mode = useCanvasStore((state) => state.mode);
 
     return (
-        <div className='flex min-h-screen flex-col overflow-hidden bg-[#020617] text-[color:var(--color-text-primary)]'>
+        <div className='flex min-h-screen flex-col overflow-hidden bg-[var(--color-canvas)] text-[color:var(--color-text-primary)]'>
             <header className='flex items-center justify-between border-b border-[rgba(148,163,184,0.15)] bg-[rgba(15,23,42,0.75)] px-6 py-4 text-xs text-[rgba(226,232,240,0.7)] backdrop-blur'>
                 <div>
                     <h1 className='text-lg font-semibold text-white'>Dropple Workspace</h1>
