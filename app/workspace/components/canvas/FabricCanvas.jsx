@@ -40,13 +40,13 @@ export default function FabricCanvas() {
 
     const gridBackground = useMemo(() => {
         if (!gridVisible || gridSize <= 0) {
-            return {};
+            return null;
         }
         const scaledSize = gridSize * scale;
-        const offsetX = ((position.x % scaledSize) + scaledSize) % scaledSize;
-        const offsetY = ((position.y % scaledSize) + scaledSize) % scaledSize;
-        const lineColor = 'rgba(139,92,246,0.1)';
-        const strongLine = 'rgba(139,92,246,0.25)';
+        const offsetX = 0;
+        const offsetY = 0;
+        const lineColor = 'rgba(139,92,246,0.12)';
+        const strongLine = 'rgba(139,92,246,0.28)';
         const major = gridSize * 4 * scale;
         return {
             backgroundImage: `linear-gradient(to right, ${lineColor} 1px, transparent 1px), linear-gradient(to bottom, ${lineColor} 1px, transparent 1px), linear-gradient(to right, ${strongLine} 1px, transparent 1px), linear-gradient(to bottom, ${strongLine} 1px, transparent 1px)`,
@@ -54,7 +54,6 @@ export default function FabricCanvas() {
             backgroundPosition: `${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px, ${offsetX}px ${offsetY}px`,
         };
     }, [gridVisible, gridSize, position.x, position.y, scale]);
-
     useEffect(() => {
         if (!pendingImageElement) return;
         const input = fileInputRef.current;
@@ -431,7 +430,6 @@ export default function FabricCanvas() {
                 });
                 frameMap.set(frame.id, rect);
                 fabricCanvas.add(rect);
-                fabricCanvas.sendToBack(rect);
             }
 
             rect.set({

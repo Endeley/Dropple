@@ -189,7 +189,6 @@ export class FabricService {
         if (!target) {
             target = frameToFabric(frame, fabric);
             canvas.add(target);
-            canvas.sendToBack(target);
         } else {
             target.set({
                 left: frame.x ?? 0,
