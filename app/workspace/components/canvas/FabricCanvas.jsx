@@ -86,14 +86,6 @@ export default function FabricCanvas() {
         input.click();
     }, [pendingImageElement]);
 
-    useEffect(() => {
-        if (!fabricReady) return;
-        const fabricCanvas = fabricCanvasRef.current;
-        if (fabricCanvas) {
-            fabricCanvas.setBackgroundColor(theme.canvasBg, () => fabricCanvas.renderAll());
-        }
-    }, [theme.canvasBg, fabricReady]);
-
     const historyHotkeyHandler = useCallback((event) => {
         const store = useCanvasStore.getState();
         if (event.metaKey || event.ctrlKey) {
@@ -137,7 +129,7 @@ export default function FabricCanvas() {
                 preserveObjectStacking: true,
                 selection: true,
             });
-            fabricCanvas.setBackgroundColor(theme.canvasBg, () => fabricCanvas.renderAll());
+            fabricCanvas.setBackgroundColor('rgba(0,0,0,0)', () => fabricCanvas.renderAll());
             fabricCanvasRef.current = fabricCanvas;
             fabricCanvas.on('after:render', handleAfterRender);
 
