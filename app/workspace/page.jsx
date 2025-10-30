@@ -34,9 +34,13 @@ export default function WorkspacePage() {
         [theme],
     );
 
+    const accentHexLower = typeof theme.accentHex === 'string' ? theme.accentHex.toLowerCase() : '';
+
     return (
         <div
             data-workspace-root
+            data-mode={mode}
+            data-accent-hex={accentHexLower}
             className='flex h-screen flex-col overflow-hidden'
             style={{ ...themeVars, background: 'var(--mode-canvas-bg)', color: 'var(--mode-text)' }}>
             <header

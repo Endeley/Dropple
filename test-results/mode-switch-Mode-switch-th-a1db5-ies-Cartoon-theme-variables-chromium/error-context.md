@@ -1,0 +1,279 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - heading "Dropple Workspace" [level=1] [ref=e5]
+      - paragraph [ref=e6]: "Infinite canvas foundation • Mode: design"
+    - link "Exit" [ref=e7] [cursor=pointer]:
+      - /url: /
+  - generic [ref=e8]:
+    - complementary [ref=e9]:
+      - generic [ref=e10]:
+        - generic [ref=e12]:
+          - paragraph [ref=e13]: Pages
+          - paragraph [ref=e14]: Manage canvas frames and layers.
+        - list [ref=e15]:
+          - listitem [ref=e16]:
+            - button "Home Page Rename frame 1440 × 1024 Focus" [ref=e17]:
+              - generic [ref=e19]:
+                - generic [ref=e20]: Home Page
+                - button "Rename frame" [ref=e21]: ✏️
+              - generic [ref=e22]: 1440 × 1024
+              - button "Focus" [ref=e24]
+            - generic [ref=e25]:
+              - button "🅣 Hero Text Rename element" [ref=e27]:
+                - generic [ref=e28]:
+                  - generic [ref=e29]: 🅣
+                  - generic [ref=e30]: Hero Text
+                - button "Rename element" [ref=e31]: ✏️
+              - button "▭ Hero Card Rename element" [ref=e33]:
+                - generic [ref=e34]:
+                  - generic [ref=e35]: ▭
+                  - generic [ref=e36]: Hero Card
+                - button "Rename element" [ref=e37]: ✏️
+      - generic [ref=e40]:
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - paragraph [ref=e43]: Tools
+            - paragraph [ref=e44]: Graphics, layouts, posters, UI elements.
+          - list [ref=e45]:
+            - listitem [ref=e46]:
+              - button "Pointer / Move Select and drag any element." [ref=e47]:
+                - paragraph [ref=e48]: Pointer / Move
+                - paragraph [ref=e49]: Select and drag any element.
+            - listitem [ref=e50]:
+              - button "Frame Tool Create new page or artboard frames." [ref=e51]:
+                - paragraph [ref=e52]: Frame Tool
+                - paragraph [ref=e53]: Create new page or artboard frames.
+            - listitem [ref=e54]:
+              - button "Shapes Draw rectangles, ellipses, and polygons." [ref=e55]:
+                - paragraph [ref=e56]: Shapes
+                - paragraph [ref=e57]: Draw rectangles, ellipses, and polygons.
+            - listitem [ref=e58]:
+              - button "Text Tool Insert headings, paragraphs, or body text." [ref=e59]:
+                - paragraph [ref=e60]: Text Tool
+                - paragraph [ref=e61]: Insert headings, paragraphs, or body text.
+            - listitem [ref=e62]:
+              - button "Image Tool Import images or drag from assets." [ref=e63]:
+                - paragraph [ref=e64]: Image Tool
+                - paragraph [ref=e65]: Import images or drag from assets.
+            - listitem [ref=e66]:
+              - button "AI Generator Generate images or layouts from prompts." [ref=e67]:
+                - paragraph [ref=e68]: AI Generator
+                - paragraph [ref=e69]: Generate images or layouts from prompts.
+            - listitem [ref=e70]:
+              - button "Layers Panel Manage hierarchy, lock, hide, or group." [ref=e71]:
+                - paragraph [ref=e72]: Layers Panel
+                - paragraph [ref=e73]: Manage hierarchy, lock, hide, or group.
+            - listitem [ref=e74]:
+              - button "Comment Tool Add feedback and collaborate in context." [ref=e75]:
+                - paragraph [ref=e76]: Comment Tool
+                - paragraph [ref=e77]: Add feedback and collaborate in context.
+        - generic [ref=e78]:
+          - generic [ref=e79]:
+            - generic [ref=e80]:
+              - paragraph [ref=e81]: Asset Library
+              - paragraph [ref=e82]: Drop assets onto the canvas or timeline. Generate new variants with AI.
+            - generic [ref=e83]:
+              - button "Upload" [ref=e84]
+              - button "Components" [ref=e85]
+          - generic [ref=e86]:
+            - button "All" [ref=e87]
+            - button "Favorites" [ref=e88]
+            - button "Canvas" [ref=e89]
+            - button "Timeline" [ref=e90]
+            - button "AI" [ref=e91]
+            - button "Uploads" [ref=e92]
+            - button "Components" [ref=e93]
+            - button "Brand" [ref=e94]
+            - button "Audio" [ref=e95]
+            - button "Video" [ref=e96]
+          - generic [ref=e97]:
+            - generic [ref=e98]:
+              - paragraph [ref=e99]: AI Generator
+              - generic [ref=e100]:
+                - button "Visual" [ref=e101]
+                - button "Component" [ref=e102]
+                - button "Audio" [ref=e103]
+                - button "Overlay" [ref=e104]
+            - generic [ref=e105]:
+              - textbox "e.g. neon gradient hero background" [ref=e106]
+              - button "Generate" [disabled] [ref=e107]
+          - generic [ref=e108]:
+            - generic [ref=e109]:
+              - generic [ref=e113]:
+                - generic [ref=e114]:
+                  - paragraph [ref=e115]: AI Hero Gradient
+                  - paragraph [ref=e116]: Ai
+                  - paragraph [ref=e117]: “gradient hero background for creat…”
+                - button "Favorite asset" [ref=e119]: ☆
+              - button "Place on canvas" [ref=e121]
+            - generic [ref=e122]:
+              - generic [ref=e126]:
+                - generic [ref=e127]:
+                  - paragraph [ref=e128]: Capsule CTA
+                  - paragraph [ref=e129]: Components
+                - button "Favorite asset" [ref=e131]: ☆
+              - button "Place on canvas" [ref=e133]
+            - generic [ref=e134]:
+              - generic [ref=e138]:
+                - generic [ref=e139]:
+                  - paragraph [ref=e140]: Dropple Glyph
+                  - paragraph [ref=e141]: Brand
+                - button "Favorite asset" [ref=e143]: ☆
+              - button "Place on canvas" [ref=e145]
+            - generic [ref=e146]:
+              - generic [ref=e166]:
+                - generic [ref=e167]:
+                  - paragraph [ref=e168]: Podcast Intro Loop
+                  - paragraph [ref=e169]: Audio track
+                - button "Favorite asset" [ref=e171]: ☆
+              - generic [ref=e172]:
+                - button "Add to timeline" [ref=e173]
+                - button "Convert to layer" [ref=e174]
+            - generic [ref=e175]:
+              - generic [ref=e195]:
+                - generic [ref=e196]:
+                  - paragraph [ref=e197]: Slide Transition
+                  - paragraph [ref=e198]: Timeline clip
+                - button "Favorite asset" [ref=e200]: ☆
+              - generic [ref=e201]:
+                - button "Add to timeline" [ref=e202]
+                - button "Convert to layer" [ref=e203]
+    - main [ref=e204]:
+      - navigation [ref=e206]:
+        - button "Design" [ref=e207]
+        - button "Graphics" [ref=e208]
+        - button "Image" [ref=e209]
+        - button "UI/UX" [ref=e210]
+        - button "Video" [ref=e211]
+        - button "Podcast" [ref=e212]
+        - button "Cartoon" [active] [ref=e213]
+        - button "AI Studio" [ref=e214]
+        - button "Docs" [ref=e215]
+        - button "Dev" [ref=e216]
+        - button "Classroom" [ref=e217]
+        - button "Brand" [ref=e218]
+      - generic [ref=e220]:
+        - generic [ref=e223]:
+          - generic [ref=e224]: Home Page
+          - generic [ref=e226]: Welcome to Dropple
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: Mode Switch
+                  - paragraph: Entering Design
+                  - paragraph: Graphics, layouts, posters, UI elements.
+              - generic:
+                - generic: Preparing tools & panels…
+      - generic [ref=e238]:
+        - generic [ref=e239]:
+          - button "↩️ Undo" [disabled] [ref=e240]
+          - button "Redo ↪️" [disabled] [ref=e241]
+        - generic [ref=e242]:
+          - generic [ref=e243]: Zoom 100%
+          - generic [ref=e244]:
+            - button "Zoom out" [ref=e245]: −
+            - slider "Zoom level" [ref=e246] [cursor=pointer]: "1"
+            - button "Zoom in" [ref=e247]: +
+          - generic [ref=e248]: Pan 0×0
+          - button "Reset" [ref=e249]
+          - button "Prototype" [ref=e250]
+        - navigation [ref=e251]:
+          - button "Zoom" [ref=e252]
+          - button "Grid" [ref=e253]
+          - button "Snapping" [ref=e254]
+          - button "Undo" [ref=e255]
+          - button "Redo" [ref=e256]
+          - button "AI Suggestions" [ref=e257]
+    - complementary [ref=e258]:
+      - generic [ref=e259]:
+        - paragraph [ref=e261]: Inspector
+        - generic [ref=e262]:
+          - paragraph [ref=e263]: Home Page
+          - paragraph [ref=e264]: frame-1
+      - generic [ref=e265]:
+        - generic [ref=e266]:
+          - heading "Transform" [level=3] [ref=e267]
+          - generic [ref=e269]:
+            - generic [ref=e270]:
+              - generic [ref=e271]:
+                - generic [ref=e272]: Frame X
+                - spinbutton [ref=e273]: "160"
+              - slider [ref=e276] [cursor=pointer]: "160"
+            - generic [ref=e277]:
+              - generic [ref=e278]:
+                - generic [ref=e279]: Frame Y
+                - spinbutton [ref=e280]: "120"
+              - slider [ref=e283] [cursor=pointer]: "120"
+            - generic [ref=e284]:
+              - generic [ref=e285]:
+                - generic [ref=e286]: Frame Width
+                - spinbutton [ref=e287]: "1440"
+              - slider [ref=e290] [cursor=pointer]: "1440"
+            - generic [ref=e291]:
+              - generic [ref=e292]:
+                - generic [ref=e293]: Frame Height
+                - spinbutton [ref=e294]: "1024"
+              - slider [ref=e297] [cursor=pointer]: "1024"
+        - generic [ref=e298]:
+          - heading "Style" [level=3] [ref=e299]
+          - generic [ref=e301]:
+            - generic [ref=e302]:
+              - generic [ref=e303]: Frame Fill
+              - generic [ref=e304]:
+                - button "Solid" [ref=e305]:
+                  - generic [ref=e306]: Solid
+                - button "Gradient" [ref=e307]:
+                  - generic [ref=e308]: Gradient
+                - button "Image" [ref=e309]:
+                  - generic [ref=e310]: Image
+                - button "Pattern" [ref=e311]:
+                  - generic [ref=e312]: Pattern
+            - generic [ref=e313]:
+              - generic [ref=e314]:
+                - generic [ref=e315]: Background Color
+                - generic [ref=e316]: "#0F172A"
+              - textbox [ref=e317] [cursor=pointer]: "#0f172a"
+            - generic [ref=e318]:
+              - generic [ref=e319]: Background Blend
+              - combobox "Background Blend" [ref=e320]:
+                - option "Normal" [selected]
+                - option "Multiply"
+                - option "Screen"
+                - option "Overlay"
+                - option "Lighten"
+                - option "Darken"
+            - button "AI Tune Background" [ref=e321]
+            - generic [ref=e322]:
+              - generic [ref=e323]:
+                - generic [ref=e324]: Frame Opacity
+                - spinbutton [ref=e325]: "1.00"
+              - slider [ref=e328] [cursor=pointer]: "1"
+        - generic [ref=e329]:
+          - heading "Effects" [level=3] [ref=e330]
+          - paragraph [ref=e332]: Select an element to configure shadows, blur, and filters.
+        - generic [ref=e333]:
+          - heading "Typography" [level=3] [ref=e334]
+          - paragraph [ref=e336]: Select a text element to edit typography settings.
+        - generic [ref=e337]:
+          - heading "Export" [level=3] [ref=e338]
+          - generic [ref=e339]:
+            - button "PNG Export" [ref=e340]:
+              - generic [ref=e341]: PNG
+              - generic [ref=e342]: Export
+            - button "SVG Export" [ref=e343]:
+              - generic [ref=e344]: SVG
+              - generic [ref=e345]: Export
+            - button "PDF Export" [ref=e346]:
+              - generic [ref=e347]: PDF
+              - generic [ref=e348]: Export
+            - button "React component Export" [ref=e349]:
+              - generic [ref=e350]: React component
+              - generic [ref=e351]: Export
+```
