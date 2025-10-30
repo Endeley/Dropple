@@ -1623,6 +1623,32 @@ function computeBoundingBox(elements) {
     };
 }
 
+// Strip heavy payloads from mode snapshots before persisting to storage to keep the payload small.
+const prepareModeStateForStorage = (modeState) => {
+    if (!modeState || typeof modeState !== 'object') {
+        return {};
+    }
+
+    return Object.entries(modeState).reduce((accumulator, [modeKey, snapshot]) => {
+        if (!snapshot || typeof snapshot !== 'object') {
+            accumulator[modeKey] = snapshot ?? null;
+            return accumulator;
+        }
+
+        const { frames, scene, ...rest } = snapshot;
+        const selectedElementIds = Array.isArray(rest.selectedElementIds) ? [...rest.selectedElementIds] : [];
+        const timelineAssets = Array.isArray(rest.timelineAssets) ? [...rest.timelineAssets] : [];
+
+        accumulator[modeKey] = {
+            ...rest,
+            selectedElementIds,
+            timelineAssets,
+        };
+
+        return accumulator;
+    }, {});
+};
+
 export const useCanvasStore = create(
     persist(
         (set, get) => ({
@@ -1751,10 +1777,10 @@ export const useCanvasStore = create(
                     selectedTool: saved.selectedTool ?? 'pointer',
                     activeToolOverlay: saved.activeToolOverlay ?? null,
                     selectedFrameId: saved.selectedFrameId ?? state.frames[0]?.id ?? null,
-                    selectedElementIds: Array.isArray(saved.selectedElementIds) ? saved.selectedElementIds : [],
-                    selectedElementId: saved.selectedElementIds?.[0] ?? null,
-                    timelineAssets: saved.timelineAssets ?? [],
-                    frames: saved.frames ?? state.frames,
+                    selectedElementIds: Array.isArray(saved.selectedElementIds) ? [...saved.selectedElementIds] : [],
+                    selectedElementId: Array.isArray(saved.selectedElementIds) ? saved.selectedElementIds[0] ?? null : null,
+                    timelineAssets: Array.isArray(saved.timelineAssets) ? saved.timelineAssets : state.timelineAssets ?? [],
+                    frames: Array.isArray(saved.frames) ? saved.frames : state.frames,
                     isModeSwitching: false,
                 });
             } else {
@@ -4526,7 +4552,7 @@ export const useCanvasStore = create(
                 activePrototypeFrameId: state.activePrototypeFrameId,
                 gridVisible: state.gridVisible,
                 gridSize: state.gridSize,
-                modeState: state.modeState,
+                modeState: prepareModeStateForStorage(state.modeState),
             }),
         },
     ),

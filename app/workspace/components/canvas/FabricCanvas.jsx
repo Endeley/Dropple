@@ -42,6 +42,7 @@ export default function FabricCanvas() {
     const lastPointerRef = useRef({ x: 0, y: 0 });
     const fileInputRef = useRef(null);
     const [pendingImageElement, setPendingImageElement] = useState(null);
+    const [fabricReady, setFabricReady] = useState(false);
 
     const frames = useCanvasStore((state) => state.frames);
     const scale = useCanvasStore((state) => state.scale ?? 1);
@@ -86,11 +87,12 @@ export default function FabricCanvas() {
     }, [pendingImageElement]);
 
     useEffect(() => {
+        if (!fabricReady) return;
         const fabricCanvas = fabricCanvasRef.current;
         if (fabricCanvas) {
             fabricCanvas.setBackgroundColor(theme.canvasBg, () => fabricCanvas.renderAll());
         }
-    }, [theme.canvasBg]);
+    }, [theme.canvasBg, fabricReady]);
 
     const historyHotkeyHandler = useCallback((event) => {
         const store = useCanvasStore.getState();
@@ -179,6 +181,7 @@ export default function FabricCanvas() {
                 getFrameById,
             });
             fabricService.setCanvas(fabricCanvas);
+            setFabricReady(true);
 
             fabricCanvas.on('mouse:down', (event) => {
                 const originalEvent = event?.e;
@@ -412,6 +415,7 @@ export default function FabricCanvas() {
     };
 
     useEffect(() => {
+        if (!fabricReady) return;
         const fabricCanvas = fabricCanvasRef.current;
         const fabricNamespace = fabricNamespaceRef.current;
         if (!fabricCanvas || !fabricNamespace) return;
@@ -569,9 +573,10 @@ export default function FabricCanvas() {
         });
 
         fabricCanvas.requestRenderAll();
-    }, [frames]);
+    }, [frames, theme, fabricReady]);
 
     useEffect(() => {
+        if (!fabricReady) return;
         const fabricCanvas = fabricCanvasRef.current;
         if (!fabricCanvas) return;
         const transform = fabricCanvas.viewportTransform ?? [1, 0, 0, 1, 0, 0];
@@ -581,9 +586,10 @@ export default function FabricCanvas() {
         transform[5] = position.y;
         fabricCanvas.setViewportTransform(transform);
         fabricCanvas.requestRenderAll();
-    }, [position.x, position.y, scale]);
+    }, [position.x, position.y, scale, fabricReady]);
 
     useEffect(() => {
+        if (!fabricReady) return;
         const fabricCanvas = fabricCanvasRef.current;
         if (!fabricCanvas) return;
         const objectMap = frameObjectsRef.current;
@@ -598,14 +604,16 @@ export default function FabricCanvas() {
             fabricCanvas.setActiveObject(target);
             fabricCanvas.requestRenderAll();
         }
-    }, [selectedFrameId]);
+    }, [selectedFrameId, fabricReady]);
 
     useEffect(() => {
+        if (!fabricReady) return;
         const container = containerRef.current;
-        const fabricCanvas = fabricCanvasRef.current;
-        if (!container || !fabricCanvas) return;
+        if (!container) return;
 
         const resize = () => {
+            const fabricCanvas = fabricCanvasRef.current;
+            if (!fabricCanvas) return;
             const rect = container.getBoundingClientRect();
             fabricCanvas.setWidth(rect.width);
             fabricCanvas.setHeight(rect.height);
@@ -616,13 +624,13 @@ export default function FabricCanvas() {
         const observer = new ResizeObserver(resize);
         observer.observe(container);
         return () => observer.disconnect();
-    }, []);
+    }, [fabricReady]);
 
     return (
         <div
             ref={containerRef}
             className={clsx('relative h-full w-full overflow-hidden')}
-            style={{ ...gridBackground, overscrollBehavior: 'none', background: theme.canvasBg }}
+            style={{ ...gridBackground, overscrollBehavior: 'none', backgroundColor: theme.canvasBg }}
         >
             <canvas ref={canvasRef} className='relative z-10 block h-full w-full' />
             <div
