@@ -51,6 +51,7 @@ const ELEMENT_ICONS = {
     script: '📝',
     character: '🎭',
     group: '🗂️',
+    path: '〰️',
 };
 
 const ELEMENT_LABELS = {
@@ -64,6 +65,7 @@ const ELEMENT_LABELS = {
     script: 'Script',
     character: 'Character',
     group: 'Group',
+    path: 'Stroke',
 };
 
 const DEFAULT_WAVEFORM = [0.24, 0.48, -0.4, -0.62, 0.32, 0.58, -0.26, 0.18, 0.42, -0.36, 0.51, -0.22, 0.33, 0.6, -0.41];
@@ -170,6 +172,7 @@ export default function ToolSidebar() {
     const placeAssetOnTimeline = useCanvasStore((state) => state.placeAssetOnTimeline);
     const toggleAssetFavorite = useCanvasStore((state) => state.toggleAssetFavorite);
     const removeAssetFromLibrary = useCanvasStore((state) => state.removeAssetFromLibrary);
+    const applyImageBackgroundRemoval = useCanvasStore((state) => state.applyImageBackgroundRemoval);
     const setTimelinePlayhead = useCanvasStore((state) => state.setTimelinePlayhead);
     const playTimeline = useCanvasStore((state) => state.playTimeline);
     const updateFrame = useCanvasStore((state) => state.updateFrame);
@@ -414,6 +417,34 @@ export default function ToolSidebar() {
             return;
         }
 
+        if (tool.id === 'guides') {
+            const nextOverlay = activeToolOverlay === 'grid' ? null : 'grid';
+            setSelectedTool('pointer');
+            setActiveToolOverlay(nextOverlay);
+            return;
+        }
+
+        if (tool.id === 'ai-layout') {
+            const nextOverlay = activeToolOverlay === 'ai-layout' ? null : 'ai-layout';
+            setSelectedTool('pointer');
+            setActiveToolOverlay(nextOverlay);
+            return;
+        }
+
+        if (tool.id === 'ai-remove-bg') {
+            const frame = frames.find((item) => item.id === selectedFrameId) ?? null;
+            const selectedId = selectedElementIds[selectedElementIds.length - 1] ?? null;
+            const targetElement = frame?.elements?.find((element) => element.id === selectedId && element.type === 'image');
+            if (!frame || !targetElement) {
+                console.info('Select an image element to remove the background.');
+                return;
+            }
+            applyImageBackgroundRemoval(frame.id, targetElement.id, {});
+            setSelectedTool('pointer');
+            setActiveToolOverlay(null);
+            return;
+        }
+
         const overlay = OVERLAY_TOOLS[tool.id];
         if (overlay) {
             setSelectedTool('pointer');
@@ -629,7 +660,8 @@ export default function ToolSidebar() {
                 </div>
                 <ul className='mt-4 flex flex-col gap-3'>
                     {tools.map((tool) => {
-                        const overlay = OVERLAY_TOOLS[tool.id] ?? null;
+                        const overlay =
+                            OVERLAY_TOOLS[tool.id] ?? (tool.id === 'guides' ? 'grid' : tool.id === 'ai-layout' ? 'ai-layout' : null);
                         const active = overlay ? activeToolOverlay === overlay : selectedTool === tool.id;
                         return (
                             <li key={tool.id}>

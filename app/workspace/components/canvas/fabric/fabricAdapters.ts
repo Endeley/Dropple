@@ -117,6 +117,34 @@ export function elementToFabric(
             // Image creation is handled asynchronously in the canvas sync effect.
             return null;
         }
+        case 'path': {
+            const rawPath = element.props?.pathData;
+            if (!rawPath) return null;
+            const pathString = Array.isArray(rawPath) ? fabric.util.joinPath(rawPath as any) : rawPath;
+            if (!pathString || typeof pathString !== 'string') return null;
+            const path = new fabric.Path(pathString, {
+                left,
+                top,
+                originX: 'left',
+                originY: 'top',
+                opacity: element.props?.opacity ?? 1,
+                stroke: element.props?.stroke ?? '#F8FAFC',
+                strokeWidth: element.props?.strokeWidth ?? 2.5,
+                fill: element.props?.fill ?? 'transparent',
+                strokeLineCap: element.props?.strokeLineCap ?? 'round',
+                strokeLineJoin: element.props?.strokeLineJoin ?? 'round',
+            });
+            const baseWidth = path.width ?? 1;
+            const baseHeight = path.height ?? 1;
+            const targetWidth = Math.max(element.props?.width ?? baseWidth, 1);
+            const targetHeight = Math.max(element.props?.height ?? baseHeight, 1);
+            path.scaleX = targetWidth / baseWidth;
+            path.scaleY = targetHeight / baseHeight;
+            attachMetadata(path, { droppleId: element.id, droppleType: 'element', elementType: element.type });
+            (path as any).droppleFrameId = frame.id;
+            path.brushType = element.props?.brushType ?? 'pen';
+            return path;
+        }
         default:
             return null;
     }
@@ -192,6 +220,29 @@ export function fabricToElement(
         }
         if (typeof fabricText.textAlign === 'string') {
             props.align = fabricText.textAlign;
+        }
+    } else if (metadata.elementType === 'path') {
+        const pathTarget: any = target;
+        if (typeof pathTarget.stroke === 'string') {
+            props.stroke = pathTarget.stroke;
+        }
+        if (typeof pathTarget.strokeWidth === 'number') {
+            props.strokeWidth = pathTarget.strokeWidth;
+        }
+        if (typeof pathTarget.fill === 'string') {
+            props.fill = pathTarget.fill;
+        }
+        if (typeof pathTarget.strokeLineCap === 'string') {
+            props.strokeLineCap = pathTarget.strokeLineCap;
+        }
+        if (typeof pathTarget.strokeLineJoin === 'string') {
+            props.strokeLineJoin = pathTarget.strokeLineJoin;
+        }
+        if (Array.isArray(pathTarget.path)) {
+            props.pathData = pathTarget.path.map((segment) => [...segment]);
+        }
+        if (pathTarget.brushType) {
+            props.brushType = pathTarget.brushType;
         }
     }
 

@@ -7,6 +7,309 @@ import { generateFrameExport } from '../utils/exportCode';
 import { configureHistory, pushHistory, canUndo, canRedo, undo, redo } from '../history/historyService';
 import { MODE_ASSETS, MODE_CONFIG } from '../modeConfig';
 
+const VIDEO_PLACEHOLDER_ACCENT = MODE_ASSETS.video?.accent ?? '#EF4444';
+
+const createPlaceholderThumbnail = (label = 'Clip', accent = VIDEO_PLACEHOLDER_ACCENT) => {
+    if (typeof document === 'undefined') return null;
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 640;
+        canvas.height = 360;
+        const context = canvas.getContext('2d');
+        if (!context) return null;
+
+        const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height);
+        gradient.addColorStop(0, accent);
+        gradient.addColorStop(1, '#1f2937');
+
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, canvas.width, canvas.height);
+
+        context.fillStyle = 'rgba(255,255,255,0.85)';
+        context.font = 'bold 48px Inter, sans-serif';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        const display = (label || 'Clip').slice(0, 18);
+        context.fillText(display, canvas.width / 2, canvas.height / 2);
+
+        return canvas.toDataURL('image/png');
+    } catch (error) {
+        console.warn('Unable to create placeholder thumbnail', error);
+        return null;
+    }
+};
+
+const isAudioMime = (value) => typeof value === 'string' && value.startsWith('audio');
+const isVideoMime = (value) => typeof value === 'string' && value.startsWith('video');
+
+const VIDEO_FILE_EXTENSIONS = new Set([
+    'mp4',
+    'mov',
+    'm4v',
+    'webm',
+    'mkv',
+    'avi',
+    'mpg',
+    'mpeg',
+    'ogv',
+    'wmv',
+]);
+
+const AUDIO_FILE_EXTENSIONS = new Set([
+    'mp3',
+    'wav',
+    'aac',
+    'flac',
+    'ogg',
+    'oga',
+    'm4a',
+    'aiff',
+    'aif',
+    'wma',
+    'opus',
+    'weba',
+]);
+
+const extractFileExtension = (name) => {
+    if (!name) return '';
+    const trimmed = `${name}`.trim().toLowerCase();
+    if (!trimmed) return '';
+    const dotIndex = trimmed.lastIndexOf('.');
+    if (dotIndex === -1 || dotIndex === trimmed.length - 1) return '';
+    return trimmed.slice(dotIndex + 1);
+};
+
+const isVideoExtension = (name) => VIDEO_FILE_EXTENSIONS.has(extractFileExtension(name));
+const isAudioExtension = (name) => AUDIO_FILE_EXTENSIONS.has(extractFileExtension(name));
+
+const inferVideoFile = (name, mime) => isVideoMime(mime) || isVideoExtension(name);
+const inferAudioFile = (name, mime) => isAudioMime(mime) || isAudioExtension(name);
+const inferTimelineFile = (name, mime) => inferVideoFile(name, mime) || inferAudioFile(name, mime);
+
+const sanitizeFileLabel = (name, fallback) => {
+    if (!name) return fallback;
+    const trimmed = `${name}`.trim();
+    if (!trimmed) return fallback;
+    const withoutExtension = trimmed.replace(/\.[^/.]+$/, '');
+    return withoutExtension || fallback;
+};
+
+const readFileAsDataUrl = (file) =>
+    new Promise((resolve) => {
+        if (typeof FileReader === 'undefined') {
+            resolve(null);
+            return;
+        }
+        try {
+            const reader = new FileReader();
+            reader.onload = () => {
+                resolve(typeof reader.result === 'string' ? reader.result : null);
+            };
+            reader.onerror = () => {
+                resolve(null);
+            };
+            reader.readAsDataURL(file);
+        } catch (error) {
+            console.warn('Unable to read file as data URL', error);
+            resolve(null);
+        }
+    });
+
+const analyzeVideoSource = async (dataUrl) => {
+    if (typeof document === 'undefined') {
+        return { duration: null, width: 0, height: 0, posterUrl: null };
+    }
+    return new Promise((resolve) => {
+        const globalWindow = typeof window === 'undefined' ? null : window;
+        let failSafeTimeout = null;
+        try {
+            const video = document.createElement('video');
+            let settled = false;
+            const cleanup = () => {
+                if (failSafeTimeout != null && globalWindow) {
+                    globalWindow.clearTimeout(failSafeTimeout);
+                    failSafeTimeout = null;
+                }
+                try {
+                    video.pause();
+                } catch (error) {
+                    // ignore pause failures
+                }
+                video.removeAttribute('src');
+                try {
+                    video.load();
+                } catch (error) {
+                    // ignore load cleanup failures
+                }
+            };
+            const finalize = (result) => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                resolve(result);
+            };
+            const captureFrame = (metrics) => {
+                try {
+                    const width = metrics.width || 640;
+                    const height = metrics.height || Math.max(Math.round((width * 9) / 16), 360);
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const context = canvas.getContext('2d');
+                    if (!context) {
+                        finalize({ ...metrics, posterUrl: null });
+                        return;
+                    }
+                    context.drawImage(video, 0, 0, width, height);
+                    const posterUrl = canvas.toDataURL('image/png');
+                    finalize({ ...metrics, posterUrl });
+                } catch (error) {
+                    console.warn('Unable to capture video poster', error);
+                    finalize({ ...metrics, posterUrl: null });
+                }
+            };
+
+            video.preload = 'metadata';
+            video.muted = true;
+            video.playsInline = true;
+            video.crossOrigin = 'anonymous';
+
+            video.addEventListener(
+                'error',
+                () => {
+                    finalize({ duration: null, width: 0, height: 0, posterUrl: null });
+                },
+                { once: true },
+            );
+
+            video.addEventListener(
+                'loadedmetadata',
+                () => {
+                    const metrics = {
+                        duration: Number.isFinite(video.duration) ? video.duration : null,
+                        width: video.videoWidth || 640,
+                        height: video.videoHeight || 360,
+                    };
+                    const ready = () => captureFrame(metrics);
+                    const targetTime =
+                        metrics.duration && metrics.duration > 0.2
+                            ? Math.min(Math.max(metrics.duration * 0.1, 0.12), metrics.duration - 0.04)
+                            : 0;
+
+                    if (targetTime > 0 && Math.abs(video.currentTime - targetTime) > 0.05) {
+                        const handleSeeked = () => {
+                            if (failSafeTimeout != null && globalWindow) {
+                                globalWindow.clearTimeout(failSafeTimeout);
+                                failSafeTimeout = null;
+                            }
+                            video.removeEventListener('seeked', handleSeeked);
+                            ready();
+                        };
+                        video.addEventListener('seeked', handleSeeked);
+                        if (globalWindow) {
+                            failSafeTimeout = globalWindow.setTimeout(() => {
+                                video.removeEventListener('seeked', handleSeeked);
+                                ready();
+                            }, 1200);
+                        }
+                        try {
+                            video.currentTime = targetTime;
+                        } catch (error) {
+                            video.removeEventListener('seeked', handleSeeked);
+                            if (failSafeTimeout != null && globalWindow) {
+                                globalWindow.clearTimeout(failSafeTimeout);
+                                failSafeTimeout = null;
+                            }
+                            ready();
+                        }
+                    } else if (video.readyState >= 2) {
+                        ready();
+                    } else {
+                        video.addEventListener('loadeddata', ready, { once: true });
+                    }
+                },
+                { once: true },
+            );
+
+            video.src = dataUrl;
+        } catch (error) {
+            console.warn('Unable to inspect video source', error);
+            if (failSafeTimeout != null && typeof window !== 'undefined') {
+                window.clearTimeout(failSafeTimeout);
+            }
+            resolve({ duration: null, width: 0, height: 0, posterUrl: null });
+        }
+    });
+};
+
+const decodeAudioBuffer = (context, arrayBuffer) =>
+    new Promise((resolve, reject) => {
+        try {
+            const result = context.decodeAudioData(
+                arrayBuffer.slice(0),
+                (decoded) => resolve(decoded),
+                (error) => reject(error ?? new Error('Failed to decode audio')),
+            );
+            if (result && typeof result.then === 'function') {
+                result.then(resolve).catch(reject);
+            }
+        } catch (error) {
+            reject(error);
+        }
+    });
+
+const extractAudioFeatures = async (arrayBuffer, sampleCount = 96) => {
+    if (typeof window === 'undefined') {
+        return { duration: null, waveform: null };
+    }
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) {
+        return { duration: null, waveform: null };
+    }
+    let audioContext = null;
+    try {
+        audioContext = new AudioContextClass();
+        const audioBuffer = await decodeAudioBuffer(audioContext, arrayBuffer);
+        const duration = Number.isFinite(audioBuffer.duration) ? audioBuffer.duration : null;
+        const channelData =
+            audioBuffer.numberOfChannels > 0 ? audioBuffer.getChannelData(0) : null;
+        if (!channelData || channelData.length === 0) {
+            return { duration, waveform: null };
+        }
+        const totalSamples = channelData.length;
+        const bucketSize = Math.max(1, Math.floor(totalSamples / sampleCount));
+        const waveform = [];
+        for (let index = 0; index < sampleCount; index += 1) {
+            const start = index * bucketSize;
+            if (start >= totalSamples) break;
+            let min = 1;
+            let max = -1;
+            for (let offset = 0; offset < bucketSize && start + offset < totalSamples; offset += 1) {
+                const sample = channelData[start + offset];
+                if (sample < min) min = sample;
+                if (sample > max) max = sample;
+            }
+            const amplitude = Math.abs(max) >= Math.abs(min) ? max : min;
+            waveform.push(Number.isFinite(amplitude) ? Math.round(amplitude * 100) / 100 : 0);
+        }
+        if (waveform.length === 0) {
+            waveform.push(0);
+        }
+        return { duration, waveform };
+    } catch (error) {
+        console.warn('Unable to extract audio waveform', error);
+        return { duration: null, waveform: null };
+    } finally {
+        if (audioContext && typeof audioContext.close === 'function') {
+            try {
+                await audioContext.close();
+            } catch (closeError) {
+                // ignore close failures
+            }
+        }
+    }
+};
+
 const DEFAULT_FRAME_BACKGROUND = '#0F172A';
 const DEFAULT_TEXT_COLOR = '#ECE9FE';
 
@@ -86,6 +389,7 @@ const ELEMENT_NAME_MAP = {
     component: 'Component',
     character: 'Character',
     group: 'Group',
+    path: 'Stroke',
 };
 
 const getDefaultElementName = (type) => ELEMENT_NAME_MAP[type] ?? 'Layer';
@@ -1683,6 +1987,10 @@ export const useCanvasStore = create(
             },
             gridVisible: false,
             gridSize: 40,
+            rulersVisible: false,
+            snapToGrid: true,
+            snapToGuides: true,
+            snapToCenters: true,
             clipboard: null,
             modeState: {},
             sceneSnapshot: null,
@@ -1851,6 +2159,14 @@ export const useCanvasStore = create(
     setGridVisible: (visible) => set({ gridVisible: Boolean(visible) }),
     toggleGrid: () => set((state) => ({ gridVisible: !state.gridVisible })),
     setGridSize: (size) => set({ gridSize: Math.max(4, Number(size) || 4) }),
+    setRulersVisible: (visible) => set({ rulersVisible: Boolean(visible) }),
+    toggleRulers: () => set((state) => ({ rulersVisible: !state.rulersVisible })),
+    setSnapToGrid: (value) => set({ snapToGrid: Boolean(value) }),
+    toggleSnapToGrid: () => set((state) => ({ snapToGrid: !state.snapToGrid })),
+    setSnapToGuides: (value) => set({ snapToGuides: Boolean(value) }),
+    toggleSnapToGuides: () => set((state) => ({ snapToGuides: !state.snapToGuides })),
+    setSnapToCenters: (value) => set({ snapToCenters: Boolean(value) }),
+    toggleSnapToCenters: () => set((state) => ({ snapToCenters: !state.snapToCenters })),
     setSelectedTool: (tool) => set({ selectedTool: tool }),
     setActiveGuides: (guides) => set({ activeGuides: Array.isArray(guides) ? guides : [] }),
     setAutoLayoutPreview: (preview) => set({ autoLayoutPreview: preview }),
@@ -1926,9 +2242,10 @@ export const useCanvasStore = create(
                 rows,
             },
         };
+        const showGuides = state.snapToGuides !== false;
         set({
             autoLayoutPreview: preview,
-            activeGuides: guides,
+            activeGuides: showGuides ? guides : [],
         });
         const duration = Number.isFinite(options.duration) ? options.duration : 2200;
         if (typeof window !== 'undefined' && duration > 0) {
@@ -1942,6 +2259,132 @@ export const useCanvasStore = create(
             return { preview, timeoutId };
         }
         return { preview };
+    },
+    applyImageBackgroundRemoval: (frameId, elementId, options = {}) => {
+        if (!frameId || !elementId) return;
+        const { color = '#ffffff', distance = 0.36 } = options;
+        let updated = false;
+        set((state) => ({
+            frames: state.frames.map((frame) => {
+                if (frame.id !== frameId) return frame;
+                let frameChanged = false;
+                const elements = frame.elements.map((element) => {
+                    if (element.id !== elementId || element.type !== 'image') return element;
+                    frameChanged = true;
+                    updated = true;
+                    return {
+                        ...element,
+                        props: {
+                            ...(element.props ?? {}),
+                            backgroundRemoved: true,
+                            removeBgColor: color,
+                            removeBgDistance: Math.max(0, Math.min(1, Number(distance) || 0.36)),
+                        },
+                    };
+                });
+                if (!frameChanged) return frame;
+                return { ...frame, elements };
+            }),
+        }));
+        if (updated) {
+            get().commitHistory('AI remove background', 'ai');
+        }
+    },
+    applyAutoLayoutPreview: (options = {}) => {
+        let applied = false;
+        set((state) => {
+            const referencePreview = state.autoLayoutPreview;
+            const frameId = options.frameId ?? referencePreview?.frameId ?? state.selectedFrameId ?? null;
+            if (!frameId) return {};
+            const frame = state.frames.find((item) => item.id === frameId);
+            if (!frame) return {};
+            const referenceRect = referencePreview?.rect ?? {
+                x: 0,
+                y: 0,
+                width: frame.width ?? 0,
+                height: frame.height ?? 0,
+            };
+            const rect = {
+                x: Number.isFinite(options.x) ? options.x : referenceRect.x,
+                y: Number.isFinite(options.y) ? options.y : referenceRect.y,
+                width: Number.isFinite(options.width) ? options.width : referenceRect.width,
+                height: Number.isFinite(options.height) ? options.height : referenceRect.height,
+            };
+            if (rect.width <= 0 || rect.height <= 0) return {};
+            const columns = Math.max(
+                1,
+                Math.floor(options.columns ?? referencePreview?.metadata?.columns ?? 3),
+            );
+            const calculatedRows = Math.ceil(
+                (frame.elements.filter((element) => (element.parentId ?? null) === null).length || 1) / columns,
+            );
+            const resolvedRows =
+                options.rows ?? referencePreview?.metadata?.rows ?? calculatedRows ?? 1;
+            const rows = Math.max(1, Math.floor(resolvedRows || 1));
+            const topLevelElements = frame.elements.filter((element) => (element.parentId ?? null) === null);
+            if (topLevelElements.length === 0) return {};
+            const limit = Math.min(topLevelElements.length, columns * rows);
+            if (limit === 0) return {};
+            const placements = new Map();
+            topLevelElements.slice(0, limit).forEach((element, index) => {
+                placements.set(element.id, index);
+            });
+            const cellWidth = rect.width / columns;
+            const cellHeight = rect.height / rows;
+            const updates = new Map();
+            placements.forEach((order, elementId) => {
+                const element = frame.elements.find((item) => item.id === elementId);
+                if (!element) return;
+                const props = element.props ?? {};
+                const col = order % columns;
+                const row = Math.floor(order / columns);
+                const innerPaddingX = cellWidth * 0.12;
+                const innerPaddingY = cellHeight * 0.12;
+                const availableWidth = Math.max(cellWidth - innerPaddingX * 2, 1);
+                const availableHeight = Math.max(cellHeight - innerPaddingY * 2, 1);
+                const nextWidth =
+                    element.type === 'text' || element.type === 'script'
+                        ? Math.max(Math.min(props.width ?? availableWidth, availableWidth), 24)
+                        : Math.max(Math.min(props.width ?? availableWidth, availableWidth), 32);
+                const nextHeight =
+                    element.type === 'text' || element.type === 'script'
+                        ? Math.max(props.height ?? availableHeight, 24)
+                        : Math.max(Math.min(props.height ?? availableHeight, availableHeight), 32);
+                const cellX = rect.x + col * cellWidth;
+                const cellY = rect.y + row * cellHeight;
+                const nextProps = {
+                    ...props,
+                    x: cellX + cellWidth / 2 - nextWidth / 2,
+                    y: cellY + cellHeight / 2 - nextHeight / 2,
+                    width: nextWidth,
+                    height: nextHeight,
+                };
+                const changed = ['x', 'y', 'width', 'height'].some((key) => nextProps[key] !== props[key]);
+                if (changed) {
+                    updates.set(elementId, nextProps);
+                }
+            });
+            if (!updates.size) return {};
+            applied = true;
+            const updatedFrame = {
+                ...frame,
+                elements: frame.elements.map((element) => {
+                    if (!updates.has(element.id)) return element;
+                    return {
+                        ...element,
+                        props: updates.get(element.id),
+                    };
+                }),
+            };
+            return {
+                frames: state.frames.map((item) => (item.id === frameId ? updatedFrame : item)),
+                autoLayoutPreview: null,
+                activeGuides: [],
+            };
+        });
+        if (applied) {
+            get().commitHistory('AI smart balance layout', 'ai');
+        }
     },
 
     setSelectedFrame: (id) => {
@@ -3756,6 +4199,7 @@ export const useCanvasStore = create(
         offset = 0,
         thumbnailUrl = null,
         waveform = null,
+        metadata = {},
         historyLabel,
         skipHistory = false,
         source = 'user',
@@ -3778,6 +4222,7 @@ export const useCanvasStore = create(
             offset: Math.max(0, offset ?? 0),
             thumbnailUrl: thumbnailUrl ?? null,
             waveform: normalizedWaveform,
+            metadata: metadata ? { ...metadata } : {},
             createdAt: new Date().toISOString(),
         };
         set((state) => ({
@@ -4121,20 +4566,67 @@ export const useCanvasStore = create(
             ),
         }));
     },
-    uploadAssetToLibrary: ({ name, dataUrl, mime, duration }) => {
+    uploadAssetToLibrary: ({ name, dataUrl, mime, duration, metadata, waveform }) => {
         if (!dataUrl) return null;
-        const trimmedName = name?.trim();
-        const isAudio = mime?.startsWith('audio');
-        const isVideo = mime?.startsWith('video');
-        const assetType = isAudio || isVideo ? 'timeline' : 'element';
-        const timelineType = isAudio ? 'audio' : isVideo ? 'clip' : null;
+        const trimmedName = typeof name === 'string' ? name.trim() : '';
+        const label = trimmedName || '';
+        const normalizedName = trimmedName || (typeof name === 'string' ? name : '');
+        const looksLikeVideo = inferVideoFile(normalizedName, mime);
+        const looksLikeAudio = !looksLikeVideo && inferAudioFile(normalizedName, mime);
+        const assetType = looksLikeAudio || looksLikeVideo ? 'timeline' : 'element';
+        const timelineType = looksLikeAudio ? 'audio' : looksLikeVideo ? 'clip' : null;
         const elementType = assetType === 'element' ? 'image' : null;
+        const normalizedDuration =
+            assetType === 'timeline'
+                ? (() => {
+                      const parsed = Number(duration);
+                      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+                      return looksLikeAudio ? 12 : 6;
+                  })()
+                : undefined;
+        const providedMetadata = metadata ? { ...metadata } : {};
+        const placeholderLabel = sanitizeFileLabel(label || name, looksLikeAudio ? 'Audio' : 'Clip');
+        const fallbackPoster =
+            assetType === 'timeline' ? createPlaceholderThumbnail(placeholderLabel) : null;
+        let preview = null;
+        let normalizedMetadata = undefined;
+        if (assetType === 'timeline') {
+            const baseTimelineMetadata = {
+                ...(looksLikeVideo ? { videoUrl: dataUrl } : {}),
+                ...(looksLikeAudio ? { audioUrl: dataUrl } : {}),
+                duration: normalizedDuration,
+            };
+            normalizedMetadata = { ...baseTimelineMetadata, ...providedMetadata };
+            const posterSource =
+                providedMetadata.posterUrl ??
+                normalizedMetadata.posterUrl ??
+                fallbackPoster ??
+                null;
+            if (posterSource && !normalizedMetadata.posterUrl) {
+                normalizedMetadata.posterUrl = posterSource;
+            }
+            preview = posterSource
+                ? { kind: 'image', value: posterSource }
+                : { kind: 'icon', value: timelineType ?? 'clip' };
+        } else {
+            normalizedMetadata = Object.keys(providedMetadata).length ? providedMetadata : undefined;
+            preview = { kind: 'image', value: dataUrl };
+        }
+        if (!preview && fallbackPoster) {
+            preview = { kind: 'image', value: fallbackPoster };
+        }
         const assetId = get().addAssetToLibrary(
             {
                 id: `asset-upload-${nanoid(6)}`,
-                label: trimmedName || (isAudio ? 'Uploaded audio' : 'Uploaded visual'),
+                label:
+                    label ||
+                    (looksLikeAudio
+                        ? 'Uploaded audio'
+                        : looksLikeVideo
+                            ? 'Uploaded clip'
+                            : 'Uploaded visual'),
                 source: 'upload',
-                category: isAudio ? 'audio' : isVideo ? 'video' : 'uploads',
+                category: looksLikeAudio ? 'audio' : looksLikeVideo ? 'video' : 'uploads',
                 status: 'ready',
                 type: assetType,
                 elementType,
@@ -4148,15 +4640,109 @@ export const useCanvasStore = create(
                               opacity: 1,
                           }
                         : undefined,
-                preview:
-                    assetType === 'element'
-                        ? { kind: 'image', value: dataUrl }
-                        : { kind: 'icon', value: timelineType ?? 'clip' },
-                duration: assetType === 'timeline' ? Number(duration) || (isAudio ? 12 : 6) : undefined,
+                preview,
+                duration: normalizedDuration,
+                waveform: waveform ? [...waveform] : undefined,
+                metadata: normalizedMetadata,
             },
             { skipUsageMark: true },
         );
         return assetId;
+    },
+    ingestTimelineFiles: async ({ files, frameId = null, offset = 0 } = {}) => {
+        if (!files || files.length === 0) return [];
+        const accepted = Array.from(files).filter((file) =>
+            file ? inferTimelineFile(file.name, file.type) : false,
+        );
+        if (accepted.length === 0) return [];
+        const state = get();
+        const targetFrameId =
+            frameId ?? state.selectedFrameId ?? state.timelinePlayback.frameId ?? state.frames[0]?.id ?? null;
+        if (!targetFrameId) return [];
+        let currentOffset = Number.isFinite(offset) ? Math.max(offset, 0) : 0;
+        const inserted = [];
+        for (const file of accepted) {
+            const type = file.type || '';
+            const asVideo = inferVideoFile(file.name, type);
+            const asAudio = !asVideo && inferAudioFile(file.name, type);
+            const fallbackLabel = asVideo ? 'Video Clip' : 'Audio Track';
+            const label = sanitizeFileLabel(file.name, fallbackLabel);
+            try {
+                if (asVideo) {
+                    const dataUrl = await readFileAsDataUrl(file);
+                    if (!dataUrl) continue;
+                    const analysis = await analyzeVideoSource(dataUrl);
+                    const posterUrl =
+                        analysis.posterUrl ?? createPlaceholderThumbnail(label) ?? null;
+                    const assetId = get().uploadAssetToLibrary({
+                        name: file.name ?? label,
+                        dataUrl,
+                        mime: type || 'video/mp4',
+                        duration: analysis.duration ?? undefined,
+                        metadata: {
+                            posterUrl,
+                            width: analysis.width ?? undefined,
+                            height: analysis.height ?? undefined,
+                            originalFileName: file.name ?? undefined,
+                        },
+                    });
+                    if (!assetId) continue;
+                    const clipDuration = Number.isFinite(analysis.duration)
+                        ? analysis.duration
+                        : undefined;
+                    get().placeAssetOnTimeline(assetId, targetFrameId, {
+                        offset: currentOffset,
+                        ...(clipDuration ? { duration: clipDuration } : {}),
+                    });
+                    inserted.push({
+                        assetId,
+                        offset: currentOffset,
+                        duration: clipDuration ?? null,
+                        type: 'video',
+                    });
+                    if (clipDuration) {
+                        currentOffset += clipDuration;
+                    }
+                } else if (asAudio) {
+                    const [dataUrl, arrayBuffer] = await Promise.all([
+                        readFileAsDataUrl(file),
+                        file.arrayBuffer(),
+                    ]);
+                    if (!dataUrl || !arrayBuffer) continue;
+                    const audioInfo = await extractAudioFeatures(arrayBuffer);
+                    const assetId = get().uploadAssetToLibrary({
+                        name: file.name ?? label,
+                        dataUrl,
+                        mime: type || 'audio/mpeg',
+                        duration: audioInfo.duration ?? undefined,
+                        metadata: {
+                            originalFileName: file.name ?? undefined,
+                        },
+                        waveform: audioInfo.waveform ?? undefined,
+                    });
+                    if (!assetId) continue;
+                    const audioDuration = Number.isFinite(audioInfo.duration)
+                        ? audioInfo.duration
+                        : undefined;
+                    get().placeAssetOnTimeline(assetId, targetFrameId, {
+                        offset: currentOffset,
+                        ...(audioDuration ? { duration: audioDuration } : {}),
+                    });
+                    inserted.push({
+                        assetId,
+                        offset: currentOffset,
+                        duration: audioDuration ?? null,
+                        type: 'audio',
+                    });
+                    if (audioDuration) {
+                        currentOffset += audioDuration;
+                    }
+                }
+            } catch (error) {
+                console.error('Unable to ingest timeline file', error);
+            }
+        }
+        return inserted;
     },
     generateAiAsset: ({ prompt = '', kind = 'image' } = {}) => {
         const definition = buildAiAssetDefinition(kind, prompt);
@@ -4324,14 +4910,20 @@ export const useCanvasStore = create(
         }
         const duration = Math.max(Number(options.duration ?? asset.duration ?? 4) || 4, 0.25);
         const offset = Math.max(Number(options.offset ?? asset.offset ?? 0) || 0, 0);
+        const posterSource =
+            asset.metadata?.posterUrl ??
+            (asset.preview?.kind === 'image' ? asset.preview.value : null) ??
+            asset.props?.imageUrl ??
+            null;
         get().addTimelineAsset({
             frameId: frame.id,
             label: asset.label ?? 'Timeline asset',
             type: asset.timelineType ?? 'clip',
             duration,
             offset,
-            thumbnailUrl: asset.preview?.kind === 'image' ? asset.preview.value : asset.props?.imageUrl ?? null,
+            thumbnailUrl: posterSource,
             waveform: asset.waveform ?? null,
+            metadata: asset.metadata ?? {},
             historyLabel: `Timeline: Insert "${asset.label ?? 'asset'}"`,
             source: 'asset-library',
         });

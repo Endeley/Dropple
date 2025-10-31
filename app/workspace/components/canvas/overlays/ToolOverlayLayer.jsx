@@ -9,6 +9,9 @@ import ComponentLibraryOverlay from './panels/ComponentLibraryOverlay';
 import PrototypeLinkOverlay from './panels/PrototypeLinkOverlay';
 import TimelineAssetsOverlay from './panels/TimelineAssetsOverlay';
 import CodeExportOverlay from './panels/CodeExportOverlay';
+import GridSettingsOverlay from './panels/GridSettingsOverlay';
+import SnapSettingsOverlay from './panels/SnapSettingsOverlay';
+import AiBalanceOverlay from './panels/AiBalanceOverlay';
 
 const PANEL_COMPONENTS = {
     gradient: GradientToolOverlay,
@@ -19,6 +22,9 @@ const PANEL_COMPONENTS = {
     link: PrototypeLinkOverlay,
     timeline: TimelineAssetsOverlay,
     'code-export': CodeExportOverlay,
+    grid: GridSettingsOverlay,
+    snapping: SnapSettingsOverlay,
+    'ai-layout': AiBalanceOverlay,
 };
 
 export default function ToolOverlayLayer() {

@@ -12,6 +12,7 @@ const ELEMENT_LABELS = {
     image: 'Image',
     component: 'Component',
     character: 'Character',
+    path: 'Stroke',
 };
 
 const BASE_PROPS = {

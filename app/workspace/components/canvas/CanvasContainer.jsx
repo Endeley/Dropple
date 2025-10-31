@@ -641,7 +641,7 @@ function ModePreviewMedia({ thumbnail, accent, scene }) {
     );
 }
 
-function TimelineWorkspace({ mode, accent, timelineBehavior }) {
+function TimelineWorkspace({ mode, accent, timelineBehavior, variant }) {
     const frames = useCanvasStore((state) => state.frames);
     const selectedFrameId = useCanvasStore((state) => state.selectedFrameId) ?? frames[0]?.id ?? null;
     const setSelectedFrame = useCanvasStore((state) => state.setSelectedFrame);
@@ -659,6 +659,8 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
         () => frames.find((frame) => frame.id === selectedFrameId) ?? frames[0] ?? null,
         [frames, selectedFrameId],
     );
+
+    const isVideoVariant = variant === 'video' || mode === 'video';
 
     useEffect(() => {
         if (!isSceneHydrating || !resolvedFrame) return undefined;
@@ -687,11 +689,23 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
         return getVideoTimelineStyle;
     }, [mode]);
 
+    const containerClass = clsx(
+        'border-t',
+        isVideoVariant
+            ? 'px-6 py-5 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
+            : 'px-5 py-4 text-xs',
+    );
+
     if (!resolvedFrame) {
         return (
             <div
-                className='border-t px-5 py-4 text-xs'
-                style={{ borderColor: 'var(--mode-border)', background: 'var(--mode-panel-bg)', color: 'var(--mode-text-muted)' }}>
+                className={containerClass}
+                style={{
+                    borderColor: 'var(--mode-border)',
+                    background: isVideoVariant ? 'rgba(8,10,19,0.95)' : 'var(--mode-panel-bg)',
+                    color: 'var(--mode-text)',
+                }}
+            >
                 Create a frame to start building your timeline.
             </div>
         );
@@ -711,11 +725,57 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
         labels: timelineBehavior?.labels,
     };
 
+    const navButtonClass = clsx(
+        'rounded-md border px-3 py-1 text-[10px] uppercase tracking-[0.25em] transition-colors',
+        isVideoVariant
+            ? 'border-white/15 bg-white/5 text-white/80 hover:border-white/30 hover:text-white'
+            : 'hover:bg-[var(--mode-accent-soft)]',
+    );
+    const playButtonClass = clsx(
+        'rounded-md border px-3 py-1 text-[10px] uppercase tracking-[0.3em] transition-colors',
+        isVideoVariant
+            ? 'border-[var(--mode-accent)] bg-[var(--mode-accent-soft)] text-white shadow-[0_0_0_1px_rgba(255,255,255,0.05)]'
+            : 'border-[var(--mode-accent)] text-[var(--mode-text)]',
+    );
+    const secondaryButtonClass = clsx(
+        'rounded-md border px-3 py-1 text-[10px] uppercase tracking-[0.3em] transition-colors',
+        isVideoVariant
+            ? 'border-white/15 text-white/75 hover:border-white/30 hover:text-white'
+            : 'border-[var(--mode-border)] text-[var(--mode-text)] hover:border-[var(--mode-accent)]',
+    );
+    const loopButtonClass = clsx(
+        'rounded-md border px-3 py-1 text-[10px] uppercase tracking-[0.3em] transition-colors',
+        isVideoVariant
+            ? timelinePlayback.loop
+                ? 'border-white/30 bg-white/15 text-white'
+                : 'border-white/15 text-white/70 hover:border-white/30 hover:text-white'
+            : 'border-[var(--mode-border)] text-[var(--mode-text)] hover:border-[var(--mode-accent)]',
+    );
+    const speedSelectClass = clsx(
+        'rounded-md border px-2 py-1 text-[10px] focus:outline-none',
+        isVideoVariant
+            ? 'border-white/15 bg-white/5 text-white/75 focus:border-white/35'
+            : 'border-[var(--mode-border)] bg-[var(--mode-panel-bg)] text-[var(--mode-text)] focus:border-[var(--mode-accent)]',
+    );
+    const headerClass = clsx(
+        'flex flex-wrap items-center justify-between gap-3',
+        isVideoVariant ? 'text-[12px] text-white/85' : undefined,
+    );
+    const timeLabelClass = clsx(
+        'flex items-center gap-2',
+        isVideoVariant ? 'text-white/75' : 'text-[var(--mode-text)]',
+    );
+
     return (
         <div
-            className='border-t px-5 py-4 text-xs'
-            style={{ borderColor: 'var(--mode-border)', background: 'var(--mode-panel-bg)', color: 'var(--mode-text)' }}>
-            <div className='flex flex-wrap items-center justify-between gap-3'>
+            className={containerClass}
+            style={{
+                borderColor: 'var(--mode-border)',
+                background: isVideoVariant ? 'rgba(8,10,19,0.95)' : 'var(--mode-panel-bg)',
+                color: isVideoVariant ? 'rgba(226,232,240,0.8)' : 'var(--mode-text)',
+            }}
+        >
+            <div className={headerClass}>
                 <div className='flex items-center gap-3'>
                     <button
                         type='button'
@@ -725,8 +785,7 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
                                 handleSelectFrame(frames[currentIndex - 1].id);
                             }
                         }}
-                        className='rounded-md border px-2 py-1 text-[10px] uppercase tracking-[0.25em] transition-colors hover:bg-[var(--mode-accent-soft)]'
-                        style={{ borderColor: 'var(--mode-border)', color: 'var(--mode-text)' }}
+                        className={navButtonClass}
                     >
                         Prev
                     </button>
@@ -738,8 +797,7 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
                                 handleSelectFrame(frames[currentIndex + 1].id);
                             }
                         }}
-                        className='rounded-md border px-2 py-1 text-[10px] uppercase tracking-[0.25em] transition-colors hover:bg-[var(--mode-accent-soft)]'
-                        style={{ borderColor: 'var(--mode-border)', color: 'var(--mode-text)' }}
+                        className={navButtonClass}
                     >
                         Next
                     </button>
@@ -749,7 +807,7 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
                         {resolvedFrame.name ?? 'Frame'}
                     </span>
                 </div>
-                <div className='flex items-center gap-2 text-[var(--mode-text)]'>
+                <div className={clsx('flex items-center gap-2', isVideoVariant ? 'text-white/80' : 'text-[var(--mode-text)]')}>
                     <button
                         type='button'
                         onClick={() => {
@@ -759,8 +817,8 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
                                 playTimeline(resolvedFrame.id);
                             }
                         }}
-                        className='rounded-md border border-[var(--mode-accent)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[var(--mode-text)] hover:border-[var(--mode-accent)]'
-                        style={{ backgroundColor: isPlaying ? 'rgba(236,233,254,0.1)' : 'transparent' }}
+                        className={playButtonClass}
+                        style={{ backgroundColor: !isVideoVariant && isPlaying ? 'rgba(236,233,254,0.1)' : undefined }}
                     >
                         {isPlaying ? 'Pause' : 'Play'}
                     </button>
@@ -770,21 +828,17 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
                             setTimelinePlayhead(resolvedFrame.id, 0, { resetTick: true });
                             pauseTimeline();
                         }}
-                        className='rounded-md border border-[var(--mode-border)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[var(--mode-text)] hover:border-[var(--mode-accent)]'
+                        className={secondaryButtonClass}
                     >
                         Stop
                     </button>
-                    <button
-                        type='button'
-                        onClick={() => setTimelineLoop(!timelinePlayback.loop)}
-                        className='rounded-md border border-[var(--mode-border)] px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[var(--mode-text)] hover:border-[var(--mode-accent)]'
-                    >
+                    <button type='button' onClick={() => setTimelineLoop(!timelinePlayback.loop)} className={loopButtonClass}>
                         Loop {timelinePlayback.loop ? 'On' : 'Off'}
                     </button>
                     <select
                         value={timelinePlayback.speed ?? 1}
                         onChange={(event) => setTimelineSpeed(Number(event.target.value) || 1)}
-                        className='rounded-md border border-[var(--mode-border)] bg-[var(--mode-panel-bg)] px-2 py-1 text-[10px] text-[var(--mode-text)] focus:border-[var(--mode-accent)]'
+                        className={speedSelectClass}
                     >
                         {[0.5, 1, 1.5, 2].map((speed) => (
                             <option key={speed} value={speed}>
@@ -793,13 +847,13 @@ function TimelineWorkspace({ mode, accent, timelineBehavior }) {
                         ))}
                     </select>
                 </div>
-                <div className='flex items-center gap-2 text-[var(--mode-text)]'>
+                <div className={timeLabelClass}>
                     <span>{formatSecondsValue(timelinePlayback.playhead ?? 0)}</span>
                     <span>/</span>
                     <span>{formatSecondsValue(totalDuration)}</span>
                 </div>
             </div>
-            <div className='mt-3'>
+            <div className='mt-4'>
                 <TimelineBar
                     frameId={resolvedFrame.id}
                     assets={frameAssets}

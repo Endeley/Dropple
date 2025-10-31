@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { nanoid } from 'nanoid';
 import clsx from 'clsx';
 import { useCanvasStore } from './context/CanvasStore';
 import { fabricService } from './fabric/fabricServiceSingleton';
@@ -31,6 +32,45 @@ const applySnappingToPoint = (point, snapping = {}) => {
     return next;
 };
 
+const applyCenterSnappingToPoint = (point, frame, snapping = {}) => {
+    if (!frame || !snapping.alignCenter) return point;
+    const threshold = Math.max(snapping.grid ?? 12, 12);
+    const centerX = (frame.x ?? 0) + (frame.width ?? 0) / 2;
+    const centerY = (frame.y ?? 0) + (frame.height ?? 0) / 2;
+    const next = { ...point };
+    if (Math.abs(point.x - centerX) <= threshold) {
+        next.x = centerX;
+    }
+    if (Math.abs(point.y - centerY) <= threshold) {
+        next.y = centerY;
+    }
+    return next;
+};
+
+const DRAWING_TOOLS = new Set(['pen', 'brush', 'smudge', 'eraser']);
+
+const DRAW_TOOL_LABELS = {
+    pen: 'Vector Path',
+    brush: 'Brush Stroke',
+    smudge: 'Smudge Stroke',
+};
+
+const clonePathData = (path) => {
+    if (!path || !Array.isArray(path)) return null;
+    return path.map((segment) => [...segment]);
+};
+
+const computeSnappingConfig = (storeState, behavior, gridSizeFallback) => {
+    const base = behavior?.snapping ?? {};
+    const gridSize = Number.isFinite(storeState.gridSize) ? storeState.gridSize : base.grid ?? gridSizeFallback ?? 8;
+    return {
+        ...base,
+        grid: storeState.snapToGrid ? gridSize : 0,
+        alignCenter: storeState.snapToCenters ?? base.alignCenter ?? false,
+        smartGuides: storeState.snapToGuides ?? base.smartGuides ?? false,
+    };
+};
+
 export default function FabricCanvas() {
     const containerRef = useRef(null);
     const canvasRef = useRef(null);
@@ -38,6 +78,7 @@ export default function FabricCanvas() {
     const fabricNamespaceRef = useRef(null);
     const frameObjectsRef = useRef(new Map());
     const elementObjectsRef = useRef(new Map());
+    const drawingBrushesRef = useRef({});
     const isPanningRef = useRef(false);
     const lastPointerRef = useRef({ x: 0, y: 0 });
     const fileInputRef = useRef(null);
@@ -54,6 +95,8 @@ export default function FabricCanvas() {
     const updateFrame = useCanvasStore((state) => state.updateFrame);
     const gridVisible = useCanvasStore((state) => state.gridVisible);
     const gridSize = useCanvasStore((state) => state.gridSize);
+    const selectedTool = useCanvasStore((state) => state.selectedTool);
+    const rulersVisible = useCanvasStore((state) => state.rulersVisible);
     const getFrameById = useCanvasStore((state) => state.getFrameById);
     const mode = useCanvasStore((state) => state.mode);
     const canvasBehavior = MODE_CANVAS_BEHAVIOR[mode] ?? MODE_CANVAS_BEHAVIOR.default;
@@ -78,6 +121,31 @@ export default function FabricCanvas() {
         };
     }, [gridVisible, gridSize, position.x, position.y, scale, theme]);
 
+    const rulerStyles = useMemo(() => {
+        if (!rulersVisible) return null;
+        const minorStep = Math.max(gridSize * scale, 16);
+        const majorStep = minorStep * 4;
+        const { r, g, b } = theme.accentRgb;
+        const lightTick = `rgba(${r}, ${g}, ${b}, 0.32)`;
+        const heavyTick = `rgba(${r}, ${g}, ${b}, 0.58)`;
+        const offsetMinorX = ((position.x % minorStep) + minorStep) % minorStep;
+        const offsetMajorX = ((position.x % majorStep) + majorStep) % majorStep;
+        const offsetMinorY = ((position.y % minorStep) + minorStep) % minorStep;
+        const offsetMajorY = ((position.y % majorStep) + majorStep) % majorStep;
+        return {
+            horizontal: {
+                backgroundImage: `linear-gradient(to right, ${lightTick} 1px, transparent 1px), linear-gradient(to right, ${heavyTick} 1px, transparent 1px)`,
+                backgroundSize: `${minorStep}px 100%, ${majorStep}px 100%`,
+                backgroundPosition: `${offsetMinorX}px 0, ${offsetMajorX}px 0`,
+            },
+            vertical: {
+                backgroundImage: `linear-gradient(${lightTick} 1px, transparent 1px), linear-gradient(${heavyTick} 1px, transparent 1px)`,
+                backgroundSize: `100% ${minorStep}px, 100% ${majorStep}px`,
+                backgroundPosition: `0 ${offsetMinorY}px, 0 ${offsetMajorY}px`,
+            },
+        };
+    }, [gridSize, rulersVisible, scale, theme.accentRgb, position.x, position.y]);
+
     useEffect(() => {
         if (!pendingImageElement) return;
         const input = fileInputRef.current;
@@ -85,6 +153,68 @@ export default function FabricCanvas() {
         input.value = '';
         input.click();
     }, [pendingImageElement]);
+
+    useEffect(() => {
+        if (!fabricReady) return;
+        const fabricCanvas = fabricCanvasRef.current;
+        const fabricNamespace = fabricNamespaceRef.current;
+        if (!fabricCanvas || !fabricNamespace) return;
+
+        const { accentRgb, textPrimary } = theme;
+        const accentColor = `rgba(${accentRgb.r}, ${accentRgb.g}, ${accentRgb.b}, 0.9)`;
+        const softAccent = `rgba(${accentRgb.r}, ${accentRgb.g}, ${accentRgb.b}, 0.38)`;
+
+        if (DRAWING_TOOLS.has(selectedTool)) {
+            let brush = drawingBrushesRef.current[selectedTool];
+            if (!brush) {
+                if (selectedTool === 'eraser' && fabricNamespace.EraserBrush) {
+                    brush = new fabricNamespace.EraserBrush(fabricCanvas);
+                    brush.width = 28;
+                } else if (selectedTool === 'smudge' && fabricNamespace.SprayBrush) {
+                    brush = new fabricNamespace.SprayBrush(fabricCanvas);
+                    brush.width = 30;
+                    brush.density = 20;
+                    brush.dotWidth = 2;
+                    brush.dotWidthVariance = 2;
+                } else {
+                    brush = new fabricNamespace.PencilBrush(fabricCanvas);
+                }
+                drawingBrushesRef.current[selectedTool] = brush;
+            }
+
+            if (selectedTool === 'pen') {
+                brush.width = 2.4;
+                brush.color = textPrimary ?? '#F8FAFC';
+                brush.decimate = 6;
+            } else if (selectedTool === 'brush') {
+                brush.width = 8;
+                brush.color = accentColor;
+                brush.shadow = new fabricNamespace.Shadow({
+                    color: softAccent,
+                    blur: 6,
+                });
+            } else if (selectedTool === 'smudge') {
+                brush.color = softAccent;
+                brush.width = 18;
+                brush.randomOpacity = true;
+            } else if (selectedTool === 'eraser') {
+                brush.width = 26;
+            }
+
+            fabricCanvas.isDrawingMode = true;
+            fabricCanvas.selection = false;
+            fabricCanvas.skipTargetFind = true;
+            fabricCanvas.freeDrawingBrush = brush;
+            fabricCanvas.discardActiveObject();
+            fabricCanvas.requestRenderAll();
+            return;
+        }
+
+        fabricCanvas.isDrawingMode = false;
+        fabricCanvas.selection = true;
+        fabricCanvas.skipTargetFind = false;
+        fabricCanvas.freeDrawingBrush = fabricCanvas.freeDrawingBrush;
+    }, [fabricReady, selectedTool, theme]);
 
     const historyHotkeyHandler = useCallback((event) => {
         const store = useCanvasStore.getState();
@@ -183,6 +313,7 @@ export default function FabricCanvas() {
                 const currentTool = store.selectedTool || 'pointer';
                 const action = resolveTool(currentTool, store.mode);
                 const pointer = fabricCanvas.getPointer(originalEvent, true);
+                const snappingConfig = computeSnappingConfig(store, canvasBehavior, store.gridSize);
                 const primaryButton = originalEvent.button === 0;
 
                 if (primaryButton && action.type !== 'pointer') {
@@ -190,11 +321,16 @@ export default function FabricCanvas() {
                         const defaults = canvasBehavior.frameDefaults ?? {};
                         const width = action.width ?? defaults.width ?? 960;
                         const height = action.height ?? defaults.height ?? 640;
-                        const snappedPointer = applySnappingToPoint(pointer, canvasBehavior.snapping);
+                        const snappedPointer = applySnappingToPoint(pointer, snappingConfig);
+                        const referenceFrame =
+                            typeof store.getFrameById === 'function' && store.selectedFrameId
+                                ? store.getFrameById(store.selectedFrameId)
+                                : null;
+                        const finalPointer = applyCenterSnappingToPoint(snappedPointer, referenceFrame, snappingConfig);
                         const newFrame = store.addFrameAt(
                             {
-                                x: snappedPointer.x - width / 2,
-                                y: snappedPointer.y - height / 2,
+                                x: finalPointer.x - width / 2,
+                                y: finalPointer.y - height / 2,
                             },
                             { width, height },
                         );
@@ -208,7 +344,7 @@ export default function FabricCanvas() {
                     if (action.type === 'element') {
                         let targetFrame = findFrameAtPoint(store.frames, pointer);
                         if (!targetFrame) {
-                            const fallbackPointer = applySnappingToPoint(pointer, canvasBehavior.snapping);
+                            const fallbackPointer = applySnappingToPoint(pointer, snappingConfig);
                             targetFrame = store.addFrameAt(
                                 {
                                     x: fallbackPointer.x - 480,
@@ -219,8 +355,13 @@ export default function FabricCanvas() {
                         }
 
                         if (targetFrame) {
-                            const snappedPointer = applySnappingToPoint(pointer, canvasBehavior.snapping);
-                            const element = createElement(action.elementType, targetFrame, snappedPointer, {
+                            const snappedPointer = applySnappingToPoint(pointer, snappingConfig);
+                            const centerAdjustedPointer = applyCenterSnappingToPoint(
+                                snappedPointer,
+                                targetFrame,
+                                snappingConfig,
+                            );
+                            const element = createElement(action.elementType, targetFrame, centerAdjustedPointer, {
                                 mode: store.mode,
                                 preset: action.preset,
                             });
@@ -342,6 +483,100 @@ export default function FabricCanvas() {
                         y: prev.y - domEvent.deltaY,
                     }));
                 }
+            });
+
+            fabricCanvas.on('path:created', (event) => {
+                const path = event?.path;
+                if (!path) return;
+                const store = useCanvasStore.getState();
+                const currentTool = store.selectedTool;
+                if (currentTool === 'eraser') {
+                    fabricCanvas.remove(path);
+                    fabricCanvas.requestRenderAll();
+                    return;
+                }
+
+                const framesState = store.frames ?? [];
+                const absoluteWidth = Math.max((path.width ?? 0) * (path.scaleX ?? 1), 1);
+                const absoluteHeight = Math.max((path.height ?? 0) * (path.scaleY ?? 1), 1);
+                const centerPoint =
+                    typeof path.getCenterPoint === 'function'
+                        ? path.getCenterPoint()
+                        : {
+                              x: (path.left ?? 0) + absoluteWidth / 2,
+                              y: (path.top ?? 0) + absoluteHeight / 2,
+                          };
+                let frame =
+                    (store.selectedFrameId && framesState.find((item) => item.id === store.selectedFrameId)) ||
+                    findFrameAtPoint(framesState, centerPoint);
+                if (!frame) {
+                    frame = store.addFrameAt(
+                        { x: centerPoint.x - 480, y: centerPoint.y - 320 },
+                        { width: 960, height: 640 },
+                    );
+                }
+                if (!frame) {
+                    fabricCanvas.remove(path);
+                    fabricCanvas.requestRenderAll();
+                    return;
+                }
+
+                const frameX = frame.x ?? 0;
+                const frameY = frame.y ?? 0;
+                const pathObject = path.toObject ? path.toObject(['path']) : null;
+                const pathDataRaw = Array.isArray(path.path) && path.path.length > 0 ? path.path : pathObject?.path;
+                const pathData = clonePathData(pathDataRaw);
+                if (!pathData) {
+                    fabricCanvas.remove(path);
+                    fabricCanvas.requestRenderAll();
+                    return;
+                }
+
+                const brushType =
+                    currentTool === 'smudge' ? 'smudge' : currentTool === 'brush' ? 'brush' : 'pen';
+                const elementId = `stroke-${nanoid(6)}`;
+
+                const element = {
+                    id: elementId,
+                    type: 'path',
+                    name: DRAW_TOOL_LABELS[brushType] ?? 'Stroke',
+                    parentId: null,
+                    props: {
+                        x: (path.left ?? 0) - frameX,
+                        y: (path.top ?? 0) - frameY,
+                        width: absoluteWidth,
+                        height: absoluteHeight,
+                        opacity: path.opacity ?? 1,
+                        pathData,
+                        stroke: path.stroke ?? theme.accent,
+                        strokeWidth: path.strokeWidth ?? 2.5,
+                        strokeLineCap: path.strokeLineCap ?? 'round',
+                        strokeLineJoin: path.strokeLineJoin ?? 'round',
+                        fill: typeof path.fill === 'string' ? path.fill : 'transparent',
+                        brushType,
+                    },
+                };
+
+                path.set({
+                    left: frameX + element.props.x,
+                    top: frameY + element.props.y,
+                    originX: 'left',
+                    originY: 'top',
+                    scaleX: 1,
+                    scaleY: 1,
+                });
+                path.brushType = brushType;
+                path.droppleFrameId = frame.id;
+                attachMetadata(path, {
+                    droppleId: elementId,
+                    droppleType: 'element',
+                    elementType: 'path',
+                });
+                elementObjectsRef.current.set(elementId, path);
+
+                store.addElementToFrame(frame.id, element, null, { historyLabel: 'Draw stroke' });
+                store.setSelectedElement(frame.id, elementId);
+                fabricCanvas.requestRenderAll();
             });
         };
 
@@ -473,6 +708,16 @@ export default function FabricCanvas() {
                                 image.set({ left, top, originX: 'left', originY: 'top' });
                                 if (props.width) image.scaleToWidth(props.width);
                                 if (props.height) image.scaleToHeight(props.height);
+                                if (props.backgroundRemoved && fabricNamespace?.filters?.RemoveColor) {
+                                    const RemoveColor = fabricNamespace.filters.RemoveColor;
+                                    image.filters = [
+                                        new RemoveColor({
+                                            color: props.removeBgColor ?? '#ffffff',
+                                            distance: props.removeBgDistance ?? 0.36,
+                                        }),
+                                    ];
+                                    image.applyFilters();
+                                }
                                 elementMap.set(element.id, image);
                                 fabricCanvas.add(image);
                                 fabricCanvas.requestRenderAll();
@@ -536,10 +781,47 @@ export default function FabricCanvas() {
                             fontWeight: props.fontWeight ?? fabricObject.fontWeight ?? '500',
                             textAlign: props.align ?? fabricObject.textAlign ?? 'left',
                         });
+                    } else if (element.type === 'path') {
+                        const baseWidth = fabricObject.width ?? props.width ?? 1;
+                        const baseHeight = fabricObject.height ?? props.height ?? 1;
+                        const targetWidth = Math.max(props.width ?? baseWidth, 1);
+                        const targetHeight = Math.max(props.height ?? baseHeight, 1);
+                        const scaleX = baseWidth ? targetWidth / baseWidth : 1;
+                        const scaleY = baseHeight ? targetHeight / baseHeight : 1;
+                        fabricObject.set({
+                            stroke: props.stroke ?? fabricObject.stroke ?? theme.accent,
+                            strokeWidth: props.strokeWidth ?? fabricObject.strokeWidth ?? 2.5,
+                            fill: props.fill ?? fabricObject.fill ?? 'transparent',
+                            strokeLineCap: props.strokeLineCap ?? fabricObject.strokeLineCap ?? 'round',
+                            strokeLineJoin: props.strokeLineJoin ?? fabricObject.strokeLineJoin ?? 'round',
+                        });
+                        fabricObject.scaleX = scaleX;
+                        fabricObject.scaleY = scaleY;
+                        fabricObject.brushType = props.brushType ?? fabricObject.brushType ?? 'pen';
                     } else if (element.type === 'image' && props.width && props.height) {
                         fabricObject.scaleToWidth(props.width);
                         fabricObject.scaleToHeight(props.height);
                         fabricObject.set({ scaleX: 1, scaleY: 1, width: props.width, height: props.height });
+                        if (props.backgroundRemoved && fabricNamespace?.filters?.RemoveColor) {
+                            const RemoveColor = fabricNamespace.filters.RemoveColor;
+                            const desiredFilter = new RemoveColor({
+                                color: props.removeBgColor ?? '#ffffff',
+                                distance: props.removeBgDistance ?? 0.36,
+                            });
+                            const existing = fabricObject.filters ?? [];
+                            const alreadyApplied =
+                                existing.length === 1 &&
+                                existing[0]?.type === desiredFilter.type &&
+                                existing[0]?.color === desiredFilter.color &&
+                                existing[0]?.distance === desiredFilter.distance;
+                            if (!alreadyApplied) {
+                                fabricObject.filters = [desiredFilter];
+                                fabricObject.applyFilters();
+                            }
+                        } else if (fabricObject.filters?.length) {
+                            fabricObject.filters = [];
+                            fabricObject.applyFilters();
+                        }
                     }
 
                     fabricObject.setCoords();
@@ -625,6 +907,20 @@ export default function FabricCanvas() {
             style={{ ...gridBackground, overscrollBehavior: 'none', backgroundColor: theme.canvasBg }}
         >
             <canvas ref={canvasRef} className='relative z-10 block h-full w-full' />
+            {rulersVisible && rulerStyles ? (
+                <>
+                    <div
+                        aria-hidden
+                        className='pointer-events-none absolute left-0 right-0 top-0 z-20 h-6 border-b border-[var(--mode-border)] bg-[var(--mode-sidebar-bg)]/90'
+                        style={rulerStyles.horizontal}
+                    />
+                    <div
+                        aria-hidden
+                        className='pointer-events-none absolute bottom-0 left-0 top-0 z-20 w-6 border-r border-[var(--mode-border)] bg-[var(--mode-sidebar-bg)]/90'
+                        style={rulerStyles.vertical}
+                    />
+                </>
+            ) : null}
             <div
                 className='pointer-events-none absolute inset-0'
                 style={{ background: `radial-gradient(circle at top, rgba(${theme.accentRgb.r}, ${theme.accentRgb.g}, ${theme.accentRgb.b}, ${canvasBehavior.heavy ? 0.2 : 0.12}), transparent 55%)` }}

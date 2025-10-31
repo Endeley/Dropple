@@ -9,6 +9,50 @@ function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
 
+const isTimelineFileType = (value) =>
+    typeof value === 'string' && (value.startsWith('video') || value.startsWith('audio'));
+
+const TIMELINE_FILE_EXTENSIONS = new Set([
+    'mp4',
+    'mov',
+    'm4v',
+    'webm',
+    'mkv',
+    'avi',
+    'mpg',
+    'mpeg',
+    'ogv',
+    'wmv',
+    'mp3',
+    'wav',
+    'aac',
+    'flac',
+    'ogg',
+    'oga',
+    'm4a',
+    'aiff',
+    'aif',
+    'wma',
+    'opus',
+    'weba',
+]);
+
+const matchesTimelineExtension = (name) => {
+    if (typeof name !== 'string') return false;
+    const trimmed = name.trim().toLowerCase();
+    if (!trimmed) return false;
+    const dotIndex = trimmed.lastIndexOf('.');
+    if (dotIndex === -1 || dotIndex === trimmed.length - 1) return false;
+    const extension = trimmed.slice(dotIndex + 1);
+    return TIMELINE_FILE_EXTENSIONS.has(extension);
+};
+
+const isTimelineFile = (file) => {
+    if (!file) return false;
+    if (isTimelineFileType(file.type)) return true;
+    return matchesTimelineExtension(file.name);
+};
+
 const DEFAULT_TRACK_ORDER = ['clip', 'overlay', 'audio', 'segment'];
 const DEFAULT_TRACK_LABELS = {
     clip: 'Clip',
@@ -46,6 +90,7 @@ export default function TimelineBar({ frameId, assets, totalDuration, getTimelin
     const pauseTimeline = useCanvasStore((state) => state.pauseTimeline);
     const setTimelineLoop = useCanvasStore((state) => state.setTimelineLoop);
     const placeAssetOnTimeline = useCanvasStore((state) => state.placeAssetOnTimeline);
+    const ingestTimelineFiles = useCanvasStore((state) => state.ingestTimelineFiles);
     const wrapperRef = useRef(null);
     const surfaceRef = useRef(null);
     const scrubPointerRef = useRef(null);
@@ -126,6 +171,26 @@ export default function TimelineBar({ frameId, assets, totalDuration, getTimelin
             surfaceRef.current = node;
         }
     }, []);
+
+    const collectTimelineFiles = (dataTransfer) => {
+        if (!dataTransfer) return [];
+        const files = [];
+        const seen = new Set();
+        const pushFile = (file) => {
+            if (!isTimelineFile(file)) return;
+            const key = `${file.name ?? 'file'}::${file.size ?? 0}::${file.lastModified ?? 0}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            files.push(file);
+        };
+        Array.from(dataTransfer.files ?? []).forEach(pushFile);
+        Array.from(dataTransfer.items ?? []).forEach((item) => {
+            if (!item || item.kind !== 'file') return;
+            const candidate = item.getAsFile();
+            if (candidate) pushFile(candidate);
+        });
+        return files;
+    };
 
     const handleDragStart = (event, assetId, handleType) => {
         event.stopPropagation();
@@ -327,10 +392,16 @@ export default function TimelineBar({ frameId, assets, totalDuration, getTimelin
 
     const handleTimelineDragOver = (event) => {
         if (!surfaceRef.current) return;
-        const types = Array.from(event.dataTransfer?.types ?? []);
-        if (!types.includes('application/x-dropple-asset')) return;
+        const dataTransfer = event.dataTransfer;
+        const types = Array.from(dataTransfer?.types ?? []);
+        const hasAssetPayload = types.includes('application/x-dropple-asset');
+        const fileMatches = collectTimelineFiles(dataTransfer);
+        if (!hasAssetPayload && fileMatches.length === 0) return;
         event.preventDefault();
-        event.dataTransfer.dropEffect = 'copy';
+        event.stopPropagation();
+        if (dataTransfer) {
+            dataTransfer.dropEffect = 'copy';
+        }
         setIsDragOver(true);
         const rect = surfaceRef.current.getBoundingClientRect();
         if (rect.width > 0) {
@@ -350,19 +421,33 @@ export default function TimelineBar({ frameId, assets, totalDuration, getTimelin
     const handleTimelineDrop = (event) => {
         if (!surfaceRef.current) return;
         event.preventDefault();
+        event.stopPropagation();
         setIsDragOver(false);
-        const payload = event.dataTransfer.getData('application/x-dropple-asset');
         setDropIndicatorPercent(null);
+        const dataTransfer = event.dataTransfer;
+        const rect = surfaceRef.current.getBoundingClientRect();
+        let offsetSeconds = 0;
+        if (rect && rect.width > 0) {
+            const ratio = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+            offsetSeconds = ratio * totalDuration;
+        }
+        const droppedFiles = collectTimelineFiles(dataTransfer);
+        if (droppedFiles.length > 0 && typeof ingestTimelineFiles === 'function') {
+            ingestTimelineFiles({
+                files: droppedFiles,
+                frameId,
+                offset: offsetSeconds,
+            }).catch((error) => {
+                console.error('Unable to ingest dropped files', error);
+            });
+            setTimelinePlayhead(frameId, offsetSeconds, { resetTick: true });
+            return;
+        }
+        const payload = dataTransfer?.getData('application/x-dropple-asset');
         if (!payload) return;
         try {
             const data = JSON.parse(payload);
             if (!data?.assetId) return;
-            const rect = surfaceRef.current.getBoundingClientRect();
-            let offsetSeconds = 0;
-            if (rect.width > 0) {
-                const ratio = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-                offsetSeconds = ratio * totalDuration;
-            }
             placeAssetOnTimeline(data.assetId, frameId, { offset: offsetSeconds });
             setTimelinePlayhead(frameId, offsetSeconds, { resetTick: true });
         } catch (error) {

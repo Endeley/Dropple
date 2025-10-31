@@ -27,7 +27,6 @@ export default function CanvasControls() {
     const setPrototypeMode = useCanvasStore((state) => state.setPrototypeMode) ?? NOOP;
     const setActivePrototypeFrameId = useCanvasStore((state) => state.setActivePrototypeFrameId) ?? NOOP;
     const setActiveToolOverlay = useCanvasStore((state) => state.setActiveToolOverlay) ?? NOOP;
-    const toggleGrid = useCanvasStore((state) => state.toggleGrid) ?? NOOP;
     const undoCanvas = useCanvasStore((state) => state.undoCanvas);
     const redoCanvas = useCanvasStore((state) => state.redoCanvas);
     const { canUndo, canRedo } = useHistoryStatus();
@@ -98,10 +97,6 @@ export default function CanvasControls() {
     );
 
     const handleActionClick = (id) => {
-        if (id === 'grid') {
-            toggleGrid();
-            return;
-        }
         setActiveToolOverlay(activeOverlay === id ? null : id);
     };
 
@@ -197,7 +192,14 @@ export default function CanvasControls() {
                     {actions.map((action) => {
                         const id = action.id ?? action;
                         const label = action.label ?? action;
-                        const isActive = id === 'grid' ? gridVisible : activeOverlay === id;
+                        const isActive =
+                            id === 'grid'
+                                ? gridVisible || activeOverlay === 'grid'
+                                : id === 'snapping'
+                                    ? activeOverlay === 'snapping'
+                                    : id === 'ai-layout'
+                                        ? activeOverlay === 'ai-layout'
+                                        : activeOverlay === id;
                         return (
                             <button
                                 key={id}
