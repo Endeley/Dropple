@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useCanvasStore } from '../canvas/context/CanvasStore';
 import TimelineBar from '../canvas/TimelineBar';
 import { MODE_CANVAS_BEHAVIOR } from '../canvas/modeConfig';
@@ -87,7 +87,6 @@ export default function VideoWorkspace() {
         }, 200);
         return () => window.clearTimeout(timeoutId);
     }, [isSceneHydrating, resolvedFrame, finishSceneHydration]);
-
     useEffect(() => {
         const preventExternalNavigation = (event) => {
             if (event.defaultPrevented) return;
@@ -125,21 +124,27 @@ export default function VideoWorkspace() {
 
     return (
         <div
-            className='flex flex-1 flex-col overflow-hidden'
+            className='flex flex-1 min-h-0 flex-col overflow-hidden'
             style={{ background: 'var(--mode-panel-bg)' }}
         >
-            <div className='flex flex-1 overflow-hidden px-6 py-5'>
+            <div className='flex flex-1 min-h-0 overflow-x-hidden overflow-y-auto px-6 py-5'>
                 <div className='flex w-80 shrink-0 flex-col pr-5'>
                     <VideoInspectorPanel sections={inspectorSections} accent='var(--mode-accent)' />
                 </div>
-                <div className='flex min-w-0 flex-1 flex-col gap-6 overflow-hidden'>
-                    <VideoPreview
-                        frame={resolvedFrame}
-                        assets={frameAssets}
-                        playbackLabel={playbackLabel}
-                    />
-                    <div className='flex min-h-0 flex-1 flex-col gap-6 overflow-hidden pb-[calc(env(safe-area-inset-bottom,0px)+12px)]'>
-                        <div className='flex-1 min-h-0 overflow-auto pr-1'>
+                <div className='flex min-w-0 flex-1 flex-col overflow-hidden'>
+                    <div className='flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pb-[calc(env(safe-area-inset-bottom,0px)+12px)]'>
+                        <div className='flex-shrink-0'>
+                            <VideoPreview
+                                frame={resolvedFrame}
+                                assets={frameAssets}
+                                playbackLabel={playbackLabel}
+                                timelinePlayback={timelinePlayback}
+                                playTimeline={playTimeline}
+                                pauseTimeline={pauseTimeline}
+                                setTimelinePlayhead={setTimelinePlayhead}
+                            />
+                        </div>
+                        <div className='flex-shrink-0 pr-1'>
                             <VideoTimeline
                                 frames={frames}
                                 frame={resolvedFrame}
@@ -155,19 +160,21 @@ export default function VideoWorkspace() {
                                 onSelectFrame={setSelectedFrame}
                             />
                         </div>
-                        <VideoTransportBar
-                            isPlaying={timelinePlayback.isPlaying}
-                            onPlayPause={() => {
-                                if (resolvedFrame) {
-                                    if (timelinePlayback.frameId === resolvedFrame.id && timelinePlayback.isPlaying) {
-                                        pauseTimeline();
-                                    } else {
-                                        playTimeline(resolvedFrame.id);
+                        <div className='flex-shrink-0'>
+                            <VideoTransportBar
+                                isPlaying={timelinePlayback.isPlaying}
+                                onPlayPause={() => {
+                                    if (resolvedFrame) {
+                                        if (timelinePlayback.frameId === resolvedFrame.id && timelinePlayback.isPlaying) {
+                                            pauseTimeline();
+                                        } else {
+                                            playTimeline(resolvedFrame.id);
+                                        }
                                     }
-                                }
-                            }}
-                            onRenderPreview={() => console.info('Render preview…')}
-                        />
+                                }}
+                                onRenderPreview={() => console.info('Render preview…')}
+                            />
+                        </div>
                     </div>
                 </div>
                 <div className='ml-6 w-60 shrink-0'>
@@ -184,7 +191,7 @@ export default function VideoWorkspace() {
     );
 }
 
-function VideoPreview({ frame, assets, playbackLabel }) {
+function VideoPreview({ frame, assets, playbackLabel, timelinePlayback, playTimeline, pauseTimeline, setTimelinePlayhead }) {
     const clipAsset = useMemo(
         () =>
             assets.find(
@@ -196,14 +203,24 @@ function VideoPreview({ frame, assets, playbackLabel }) {
         [assets],
     );
 
+    const runtimeAssetId =
+        clipAsset?.metadata?.assetId ??
+        clipAsset?.assetId ??
+        clipAsset?.metadata?.sourceAssetId ??
+        null;
+
+    const assetRuntime = useCanvasStore((state) => (runtimeAssetId ? state.runtimeMedia?.[runtimeAssetId] ?? null : null));
+
     const poster =
         clipAsset?.thumbnailUrl ??
         (clipAsset?.preview?.kind === 'image' ? clipAsset.preview.value : null) ??
         clipAsset?.metadata?.posterUrl ??
         clipAsset?.metadata?.thumbnail ??
+        assetRuntime?.posterUrl ??
         null;
 
     const playbackSource =
+        assetRuntime?.videoUrl ??
         clipAsset?.metadata?.videoUrl ??
         clipAsset?.metadata?.sourceUrl ??
         clipAsset?.metadata?.mediaUrl ??
@@ -212,6 +229,81 @@ function VideoPreview({ frame, assets, playbackLabel }) {
         null;
 
     const backgroundImage = poster ?? null;
+    const videoRef = useRef(null);
+    const syncingRef = useRef(false);
+    const isActiveFrame = Boolean(frame?.id) && timelinePlayback.frameId === frame?.id;
+
+    useEffect(() => {
+        const video = videoRef.current;
+        if (!video || !isActiveFrame) return;
+        const targetTime = timelinePlayback.playhead ?? 0;
+        const current = Number.isFinite(video.currentTime) ? video.currentTime : 0;
+        if (Math.abs(current - targetTime) > 0.08) {
+            syncingRef.current = true;
+            try {
+                video.currentTime = targetTime;
+            } catch (error) {
+                // ignore sync failures
+            } finally {
+                window.setTimeout(() => {
+                    syncingRef.current = false;
+                }, 50);
+            }
+        }
+        if (video.playbackRate !== (timelinePlayback.speed ?? 1)) {
+            video.playbackRate = timelinePlayback.speed ?? 1;
+        }
+        if (timelinePlayback.isPlaying) {
+            const playResult = video.play();
+            if (playResult && typeof playResult.catch === 'function') {
+                playResult.catch(() => {});
+            }
+        } else {
+            video.pause();
+        }
+    }, [timelinePlayback.playhead, timelinePlayback.speed, timelinePlayback.isPlaying, timelinePlayback.frameId, isActiveFrame]);
+
+    useEffect(() => {
+        const video = videoRef.current;
+        if (!video) return undefined;
+        const handlePlay = () => {
+            if (frame?.id) {
+                playTimeline(frame.id);
+            }
+        };
+        const handlePause = () => {
+            pauseTimeline();
+        };
+        const handleTimeUpdate = () => {
+            if (!frame?.id || !isActiveFrame || syncingRef.current) return;
+            setTimelinePlayhead(frame.id, video.currentTime, {});
+        };
+        const handleSeeked = () => {
+            if (!frame?.id || !isActiveFrame) return;
+            setTimelinePlayhead(frame.id, video.currentTime, { resetTick: true });
+        };
+        const handleEnded = () => {
+            if (!frame?.id) return;
+            if (timelinePlayback.loop) {
+                setTimelinePlayhead(frame.id, 0, { resetTick: true });
+                playTimeline(frame.id);
+            } else {
+                pauseTimeline();
+            }
+        };
+        video.addEventListener('play', handlePlay);
+        video.addEventListener('pause', handlePause);
+        video.addEventListener('timeupdate', handleTimeUpdate);
+        video.addEventListener('seeked', handleSeeked);
+        video.addEventListener('ended', handleEnded);
+        return () => {
+            video.removeEventListener('play', handlePlay);
+            video.removeEventListener('pause', handlePause);
+            video.removeEventListener('timeupdate', handleTimeUpdate);
+            video.removeEventListener('seeked', handleSeeked);
+            video.removeEventListener('ended', handleEnded);
+        };
+    }, [frame?.id, isActiveFrame, playTimeline, pauseTimeline, setTimelinePlayhead, timelinePlayback.loop]);
 
     return (
         <div
@@ -220,6 +312,7 @@ function VideoPreview({ frame, assets, playbackLabel }) {
         >
             {playbackSource ? (
                 <video
+                    ref={videoRef}
                     className='mx-auto aspect-video w-full overflow-hidden rounded-xl border'
                     style={{ borderColor: 'var(--mode-border)', background: 'var(--mode-canvas-bg)' }}
                     src={playbackSource}
@@ -407,14 +500,8 @@ function VideoInspectorControl({ control, accent }) {
 }
 
 function VideoMediaBin({ assets, accent, frames, activeFrameId, onSelectFrame }) {
-    const items = assets.length
-        ? assets
-        : frames.map((frame, index) => ({
-              id: frame.id,
-              label: frame.name ?? `Shot ${index + 1}`,
-              duration: frame.timelineDuration ?? 30,
-              fallback: true,
-          }));
+    const runtimeMedia = useCanvasStore((state) => state.runtimeMedia);
+    const hasAssets = assets.length > 0;
 
     return (
         <div
@@ -424,7 +511,9 @@ function VideoMediaBin({ assets, accent, frames, activeFrameId, onSelectFrame })
             <header className='flex items-start justify-between gap-2 border-b pb-4' style={{ borderColor: 'var(--mode-border)' }}>
                 <div>
                     <p className='text-[11px] font-semibold uppercase tracking-[0.35em] text-[color:var(--mode-text-muted)]'>Media Browser</p>
-                    <p className='text-xs text-[color:var(--mode-text-muted)]'>Drop footage or choose a shot to focus.</p>
+                    <p className='text-xs text-[color:var(--mode-text-muted)]'>
+                        Drop footage or import clips to build your timeline.
+                    </p>
                 </div>
                 <button
                     type='button'
@@ -435,50 +524,78 @@ function VideoMediaBin({ assets, accent, frames, activeFrameId, onSelectFrame })
                 </button>
             </header>
             <div className='mt-4 flex-1 space-y-3 overflow-y-auto pr-1'>
-                {items.map((item, index) => {
-                    const durationLabel = formatSecondsValue(item.duration ?? 0);
-                    const isActive = item.frameId ? item.frameId === activeFrameId : item.id === activeFrameId;
-                    return (
-                        <button
-                            key={item.id ?? index}
-                            type='button'
-                            onClick={() => {
-                                if (item.frameId) onSelectFrame?.(item.frameId);
-                                else if (item.id) onSelectFrame?.(item.id);
-                            }}
-                            className={clsx(
-                                'flex w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left transition-colors',
-                                isActive
-                                    ? 'border-[var(--mode-accent)] bg-[var(--mode-accent-soft)]/60 text-[color:var(--mode-text)]'
-                                    : 'hover:border-[var(--mode-accent)] hover:text-[color:var(--mode-text)]',
-                            )}
-                            style={{
-                                borderColor: isActive ? 'var(--mode-accent)' : 'var(--mode-border)',
-                                background: isActive ? 'var(--mode-accent-soft)' : 'var(--mode-panel-bg)',
-                                color: 'var(--mode-text)',
-                            }}
-                        >
-                            <div
-                                className='relative h-16 w-24 overflow-hidden rounded-xl border'
-                                style={{ borderColor: 'var(--mode-border)', background: 'var(--mode-canvas-bg)' }}
+                {!hasAssets ? (
+                    <div
+                        className='flex h-full min-h-[200px] flex-col items-center justify-center rounded-2xl border border-dashed border-[color:var(--mode-border)] bg-[color:var(--mode-panel-bg)]/40 px-6 text-center text-[color:var(--mode-text-muted)]'
+                        style={{ borderColor: 'var(--mode-border)' }}
+                    >
+                        <p className='text-sm font-semibold uppercase tracking-[0.3em]'>No media yet</p>
+                        <p className='mt-2 text-xs leading-relaxed'>
+                            Use the Import button or drop files onto the timeline to add clips. They will appear here for quick access.
+                        </p>
+                    </div>
+                ) : (
+                    assets.map((item, index) => {
+                        const durationLabel = formatSecondsValue(item.duration ?? 0);
+                        const isActive = item.frameId ? item.frameId === activeFrameId : item.id === activeFrameId;
+                        const assetId = item.metadata?.assetId ?? item.assetId ?? null;
+                        const runtime = assetId ? runtimeMedia?.[assetId] ?? null : null;
+                        const previewSource =
+                            item.thumbnailUrl ??
+                            item.metadata?.posterUrl ??
+                            (item.preview?.kind === 'image' ? item.preview.value : null) ??
+                            runtime?.posterUrl ??
+                            null;
+                        return (
+                            <button
+                                key={item.id ?? index}
+                                type='button'
+                                onClick={() => {
+                                    if (item.frameId) onSelectFrame?.(item.frameId);
+                                    else if (item.id) onSelectFrame?.(item.id);
+                                }}
+                                className={clsx(
+                                    'flex w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left transition-colors',
+                                    isActive
+                                        ? 'border-[var(--mode-accent)] bg-[var(--mode-accent-soft)]/60 text-[color:var(--mode-text)]'
+                                        : 'hover:border-[var(--mode-accent)] hover:text-[color:var(--mode-text)]',
+                                )}
+                                style={{
+                                    borderColor: isActive ? 'var(--mode-accent)' : 'var(--mode-border)',
+                                    background: isActive ? 'var(--mode-accent-soft)' : 'var(--mode-panel-bg)',
+                                    color: 'var(--mode-text)',
+                                }}
                             >
                                 <div
-                                    className='absolute inset-0'
-                                    style={{ background: `linear-gradient(135deg, ${accent}33, rgba(255,255,255,0.06))` }}
-                                />
-                                <span className='absolute bottom-1 right-1 rounded-full bg-black/50 px-2 py-[2px] text-[10px] font-medium text-white/80'>
-                                    {durationLabel}
-                                </span>
-                            </div>
-                            <div className='flex-1'>
-                                <p className='text-sm font-semibold tracking-wide'>{item.label ?? `Clip ${index + 1}`}</p>
-                                <p className='text-[11px] uppercase tracking-[0.2em] text-[color:var(--mode-text-muted)]'>
-                                    {item.timelineType ? item.timelineType : item.fallback ? 'Frame Placeholder' : 'Clip'}
-                                </p>
-                            </div>
-                        </button>
-                    );
-                })}
+                                    className='relative h-16 w-24 overflow-hidden rounded-xl border'
+                                    style={{ borderColor: 'var(--mode-border)', background: 'var(--mode-canvas-bg)' }}
+                                >
+                                    <div
+                                        className='absolute inset-0'
+                                        style={
+                                            previewSource
+                                                ? {
+                                                      backgroundImage: `url(${previewSource})`,
+                                                      backgroundSize: 'cover',
+                                                      backgroundPosition: 'center',
+                                                  }
+                                                : { background: `linear-gradient(135deg, ${accent}33, rgba(255,255,255,0.06))` }
+                                        }
+                                    />
+                                    <span className='absolute bottom-1 right-1 rounded-full bg-black/50 px-2 py-[2px] text-[10px] font-medium text-white/80'>
+                                        {durationLabel}
+                                    </span>
+                                </div>
+                                <div className='flex-1'>
+                                    <p className='text-sm font-semibold tracking-wide'>{item.label ?? `Clip ${index + 1}`}</p>
+                                    <p className='text-[11px] uppercase tracking-[0.2em] text-[color:var(--mode-text-muted)]'>
+                                        {item.timelineType ?? 'Clip'}
+                                    </p>
+                                </div>
+                            </button>
+                        );
+                    })
+                )}
             </div>
         </div>
     );
@@ -500,11 +617,51 @@ function VideoTimeline({
 }) {
     const isActive = timelinePlayback.frameId === frame?.id;
     const isPlaying = isActive && timelinePlayback.isPlaying;
+    const runtimeMedia = useCanvasStore((state) => state.runtimeMedia);
 
     const trackConfig = {
         order: timelineBehavior?.tracks,
         labels: timelineBehavior?.labels,
     };
+
+    const timelineStyles = useCallback(
+        (asset) => {
+            const assetId = asset.metadata?.assetId ?? asset.metadata?.sourceAssetId ?? asset.assetId ?? null;
+            const runtime = assetId ? runtimeMedia?.[assetId] ?? null : null;
+            if (asset.type === 'audio') {
+                return {
+                    style: {
+                        background: 'linear-gradient(90deg, rgba(99,102,241,0.45), rgba(59,130,246,0.45))',
+                    },
+                    icon: '♪',
+                    waveformColor: 'var(--mode-text)',
+                };
+            }
+            const poster =
+                asset.thumbnailUrl ??
+                asset.metadata?.posterUrl ??
+                (asset.preview?.kind === 'image' ? asset.preview.value : null) ??
+                runtime?.posterUrl ??
+                null;
+            if (poster) {
+                return {
+                    style: {
+                        backgroundImage: `url(${poster})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                    },
+                    icon: '▶',
+                };
+            }
+            return {
+                style: {
+                    background: 'linear-gradient(135deg, rgba(244,114,182,0.45), rgba(96,165,250,0.45))',
+                },
+                icon: '▶',
+            };
+        },
+        [runtimeMedia],
+    );
 
     return (
         <div
@@ -613,17 +770,10 @@ function VideoTimeline({
             </div>
             <div className='mt-4 rounded-xl border' style={{ borderColor: 'var(--mode-border)', background: 'var(--mode-panel-bg)' }}>
                 <TimelineBar
-                    frameId={frame?.id ?? ''}
+                    frameId={frame?.id}
                     assets={frameAssets}
                     totalDuration={totalDuration}
-                    getTimelineStyles={(asset) => ({
-                        background:
-                            asset.type === 'audio'
-                                ? 'linear-gradient(90deg, rgba(99,102,241,0.35), rgba(59,130,246,0.35))'
-                                : 'linear-gradient(90deg, rgba(244,114,182,0.35), rgba(96,165,250,0.35))',
-                        borderColor: 'var(--mode-border)',
-                        waveformColor: 'var(--mode-text)',
-                    })}
+                    getTimelineStyles={timelineStyles}
                     trackConfig={trackConfig}
                 />
             </div>

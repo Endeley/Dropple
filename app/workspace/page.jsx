@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useMemo } from 'react';
 import CanvasContainer from './components/canvas/CanvasContainer';
+import CanvasContextMenu from './components/canvas/CanvasContextMenu';
 import ModeToolbar from './components/canvas/ModeToolbar';
 import ToolSidebar from './components/canvas/ToolSidebar';
 import CanvasControls from './components/canvas/CanvasControls';
@@ -66,6 +67,7 @@ export default function WorkspacePage() {
                 <main className='relative flex flex-1 flex-col overflow-hidden' style={{ background: 'var(--mode-panel-bg)' }}>
                     <ModeToolbar />
                     <VideoWorkspace />
+                    <CanvasContextMenu />
                 </main>
             </div>
         );
@@ -107,6 +109,7 @@ export default function WorkspacePage() {
                 </main>
                 <InspectorPanel />
             </div>
+            <CanvasContextMenu />
         </div>
     );
 }

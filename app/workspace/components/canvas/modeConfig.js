@@ -465,8 +465,8 @@ export const MODE_CANVAS_BEHAVIOR = {
         kind: 'timeline',
         usesFabric: true,
         timeline: {
-            tracks: ['clip', 'overlay', 'audio'],
-            labels: { clip: 'Video', overlay: 'Overlay', audio: 'Audio' },
+            tracks: ['clip', 'audio'],
+            labels: { clip: 'Video', audio: 'Audio' },
         },
         snapping: { grid: 4, alignCenter: true },
         frameDefaults: { width: 1920, height: 1080 },

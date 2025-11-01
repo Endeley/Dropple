@@ -19,6 +19,8 @@ export default function CanvasContextMenu() {
     const duplicateElement = useCanvasStore((state) => state.duplicateElement) ?? NOOP;
     const pasteElement = useCanvasStore((state) => state.pasteElement) ?? NOOP;
     const removeElement = useCanvasStore((state) => state.removeElement) ?? NOOP;
+    const removeTimelineAsset = useCanvasStore((state) => state.removeTimelineAsset) ?? NOOP;
+    const removeTimelineAssets = useCanvasStore((state) => state.removeTimelineAssets) ?? NOOP;
     const copyFrame = useCanvasStore((state) => state.copyFrame) ?? NOOP;
     const duplicateFrame = useCanvasStore((state) => state.duplicateFrame) ?? NOOP;
     const pasteFrame = useCanvasStore((state) => state.pasteFrame) ?? NOOP;
@@ -99,6 +101,9 @@ export default function CanvasContextMenu() {
     const activeType = contextMenu?.type ?? null;
     const frameId = contextMenu?.frameId ?? null;
     const elementId = contextMenu?.elementId ?? null;
+    const timelineAssetId = contextMenu?.timelineAssetId ?? null;
+    const timelineAssetLabel = contextMenu?.assetLabel ?? null;
+    const timelineSelectedAssetIds = useCanvasStore((state) => state.timelineSelectedAssetIds ?? EMPTY_ARRAY);
     const canvasPoint = contextMenu?.canvasPoint ?? null;
 
     const frame = useMemo(() => {
@@ -214,13 +219,31 @@ export default function CanvasContextMenu() {
             label: 'Delete',
             icon: '🗑️',
             action:
-                activeType === 'element' && frameId && elementId
-                    ? () => removeElement(frameId, elementId)
-                    : activeType === 'frame' && frameId
-                        ? () => removeFrame(frameId)
-                        : null,
+                activeType === 'timeline-asset' && timelineAssetId
+                    ? () => {
+                          const selection = timelineSelectedAssetIds.length > 1 ? timelineSelectedAssetIds : [timelineAssetId];
+                          if (selection.length > 1) {
+                              removeTimelineAssets(selection, {
+                                  historyLabel: `Timeline: Remove ${selection.length} clips`,
+                                  source: 'timeline',
+                              });
+                          } else {
+                              removeTimelineAsset(timelineAssetId, {
+                                  historyLabel: timelineAssetLabel ? `Timeline: Remove "${timelineAssetLabel}"` : undefined,
+                                  source: 'timeline',
+                              });
+                          }
+                      }
+                    : activeType === 'element' && frameId && elementId
+                        ? () => removeElement(frameId, elementId)
+                        : activeType === 'frame' && frameId
+                            ? () => removeFrame(frameId)
+                            : null,
             danger: true,
-            disabled: !(activeType === 'element' && frameId && elementId) && !(activeType === 'frame' && frameId),
+            disabled:
+                !(activeType === 'timeline-asset' && timelineAssetId) &&
+                !(activeType === 'element' && frameId && elementId) &&
+                !(activeType === 'frame' && frameId),
             keywords: ['delete', 'remove', 'clear'],
         }),
         createMenuItem({
@@ -1250,6 +1273,28 @@ export default function CanvasContextMenu() {
                 title: 'Video Editing Tools',
                 items: videoItems,
             });
+            if (activeType === 'timeline-asset' && timelineAssetId) {
+                builtSections.push({
+                    key: 'timeline-asset',
+                    title: 'Timeline Clip',
+                    items: [
+                        createMenuItem({
+                            key: 'timeline-remove',
+                            label: timelineAssetLabel ? `Remove "${timelineAssetLabel}"` : 'Remove Clip',
+                            icon: '🗑️',
+                            danger: true,
+                            action: () =>
+                                removeTimelineAsset(timelineAssetId, {
+                                    historyLabel: timelineAssetLabel
+                                        ? `Timeline: Remove "${timelineAssetLabel}"`
+                                        : undefined,
+                                    source: 'timeline',
+                                }),
+                            keywords: ['timeline', 'remove', 'clip'],
+                        }),
+                    ],
+                });
+            }
         }
         if (mode === 'ai-studio') {
             builtSections.push({

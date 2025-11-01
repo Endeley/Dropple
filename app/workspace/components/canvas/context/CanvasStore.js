@@ -2,12 +2,143 @@
 
 import { nanoid } from 'nanoid';
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { generateFrameExport } from '../utils/exportCode';
 import { configureHistory, pushHistory, canUndo, canRedo, undo, redo } from '../history/historyService';
 import { MODE_ASSETS, MODE_CONFIG } from '../modeConfig';
 
 const VIDEO_PLACEHOLDER_ACCENT = MODE_ASSETS.video?.accent ?? '#EF4444';
+
+const createMemoryStorage = () => {
+    let storage = new Map();
+    return {
+        getItem: (name) => (storage.has(name) ? storage.get(name) : null),
+        setItem: (name, value) => {
+            storage.set(name, value);
+        },
+        removeItem: (name) => {
+            storage.delete(name);
+        },
+        clear: () => {
+            storage.clear();
+        },
+    };
+};
+
+const isQuotaExceededError = (error) => {
+    if (!error) {
+        return false;
+    }
+    if (error.name === 'QuotaExceededError') {
+        return true;
+    }
+    if (typeof DOMException !== 'undefined' && error instanceof DOMException) {
+        return error.code === 22 || error.code === 1014 || error.name === 'NS_ERROR_DOM_QUOTA_REACHED';
+    }
+    return false;
+};
+
+let hasWarnedCanvasStorageUnavailable = false;
+let hasWarnedCanvasStorageQuota = false;
+
+const canvasPersistStorage = createJSONStorage(() => {
+    const memoryStorage = createMemoryStorage();
+    if (typeof window === 'undefined') {
+        return memoryStorage;
+    }
+
+    let baseStorage;
+    try {
+        baseStorage = window.localStorage;
+        const testKey = '__dropple_canvas_state__';
+        baseStorage.setItem(testKey, testKey);
+        baseStorage.removeItem(testKey);
+    } catch (error) {
+        if (!hasWarnedCanvasStorageUnavailable) {
+            console.warn(
+                'Canvas state persistence falling back to in-memory storage. Browser storage unavailable.',
+                error,
+            );
+            hasWarnedCanvasStorageUnavailable = true;
+        }
+        return memoryStorage;
+    }
+
+    let useMemoryOnly = false;
+
+    return {
+        getItem: (name) => {
+            if (useMemoryOnly) {
+                return memoryStorage.getItem(name);
+            }
+            try {
+                const value = baseStorage.getItem(name);
+                if (value === null) {
+                    return memoryStorage.getItem(name);
+                }
+                memoryStorage.setItem(name, value);
+                return value;
+            } catch (error) {
+                if (isQuotaExceededError(error)) {
+                    if (!hasWarnedCanvasStorageQuota) {
+                        console.warn(
+                            'Canvas state persistence exceeded storage quota. Switching to in-memory storage.',
+                            error,
+                        );
+                        hasWarnedCanvasStorageQuota = true;
+                    }
+                    useMemoryOnly = true;
+                    return memoryStorage.getItem(name);
+                }
+                throw error;
+            }
+        },
+        setItem: (name, value) => {
+            memoryStorage.setItem(name, value);
+            if (useMemoryOnly) {
+                return;
+            }
+            try {
+                baseStorage.setItem(name, value);
+            } catch (error) {
+                if (isQuotaExceededError(error)) {
+                    if (!hasWarnedCanvasStorageQuota) {
+                        console.warn(
+                            'Canvas state persistence exceeded storage quota. Switching to in-memory storage.',
+                            error,
+                        );
+                        hasWarnedCanvasStorageQuota = true;
+                    }
+                    useMemoryOnly = true;
+                    return;
+                }
+                throw error;
+            }
+        },
+        removeItem: (name) => {
+            memoryStorage.removeItem(name);
+            if (useMemoryOnly) {
+                return;
+            }
+            try {
+                baseStorage.removeItem(name);
+            } catch (error) {
+                if (isQuotaExceededError(error)) {
+                    if (!hasWarnedCanvasStorageQuota) {
+                        console.warn(
+                            'Canvas state persistence exceeded storage quota. Switching to in-memory storage.',
+                            error,
+                        );
+                        hasWarnedCanvasStorageQuota = true;
+                    }
+                    useMemoryOnly = true;
+                    return;
+                }
+                throw error;
+            }
+        },
+    };
+});
 
 const createPlaceholderThumbnail = (label = 'Clip', accent = VIDEO_PLACEHOLDER_ACCENT) => {
     if (typeof document === 'undefined') return null;
@@ -308,6 +439,191 @@ const extractAudioFeatures = async (arrayBuffer, sampleCount = 96) => {
             }
         }
     }
+};
+
+const sanitizeAssetForStorage = (asset) => {
+    if (!asset) return null;
+    const clone = {
+        ...asset,
+    };
+    if (clone.preview) {
+        clone.preview = { ...clone.preview };
+        if (typeof clone.preview.value === 'string') {
+            const value = clone.preview.value;
+            if (value.startsWith('blob:') || value.startsWith('data:') || value.length > 120000) {
+                clone.preview = {
+                    kind: 'icon',
+                    value: clone.timelineType ?? clone.type ?? 'clip',
+                };
+            }
+        }
+    }
+    if (clone.metadata) {
+        const nextMetadata = { ...clone.metadata };
+        if (typeof nextMetadata.videoUrl === 'string') {
+            const value = nextMetadata.videoUrl;
+            if (value.startsWith('blob:') || value.startsWith('data:') || value.length > 120000) {
+                delete nextMetadata.videoUrl;
+            }
+        }
+        if (typeof nextMetadata.audioUrl === 'string') {
+            const value = nextMetadata.audioUrl;
+            if (value.startsWith('blob:') || value.startsWith('data:') || value.length > 120000) {
+                delete nextMetadata.audioUrl;
+            }
+        }
+        if (Object.keys(nextMetadata).length === 0) {
+            clone.metadata = {};
+        } else {
+            clone.metadata = nextMetadata;
+        }
+    }
+    if (Array.isArray(clone.waveform)) {
+        const maxSamples = 512;
+        if (clone.waveform.length > maxSamples) {
+            clone.waveform = clone.waveform.slice(0, maxSamples);
+        }
+    }
+    return clone;
+};
+
+const MAX_ASSET_LIBRARY_ENTRIES = 80;
+
+const sanitizeAssetLibraryForStorage = (library) =>
+    Array.isArray(library)
+        ? library
+              .map((asset) => sanitizeAssetForStorage(asset))
+              .filter(Boolean)
+              .slice(0, MAX_ASSET_LIBRARY_ENTRIES)
+        : [];
+
+const revokeObjectUrl = (value) => {
+    if (typeof value === 'string' && value.startsWith('blob:')) {
+        try {
+            URL.revokeObjectURL(value);
+        } catch (error) {
+            console.warn('Unable to revoke object URL', error);
+        }
+    }
+};
+
+const sanitizeTimelineAssetForStorage = (asset) => {
+    if (!asset) return null;
+    const copy = {
+        ...asset,
+    };
+    if ('trackKey' in copy) {
+        delete copy.trackKey;
+    }
+    if ('trackLabel' in copy) {
+        delete copy.trackLabel;
+    }
+    if (typeof copy.thumbnailUrl === 'string') {
+        const thumb = copy.thumbnailUrl;
+        if (thumb.startsWith('data:') || thumb.startsWith('blob:') || thumb.length > 120000) {
+            copy.thumbnailUrl = null;
+        }
+    }
+    if (copy.metadata && typeof copy.metadata === 'object') {
+        const nextMetadata = { ...copy.metadata };
+        if (typeof nextMetadata.posterUrl === 'string') {
+            const poster = nextMetadata.posterUrl;
+            if (poster.startsWith('data:') || poster.startsWith('blob:') || poster.length > 120000) {
+                delete nextMetadata.posterUrl;
+            }
+        }
+        if ('trackKey' in nextMetadata) {
+            delete nextMetadata.trackKey;
+        }
+        if ('trackLabel' in nextMetadata) {
+            delete nextMetadata.trackLabel;
+        }
+        if (typeof nextMetadata.videoUrl === 'string') {
+            const value = nextMetadata.videoUrl;
+            if (value.startsWith('blob:') || value.startsWith('data:') || value.length > 120000) {
+                delete nextMetadata.videoUrl;
+            }
+        }
+        if (typeof nextMetadata.audioUrl === 'string') {
+            const value = nextMetadata.audioUrl;
+            if (value.startsWith('blob:') || value.startsWith('data:') || value.length > 120000) {
+                delete nextMetadata.audioUrl;
+            }
+        }
+        copy.metadata = nextMetadata;
+    }
+    return copy;
+};
+
+const sanitizeTimelineAssetsForStorage = (assets) =>
+    Array.isArray(assets)
+        ? assets
+              .map((asset) => sanitizeTimelineAssetForStorage(asset))
+              .filter(Boolean)
+        : [];
+
+const formatTimecode = (value) => {
+    const seconds = Math.max(0, Number.isFinite(value) ? value : 0);
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds - minutes * 60;
+    return `${minutes}:${remainder.toFixed(1).padStart(4, '0')}`;
+};
+
+const formatSegmentRange = (start, end) => `${formatTimecode(start)} – ${formatTimecode(end)}`;
+
+const getTimelineSegmentStep = (duration) => {
+    if (!Number.isFinite(duration) || duration <= 0) return 5;
+    if (duration <= 10) return 1;
+    if (duration <= 60) return 5;
+    if (duration <= 300) return 10;
+    if (duration <= 600) return 20;
+    if (duration <= 900) return 30;
+    return 60;
+};
+
+const createSegments = (duration, _step) => {
+    const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 1;
+    return [{ start: 0, duration: safeDuration }];
+};
+
+const createTimelineFrameStub = (frameId, index = 0, overrides = {}) => {
+    const baseX = 160;
+    const baseY = 120;
+    const offsetX = index * 420;
+    return {
+        id: frameId,
+        name: overrides.name ?? `Shot ${index + 1}`,
+        x: overrides.x ?? baseX + offsetX,
+        y: overrides.y ?? baseY,
+        width: overrides.width ?? 1920,
+        height: overrides.height ?? 1080,
+        opacity: overrides.opacity ?? 1,
+        backgroundColor: overrides.backgroundColor ?? DEFAULT_FRAME_BACKGROUND,
+        backgroundImage: overrides.backgroundImage ?? null,
+        backgroundFit: overrides.backgroundFit ?? 'cover',
+        backgroundFillType: overrides.backgroundFillType ?? 'solid',
+        backgroundGradientType: overrides.backgroundGradientType ?? 'linear',
+        backgroundGradientStart: overrides.backgroundGradientStart ?? '#8B5CF6',
+        backgroundGradientEnd: overrides.backgroundGradientEnd ?? '#3B82F6',
+        backgroundGradientAngle: overrides.backgroundGradientAngle ?? 45,
+        backgroundPatternScale: overrides.backgroundPatternScale ?? 1,
+        backgroundPatternOffsetX: overrides.backgroundPatternOffsetX ?? 0,
+        backgroundPatternOffsetY: overrides.backgroundPatternOffsetY ?? 0,
+        backgroundPatternRepeat: overrides.backgroundPatternRepeat ?? 'repeat',
+        backgroundBlendMode: overrides.backgroundBlendMode ?? 'normal',
+        layoutMode: overrides.layoutMode ?? 'absolute',
+        layoutGap: overrides.layoutGap ?? 32,
+        layoutAlign: overrides.layoutAlign ?? 'start',
+        layoutCrossAlign: overrides.layoutCrossAlign ?? 'start',
+        layoutWrap: overrides.layoutWrap ?? DEFAULT_FLEX_WRAP,
+        layoutPadding:
+            overrides.layoutPadding ?? { top: 64, right: 64, bottom: 64, left: 64 },
+        layoutRowGap: overrides.layoutRowGap ?? 32,
+        layoutGridColumns: overrides.layoutGridColumns ?? DEFAULT_GRID_COLUMNS,
+        layoutGridAutoRows: overrides.layoutGridAutoRows ?? DEFAULT_GRID_AUTO_ROWS,
+        timelineDuration: overrides.timelineDuration ?? 20,
+        elements: overrides.elements ?? [],
+    };
 };
 
 const DEFAULT_FRAME_BACKGROUND = '#0F172A';
@@ -1972,10 +2288,12 @@ export const useCanvasStore = create(
             activeToolOverlay: null,
             comments: [],
             timelineAssets: [],
+            timelineSelectedAssetIds: [],
             timelineActions: [],
             assetLibrary: [...DEFAULT_ASSET_LIBRARY],
             assetUploadQueue: [],
             gradientLibrary: [...DEFAULT_GRADIENT_LIBRARY],
+            runtimeMedia: {},
             timelinePlayback: {
                 frameId: null,
                 isPlaying: false,
@@ -2401,6 +2719,7 @@ export const useCanvasStore = create(
             selectedElementId: null,
             selectedElementIds: [],
             activePrototypeFrameId: nextPrototype,
+            timelineSelectedAssetIds: [],
         });
         get().commitHistory('Selection change', 'system');
     },
@@ -4203,8 +4522,13 @@ export const useCanvasStore = create(
         historyLabel,
         skipHistory = false,
         source = 'user',
+        trackKey = null,
     }) => {
-        if (!frameId || !label) return;
+        console.info('addTimelineAsset: invoked', { frameId, label, type, duration, offset });
+        if (!frameId || !label) {
+            console.warn('addTimelineAsset: missing frame or label', { frameId, label });
+            return;
+        }
         const normalizedWaveform = Array.isArray(waveform)
             ? waveform.filter((value) => Number.isFinite(value))
             : typeof waveform === 'string'
@@ -4213,7 +4537,7 @@ export const useCanvasStore = create(
                       .map((value) => Number(value.trim()))
                       .filter((value) => Number.isFinite(value))
                 : null;
-        const newAsset = {
+        const newAsset = sanitizeTimelineAssetForStorage({
             id: `asset-${nanoid(6)}`,
             frameId,
             label,
@@ -4224,10 +4548,22 @@ export const useCanvasStore = create(
             waveform: normalizedWaveform,
             metadata: metadata ? { ...metadata } : {},
             createdAt: new Date().toISOString(),
-        };
-        set((state) => ({
-            timelineAssets: [...state.timelineAssets, newAsset],
-        }));
+            trackKey: trackKey ?? metadata?.trackKey ?? null,
+        });
+        set((state) => {
+            const next = [...state.timelineAssets, newAsset];
+            console.info('addTimelineAsset: state update', {
+                previousCount: state.timelineAssets.length,
+                nextCount: next.length,
+                frameId,
+                label,
+                type,
+            });
+            return {
+                timelineAssets: next,
+                ...(skipHistory ? {} : { timelineSelectedAssetIds: [newAsset.id] }),
+            };
+        });
         get().pushTimelineAction({
             id: `ta-${nanoid(6)}`,
             type: 'add',
@@ -4250,9 +4586,65 @@ export const useCanvasStore = create(
         } = options;
         const existing = get().timelineAssets.find((asset) => asset.id === assetId);
         if (!existing) return;
-        set((state) => ({
-            timelineAssets: state.timelineAssets.filter((asset) => asset.id !== assetId),
-        }));
+        console.info('removeTimelineAsset', assetId, existing.label);
+        const runtimeAssetId = existing.metadata?.assetId ?? existing.assetId ?? null;
+        const trackKey = existing.trackKey ?? existing.metadata?.trackKey ?? null;
+        if (runtimeAssetId && existing.type === 'clip') {
+            const relatedAssets = get()
+                .timelineAssets.filter(
+                    (asset) =>
+                        asset.id !== assetId &&
+                        (asset.metadata?.assetId ?? asset.assetId ?? null) === runtimeAssetId &&
+                        asset.type !== 'clip',
+                )
+                .map((asset) => asset.id);
+            relatedAssets.forEach((relatedId) => {
+                get().removeTimelineAsset(relatedId, {
+                    historyLabel: undefined,
+                    skipHistory: true,
+                    source,
+                });
+            });
+        }
+        let remainingCount = 0;
+        let shouldRemoveLibraryAsset = false;
+        set((state) => {
+            const nextAssets = state.timelineAssets.filter((asset) => asset.id !== assetId);
+            if (runtimeAssetId) {
+                remainingCount = nextAssets.filter((asset) => {
+                    const referenceId = asset.metadata?.assetId ?? asset.assetId ?? null;
+                    return referenceId === runtimeAssetId;
+                }).length;
+                if (remainingCount === 0) {
+                    const libraryAsset = state.assetLibrary.find((asset) => asset.id === runtimeAssetId);
+                    if (libraryAsset && libraryAsset.source === 'upload') {
+                        shouldRemoveLibraryAsset = true;
+                    }
+                }
+            }
+            const nextSelection = state.timelineSelectedAssetIds.filter((id) => id !== assetId);
+            const mutation = {
+                timelineAssets: nextAssets,
+                timelineSelectedAssetIds: nextSelection,
+            };
+            if (shouldRemoveLibraryAsset) {
+                mutation.assetLibrary = state.assetLibrary.filter((asset) => asset.id !== runtimeAssetId);
+            }
+            return mutation;
+        });
+        if (runtimeAssetId && remainingCount === 0) {
+            get().removeRuntimeMedia(runtimeAssetId);
+            if (shouldRemoveLibraryAsset) {
+                console.info('Removed uploaded asset from library after timeline delete', runtimeAssetId);
+            }
+        }
+        if (trackKey) {
+            const stillHasTrack = get()
+                .timelineAssets.some((asset) => (asset.trackKey ?? asset.metadata?.trackKey ?? null) === trackKey);
+            if (!stillHasTrack) {
+                console.info('Timeline track released', trackKey);
+            }
+        }
         get().pushTimelineAction({
             id: `ta-${nanoid(6)}`,
             type: 'remove',
@@ -4267,6 +4659,51 @@ export const useCanvasStore = create(
             get().commitHistory(historyLabel ?? `Remove timeline asset "${assetLabel}"`, source);
         }
     },
+    removeTimelineAssets: (assetIds, options = {}) => {
+        const uniqueIds = Array.from(new Set(Array.isArray(assetIds) ? assetIds : [])).filter(Boolean);
+        if (uniqueIds.length === 0) return;
+        uniqueIds.forEach((assetId, index) => {
+            get().removeTimelineAsset(assetId, {
+                ...options,
+                skipHistory: index > 0 || options.skipHistory,
+                historyLabel:
+                    index === 0
+                        ? options.historyLabel ?? `Timeline: Remove ${uniqueIds.length} clips`
+                        : options.historyLabel,
+            });
+        });
+    },
+    setTimelineSelectedAssets: (assetIds) => {
+        const uniqueIds = Array.from(new Set(Array.isArray(assetIds) ? assetIds : [])).filter(Boolean);
+        set({ timelineSelectedAssetIds: uniqueIds });
+    },
+    selectTimelineAsset: (assetId, { mode = 'replace' } = {}) => {
+        if (!assetId) return;
+        set((state) => {
+            const current = state.timelineSelectedAssetIds ?? [];
+            let next = current;
+            switch (mode) {
+                case 'append':
+                    if (!current.includes(assetId)) {
+                        next = [...current, assetId];
+                    }
+                    break;
+                case 'toggle':
+                    next = current.includes(assetId)
+                        ? current.filter((id) => id !== assetId)
+                        : [...current, assetId];
+                    break;
+                case 'replace':
+                default:
+                    next = [assetId];
+                    break;
+            }
+            return {
+                timelineSelectedAssetIds: next,
+            };
+        });
+    },
+    clearTimelineSelection: () => set({ timelineSelectedAssetIds: [] }),
     updateTimelineAsset: (assetId, updates, options = {}) => {
         const {
             log = true,
@@ -4478,7 +4915,10 @@ export const useCanvasStore = create(
         get().setTimelinePlayhead(asset.frameId, asset.offset ?? 0, { resetTick: true });
     },
     addAssetToLibrary: (asset, options = {}) => {
-        if (!asset) return null;
+        if (!asset) {
+            console.warn('placeAssetOnTimeline: asset not found', assetId);
+            return null;
+        }
         const prepared = {
             id: asset.id ?? `asset-${nanoid(6)}`,
             label: asset.label ?? 'Library asset',
@@ -4503,16 +4943,21 @@ export const useCanvasStore = create(
             favorite: Boolean(asset.favorite),
             createdAt: asset.createdAt ?? new Date().toISOString(),
         };
+        const sanitizedPrepared = sanitizeAssetForStorage(prepared);
+        if (sanitizedPrepared && sanitizedPrepared.metadata == null) {
+            sanitizedPrepared.metadata = {};
+        }
         set((state) => {
-            const filtered = state.assetLibrary.filter((existing) => existing.id !== prepared.id);
+            const filtered = state.assetLibrary.filter((existing) => existing.id !== sanitizedPrepared.id);
+            const limited = [sanitizedPrepared, ...filtered].slice(0, MAX_ASSET_LIBRARY_ENTRIES);
             return {
-                assetLibrary: [prepared, ...filtered],
+                assetLibrary: limited,
             };
         });
         if (!options.skipUsageMark) {
-            get().markAssetUsed(prepared.id);
+            get().markAssetUsed(sanitizedPrepared.id);
         }
-        return prepared.id;
+        return sanitizedPrepared.id;
     },
     updateAssetMetadata: (assetId, updates = {}) => {
         if (!assetId || !updates) return;
@@ -4647,6 +5092,20 @@ export const useCanvasStore = create(
             },
             { skipUsageMark: true },
         );
+        console.info('uploadAssetToLibrary: stored asset', {
+            assetId,
+            label:
+                label ||
+                (looksLikeAudio
+                    ? 'Uploaded audio'
+                    : looksLikeVideo
+                        ? 'Uploaded clip'
+                        : 'Uploaded visual'),
+            assetType,
+            timelineType,
+            mime,
+            name,
+        });
         return assetId;
     },
     ingestTimelineFiles: async ({ files, frameId = null, offset = 0 } = {}) => {
@@ -4656,9 +5115,48 @@ export const useCanvasStore = create(
         );
         if (accepted.length === 0) return [];
         const state = get();
+        const normalizedFrameId =
+            frameId === '' || frameId === undefined ? null : frameId;
         const targetFrameId =
-            frameId ?? state.selectedFrameId ?? state.timelinePlayback.frameId ?? state.frames[0]?.id ?? null;
+            normalizedFrameId ??
+            state.selectedFrameId ??
+            state.timelinePlayback.frameId ??
+            state.frames[0]?.id ??
+            null;
         if (!targetFrameId) return [];
+        const ensureFrameForTimeline = (frameIdToEnsure, duration) => {
+            set((draft) => {
+                const existing = draft.frames.find((frame) => frame.id === frameIdToEnsure);
+                if (existing) {
+                    const existingDuration = existing.timelineDuration ?? 0;
+                    const nextDuration = Math.max(existingDuration, duration ?? existingDuration);
+                    if (nextDuration !== existingDuration) {
+                        return {
+                            frames: draft.frames.map((frame) =>
+                                frame.id === frameIdToEnsure
+                                    ? { ...frame, timelineDuration: nextDuration }
+                                    : frame,
+                            ),
+                        };
+                    }
+                    return {};
+                }
+                const index = draft.frames.length;
+                const stub = createTimelineFrameStub(frameIdToEnsure, index, {
+                    timelineDuration: duration ?? 20,
+                });
+                return {
+                    frames: [...draft.frames, stub],
+                    selectedFrameId: draft.selectedFrameId ?? frameIdToEnsure,
+                };
+            });
+        };
+        set((current) => ({
+            selectedFrameId: targetFrameId,
+            selectedElementId: null,
+            selectedElementIds: [],
+            activePrototypeFrameId: current.activePrototypeFrameId ?? targetFrameId,
+        }));
         let currentOffset = Number.isFinite(offset) ? Math.max(offset, 0) : 0;
         const inserted = [];
         for (const file of accepted) {
@@ -4669,14 +5167,38 @@ export const useCanvasStore = create(
             const label = sanitizeFileLabel(file.name, fallbackLabel);
             try {
                 if (asVideo) {
-                    const dataUrl = await readFileAsDataUrl(file);
-                    if (!dataUrl) continue;
-                    const analysis = await analyzeVideoSource(dataUrl);
+                    let playbackSource = null;
+                    try {
+                        if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+                            playbackSource = URL.createObjectURL(file);
+                        }
+                    } catch (urlError) {
+                        console.warn('Unable to create object URL for video', urlError);
+                    }
+                    if (!playbackSource) {
+                        playbackSource = await readFileAsDataUrl(file);
+                    }
+                    if (!playbackSource) continue;
+                    let videoBuffer = null;
+                    try {
+                        videoBuffer = await file.arrayBuffer();
+                    } catch (error) {
+                        videoBuffer = null;
+                    }
+                    const analysis = await analyzeVideoSource(playbackSource);
+                    let audioInfo = null;
+                    if (videoBuffer) {
+                        try {
+                            audioInfo = await extractAudioFeatures(videoBuffer);
+                        } catch (error) {
+                            audioInfo = null;
+                        }
+                    }
                     const posterUrl =
                         analysis.posterUrl ?? createPlaceholderThumbnail(label) ?? null;
                     const assetId = get().uploadAssetToLibrary({
                         name: file.name ?? label,
-                        dataUrl,
+                        dataUrl: playbackSource,
                         mime: type || 'video/mp4',
                         duration: analysis.duration ?? undefined,
                         metadata: {
@@ -4687,32 +5209,134 @@ export const useCanvasStore = create(
                         },
                     });
                     if (!assetId) continue;
+                    get().registerRuntimeMedia(assetId, {
+                        videoUrl: playbackSource,
+                        posterUrl,
+                        audioUrl: playbackSource,
+                    });
                     const clipDuration = Number.isFinite(analysis.duration)
                         ? analysis.duration
                         : undefined;
-                    get().placeAssetOnTimeline(assetId, targetFrameId, {
-                        offset: currentOffset,
-                        ...(clipDuration ? { duration: clipDuration } : {}),
+                    const timelineDuration = clipDuration ?? 6;
+                    const clipStart = currentOffset;
+                    ensureFrameForTimeline(targetFrameId, clipStart + timelineDuration);
+                    const segmentStep = getTimelineSegmentStep(timelineDuration);
+                    const videoSegments = createSegments(timelineDuration, segmentStep);
+                    videoSegments.forEach((segment, index) => {
+                        const segmentOffset = clipStart + segment.start;
+                        const segmentLabel =
+                            videoSegments.length > 1
+                                ? `${label} — ${formatSegmentRange(segment.start, segment.start + segment.duration)}`
+                                : label;
+                        get().addTimelineAsset({
+                            frameId: targetFrameId,
+                            label: segmentLabel,
+                            type: 'clip',
+                            duration: segment.duration,
+                            offset: segmentOffset,
+                            thumbnailUrl: index === 0 ? posterUrl : null,
+                            metadata: {
+                                assetId,
+                                posterUrl: index === 0 ? posterUrl : undefined,
+                                segmentStart: segment.start,
+                                segmentDuration: segment.duration,
+                                width: analysis.width ?? undefined,
+                                height: analysis.height ?? undefined,
+                                originalFileName: file.name ?? undefined,
+                            },
+                            historyLabel: index === 0 ? `Timeline: Insert "${label}"` : undefined,
+                            source: 'upload',
+                            skipHistory: index > 0,
+                        });
+                        inserted.push({
+                            assetId,
+                            offset: segmentOffset,
+                            duration: segment.duration,
+                            type: 'video',
+                        });
                     });
-                    inserted.push({
-                        assetId,
-                        offset: currentOffset,
-                        duration: clipDuration ?? null,
-                        type: 'video',
-                    });
-                    if (clipDuration) {
-                        currentOffset += clipDuration;
+                    if (audioInfo && (Number.isFinite(audioInfo.duration) || Array.isArray(audioInfo.waveform))) {
+                        const audioDuration = Number.isFinite(audioInfo.duration)
+                            ? audioInfo.duration
+                            : timelineDuration;
+                        const audioSegments = createSegments(audioDuration, getTimelineSegmentStep(audioDuration));
+                        const waveformValues = Array.isArray(audioInfo.waveform) ? audioInfo.waveform : [];
+                        let waveformCursor = 0;
+                        audioSegments.forEach((segment) => {
+                            const segmentOffset = clipStart + segment.start;
+                            let segmentWaveform = null;
+                            if (waveformValues.length > 0) {
+                                const sampleCount = Math.max(
+                                    1,
+                                    Math.round((segment.duration / audioDuration) * waveformValues.length),
+                                );
+                                segmentWaveform = waveformValues.slice(
+                                    waveformCursor,
+                                    waveformCursor + sampleCount,
+                                );
+                                waveformCursor += sampleCount;
+                            }
+                            const segmentLabel =
+                                audioSegments.length > 1
+                                    ? `${label} (Audio) — ${formatSegmentRange(
+                                          segment.start,
+                                          segment.start + segment.duration,
+                                      )}`
+                                    : `${label} (Audio)`;
+                            get().addTimelineAsset({
+                                frameId: targetFrameId,
+                                label: segmentLabel,
+                                type: 'audio',
+                                duration: segment.duration,
+                                offset: segmentOffset,
+                                waveform: segmentWaveform ?? undefined,
+                                metadata: {
+                                    assetId,
+                                    derivedFrom: 'video',
+                                    segmentStart: segment.start,
+                                    segmentDuration: segment.duration,
+                                    originalFileName: file.name ?? undefined,
+                                },
+                                historyLabel: undefined,
+                                source: 'upload',
+                                skipHistory: true,
+                            });
+                            inserted.push({
+                                assetId,
+                                offset: segmentOffset,
+                                duration: segment.duration,
+                                type: 'audio',
+                            });
+                        });
                     }
+                    get().markAssetUsed(assetId);
+                    get().setTimelinePlayhead(targetFrameId, clipStart, { resetTick: true });
+                    console.info('Ingested video file', {
+                        file: file.name,
+                        assetId,
+                        frameId: targetFrameId,
+                        offset: clipStart,
+                        clipDuration,
+                    });
+                    currentOffset = clipStart + timelineDuration;
                 } else if (asAudio) {
-                    const [dataUrl, arrayBuffer] = await Promise.all([
-                        readFileAsDataUrl(file),
-                        file.arrayBuffer(),
-                    ]);
-                    if (!dataUrl || !arrayBuffer) continue;
+                    const [arrayBuffer] = await Promise.all([file.arrayBuffer()]);
+                    let audioUrl = null;
+                    try {
+                        if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+                            audioUrl = URL.createObjectURL(file);
+                        }
+                    } catch (urlError) {
+                        console.warn('Unable to create object URL for audio', urlError);
+                    }
+                    if (!audioUrl) {
+                        audioUrl = await readFileAsDataUrl(file);
+                    }
+                    if (!audioUrl || !arrayBuffer) continue;
                     const audioInfo = await extractAudioFeatures(arrayBuffer);
                     const assetId = get().uploadAssetToLibrary({
                         name: file.name ?? label,
-                        dataUrl,
+                        dataUrl: audioUrl,
                         mime: type || 'audio/mpeg',
                         duration: audioInfo.duration ?? undefined,
                         metadata: {
@@ -4721,27 +5345,73 @@ export const useCanvasStore = create(
                         waveform: audioInfo.waveform ?? undefined,
                     });
                     if (!assetId) continue;
+                    get().registerRuntimeMedia(assetId, { audioUrl });
                     const audioDuration = Number.isFinite(audioInfo.duration)
                         ? audioInfo.duration
                         : undefined;
-                    get().placeAssetOnTimeline(assetId, targetFrameId, {
-                        offset: currentOffset,
-                        ...(audioDuration ? { duration: audioDuration } : {}),
+                    const timelineDuration = audioDuration ?? 12;
+                    ensureFrameForTimeline(targetFrameId, (currentOffset ?? 0) + timelineDuration);
+                    const audioSegments = createSegments(timelineDuration, getTimelineSegmentStep(timelineDuration));
+                    const waveformValues = Array.isArray(audioInfo.waveform) ? audioInfo.waveform : [];
+                    let waveformCursor = 0;
+                    audioSegments.forEach((segment, index) => {
+                        const segmentOffset = currentOffset + segment.start;
+                        let segmentWaveform = null;
+                        if (waveformValues.length > 0) {
+                            const sampleCount = Math.max(
+                                1,
+                                Math.round((segment.duration / timelineDuration) * waveformValues.length),
+                            );
+                            segmentWaveform = waveformValues.slice(
+                                waveformCursor,
+                                waveformCursor + sampleCount,
+                            );
+                            waveformCursor += sampleCount;
+                        }
+                        const segmentLabel =
+                            audioSegments.length > 1
+                                ? `${label} — ${formatSegmentRange(segment.start, segment.start + segment.duration)}`
+                                : label;
+                        get().addTimelineAsset({
+                            frameId: targetFrameId,
+                            label: segmentLabel,
+                            type: 'audio',
+                            duration: segment.duration,
+                            offset: segmentOffset,
+                            waveform: segmentWaveform ?? undefined,
+                            metadata: {
+                                assetId,
+                                segmentStart: segment.start,
+                                segmentDuration: segment.duration,
+                                originalFileName: file.name ?? undefined,
+                            },
+                            historyLabel: index === 0 ? `Timeline: Insert "${label}"` : undefined,
+                            source: 'upload',
+                            skipHistory: index > 0,
+                        });
+                        inserted.push({
+                            assetId,
+                            offset: segmentOffset,
+                            duration: segment.duration,
+                            type: 'audio',
+                        });
                     });
-                    inserted.push({
+                    get().markAssetUsed(assetId);
+                    get().setTimelinePlayhead(targetFrameId, currentOffset, { resetTick: true });
+                    console.info('Ingested audio file', {
+                        file: file.name,
                         assetId,
+                        frameId: targetFrameId,
                         offset: currentOffset,
-                        duration: audioDuration ?? null,
-                        type: 'audio',
+                        audioDuration,
                     });
-                    if (audioDuration) {
-                        currentOffset += audioDuration;
-                    }
+                    currentOffset += timelineDuration;
                 }
             } catch (error) {
                 console.error('Unable to ingest timeline file', error);
             }
         }
+        console.info('Timeline assets snapshot', get().timelineAssets);
         return inserted;
     },
     generateAiAsset: ({ prompt = '', kind = 'image' } = {}) => {
@@ -4760,26 +5430,28 @@ export const useCanvasStore = create(
             },
         };
         set((state) => ({
-            assetLibrary: [pending, ...state.assetLibrary],
+            assetLibrary: [pending, ...state.assetLibrary].slice(0, MAX_ASSET_LIBRARY_ENTRIES),
         }));
         const delay = 900 + Math.round(Math.random() * 900);
         setTimeout(() => {
             const finalDefinition = buildAiAssetDefinition(kind, `${prompt}`.trim());
             set((state) => ({
-                assetLibrary: state.assetLibrary.map((asset) =>
-                    asset.id === tempId
-                        ? {
-                              ...asset,
-                              ...finalDefinition,
-                              status: 'ready',
-                              metadata: {
-                                  ...(asset.metadata ?? {}),
-                                  ...(finalDefinition.metadata ?? {}),
-                                  generatedAt: new Date().toISOString(),
-                              },
-                          }
-                        : asset,
-                ),
+                assetLibrary: state.assetLibrary
+                    .map((asset) =>
+                        asset.id === tempId
+                            ? {
+                                  ...asset,
+                                  ...finalDefinition,
+                                  status: 'ready',
+                                  metadata: {
+                                      ...(asset.metadata ?? {}),
+                                      ...(finalDefinition.metadata ?? {}),
+                                      generatedAt: new Date().toISOString(),
+                                  },
+                              }
+                            : asset,
+                    )
+                    .slice(0, MAX_ASSET_LIBRARY_ENTRIES),
             }));
         }, delay);
         return tempId;
@@ -4789,6 +5461,7 @@ export const useCanvasStore = create(
         set((state) => ({
             assetLibrary: state.assetLibrary.filter((asset) => asset.id !== assetId),
         }));
+        get().removeRuntimeMedia(assetId);
     },
     addGradientPreset: (preset) => {
         if (!preset || !preset.id) return;
@@ -4804,12 +5477,56 @@ export const useCanvasStore = create(
             };
         });
     },
-    removeGradientPreset: (id) => {
-        if (!id) return;
-        set((state) => ({
-            gradientLibrary: state.gradientLibrary.filter((item) => item.id !== id),
-        }));
-    },
+            removeGradientPreset: (id) => {
+                if (!id) return;
+                set((state) => ({
+                    gradientLibrary: state.gradientLibrary.filter((item) => item.id !== id),
+                }));
+            },
+            registerRuntimeMedia: (assetId, payload = {}) => {
+                if (!assetId || !payload) return;
+                set((state) => ({
+                    runtimeMedia: {
+                        ...state.runtimeMedia,
+                        [assetId]: {
+                            ...(state.runtimeMedia?.[assetId] ?? {}),
+                            ...payload,
+                        },
+                    },
+                }));
+            },
+            removeRuntimeMedia: (assetId) => {
+                if (!assetId) return;
+                set((state) => {
+                    if (!state.runtimeMedia?.[assetId]) return {};
+                    const existing = state.runtimeMedia[assetId];
+                    revokeObjectUrl(existing.videoUrl);
+                    revokeObjectUrl(existing.audioUrl);
+                    const next = { ...state.runtimeMedia };
+                    delete next[assetId];
+                    return { runtimeMedia: next };
+                });
+            },
+            pruneUploadMedia: () => {
+                set((state) => {
+                    const sanitizedLibrary = state.assetLibrary.map((asset) => {
+                        if (!asset || asset.source !== 'upload') return asset;
+                        const sanitized = sanitizeAssetForStorage(asset);
+                        return {
+                            ...sanitized,
+                            metadata: sanitized.metadata ?? {},
+                        };
+                    });
+                    return {
+                        assetLibrary: sanitizedLibrary,
+                    };
+                });
+            },
+            pruneTimelineAssets: () => {
+                set((state) => ({
+                    timelineAssets: sanitizeTimelineAssetsForStorage(state.timelineAssets),
+                }));
+            },
     placeAssetOnFrame: (assetId, frameId = null, options = {}) => {
         const state = get();
         const asset = state.assetLibrary.find((item) => item.id === assetId);
@@ -4900,12 +5617,29 @@ export const useCanvasStore = create(
         const state = get();
         const asset = state.assetLibrary.find((item) => item.id === assetId);
         if (!asset) return null;
+        const normalizedFrameId =
+            frameId === '' || frameId === undefined ? null : frameId;
         const targetFrameId =
-            frameId ?? state.selectedFrameId ?? state.timelinePlayback.frameId ?? state.frames[0]?.id ?? null;
+            normalizedFrameId ??
+            state.selectedFrameId ??
+            state.timelinePlayback.frameId ??
+            state.frames[0]?.id ??
+            null;
         if (!targetFrameId) return null;
         const frame = state.frames.find((item) => item.id === targetFrameId);
-        if (!frame) return null;
+        if (!frame) {
+            console.warn('placeAssetOnTimeline: frame not found', {
+                targetFrameId,
+                availableFrames: state.frames.map((item) => item.id),
+            });
+            return null;
+        }
         if (asset.type !== 'timeline') {
+            console.warn('placeAssetOnTimeline: asset not timeline type, redirecting to frame', {
+                assetId,
+                assetType: asset.type,
+                timelineType: asset.timelineType,
+            });
             return get().placeAssetOnFrame(assetId, targetFrameId, options);
         }
         const duration = Math.max(Number(options.duration ?? asset.duration ?? 4) || 4, 0.25);
@@ -4915,6 +5649,13 @@ export const useCanvasStore = create(
             (asset.preview?.kind === 'image' ? asset.preview.value : null) ??
             asset.props?.imageUrl ??
             null;
+        console.info('placeAssetOnTimeline: adding asset', {
+            assetId,
+            frameId: frame.id,
+            label: asset.label,
+            assetType: asset.type,
+            timelineType: asset.timelineType,
+        });
         get().addTimelineAsset({
             frameId: frame.id,
             label: asset.label ?? 'Timeline asset',
@@ -4923,9 +5664,20 @@ export const useCanvasStore = create(
             offset,
             thumbnailUrl: posterSource,
             waveform: asset.waveform ?? null,
-            metadata: asset.metadata ?? {},
+            metadata: {
+                ...(asset.metadata ?? {}),
+                assetId,
+            },
             historyLabel: `Timeline: Insert "${asset.label ?? 'asset'}"`,
             source: 'asset-library',
+        });
+        console.info('Placed timeline asset', {
+            frameId: frame.id,
+            assetId,
+            label: asset.label,
+            duration,
+            offset,
+            timelineType: asset.timelineType,
         });
         get().markAssetUsed(assetId);
         const modeConfig = MODE_ASSETS[state.mode] ?? {};
@@ -5130,7 +5882,8 @@ export const useCanvasStore = create(
         }),
         {
             name: 'dropple-canvas-state',
-            version: 1,
+            version: 2,
+            storage: canvasPersistStorage,
             partialize: (state) => ({
                 mode: state.mode,
                 scale: state.scale,
@@ -5139,16 +5892,75 @@ export const useCanvasStore = create(
                 selectedFrameId: state.selectedFrameId,
                 frameLinks: state.frameLinks,
                 comments: state.comments,
-                timelineAssets: state.timelineAssets,
+                timelineAssets: sanitizeTimelineAssetsForStorage(state.timelineAssets),
                 prototypeMode: state.prototypeMode,
                 activePrototypeFrameId: state.activePrototypeFrameId,
                 gridVisible: state.gridVisible,
                 gridSize: state.gridSize,
+                assetLibrary: sanitizeAssetLibraryForStorage(state.assetLibrary),
                 modeState: prepareModeStateForStorage(state.modeState),
             }),
+            migrate: (persistedState, version) => {
+                if (!persistedState || typeof persistedState !== 'object') {
+                    return persistedState;
+                }
+                const next = { ...persistedState };
+                if (next.assetLibrary) {
+                    next.assetLibrary = sanitizeAssetLibraryForStorage(next.assetLibrary);
+                }
+                if (next.timelineAssets) {
+                    next.timelineAssets = sanitizeTimelineAssetsForStorage(next.timelineAssets);
+                }
+                return next;
+            },
         },
     ),
 );
+
+try {
+    useCanvasStore.getState().pruneUploadMedia();
+} catch (error) {
+    console.warn('Unable to prune upload media on init', error);
+}
+try {
+    useCanvasStore.getState().pruneTimelineAssets();
+} catch (error) {
+    console.warn('Unable to prune timeline assets on init', error);
+}
+
+try {
+    const initState = useCanvasStore.getState();
+    if ((initState.frames?.length ?? 0) === 0 && (initState.timelineAssets?.length ?? 0) > 0) {
+        const groups = new Map();
+        initState.timelineAssets.forEach((asset) => {
+            const frameId = asset.frameId ?? 'frame-inbox';
+            if (!groups.has(frameId)) {
+                groups.set(frameId, {
+                    id: frameId,
+                    duration: 0,
+                });
+            }
+            const entry = groups.get(frameId);
+            const endpoint = (asset.offset ?? 0) + (asset.duration ?? 0);
+            entry.duration = Math.max(entry.duration, endpoint);
+        });
+        useCanvasStore.setState((state) => {
+            if ((state.frames?.length ?? 0) > 0) return state;
+            const generatedFrames = Array.from(groups.values()).map((group, index) =>
+                createTimelineFrameStub(group.id, index, {
+                    timelineDuration: group.duration || 20,
+                }),
+            );
+            return {
+                ...state,
+                frames: generatedFrames,
+                selectedFrameId: state.selectedFrameId ?? generatedFrames[0]?.id ?? null,
+            };
+        });
+    }
+} catch (error) {
+    console.warn('Unable to reconcile timeline frames on init', error);
+}
 
 configureHistory(() => {
     const state = useCanvasStore.getState();
