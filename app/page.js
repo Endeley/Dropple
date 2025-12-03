@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { ModeSection } from './components/ModeSection';
+import { ModeSection } from '../components/modes/ModeSection';
 import { modes, primaryAccent } from './modes';
 
 export default function Home() {

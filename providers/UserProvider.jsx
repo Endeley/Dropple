@@ -11,12 +11,19 @@ export function ConvexUserSync() {
 
   useEffect(() => {
     if (!user) return;
-
-    // Fire-and-forget; the mutation is idempotent per stackUserId.
     ensureUser().catch((err) =>
       console.error("Failed to sync user to Convex:", err),
     );
   }, [user, ensureUser]);
 
   return null;
+}
+
+export function UserProvider({ children }) {
+  return (
+    <>
+      <ConvexUserSync />
+      {children}
+    </>
+  );
 }

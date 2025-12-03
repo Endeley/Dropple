@@ -1,8 +1,8 @@
 "use client";
 
 import { Suspense } from "react";
-import { useUser } from "@stackframe/stack";
 import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
+import { useUser } from "@stackframe/stack";
 import { stackClientApp } from "../stack/client";
 
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
@@ -26,7 +26,7 @@ function useStackConvexAuth() {
   };
 }
 
-export function ConvexClientProvider({ children }) {
+export function ConvexProvider({ children }) {
   return (
     <Suspense fallback={null}>
       <ConvexProviderWithAuth client={convexClient} useAuth={useStackConvexAuth}>

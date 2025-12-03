@@ -11,4 +11,38 @@ export default defineSchema({
   })
     .index("by_stack_user", ["stackUserId"])
     .index("by_email", ["email"]),
+  templates: defineTable({
+    name: v.string(),
+    mode: v.string(),
+    userId: v.string(),
+    thumbnail: v.optional(v.string()),
+    tags: v.array(v.string()),
+    category: v.optional(v.string()),
+    width: v.number(),
+    height: v.number(),
+    layers: v.array(
+      v.object({
+        id: v.string(),
+        type: v.string(),
+        x: v.number(),
+        y: v.number(),
+        width: v.number(),
+        height: v.number(),
+        rotation: v.optional(v.number()),
+        url: v.optional(v.string()),
+        content: v.optional(v.string()),
+        props: v.optional(v.any()),
+      }),
+    ),
+    isPublished: v.boolean(),
+    price: v.optional(v.number()),
+    purchases: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    version: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_mode", ["mode"])
+    .index("by_published", ["isPublished"])
+    .index("by_category", ["category"]),
 });
