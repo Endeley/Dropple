@@ -1,7 +1,15 @@
 import { getConvexProvidersConfig } from "@stackframe/stack";
 
-export default {
+const projectId = process.env.NEXT_PUBLIC_STACK_PROJECT_ID;
+
+if (!projectId) {
+  throw new Error("NEXT_PUBLIC_STACK_PROJECT_ID is not set");
+}
+
+const authConfig = {
   providers: getConvexProvidersConfig({
-    projectId: process.env.NEXT_PUBLIC_STACK_PROJECT_ID,
+    projectId,
   }),
 };
+
+export default authConfig;
