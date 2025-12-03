@@ -13,6 +13,7 @@ export default defineSchema({
     .index("by_email", ["email"]),
   templates: defineTable({
     name: v.string(),
+    description: v.optional(v.string()),
     mode: v.string(),
     userId: v.string(),
     thumbnail: v.optional(v.string()),
@@ -45,4 +46,23 @@ export default defineSchema({
     .index("by_mode", ["mode"])
     .index("by_published", ["isPublished"])
     .index("by_category", ["category"]),
+  assets: defineTable({
+    userId: v.string(),
+    fileId: v.string(),
+    url: v.string(),
+    filename: v.string(),
+    type: v.string(),
+    size: v.number(),
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]),
+  components: defineTable({
+    userId: v.string(),
+    name: v.string(),
+    category: v.string(),
+    tags: v.array(v.string()),
+    nodes: v.array(v.any()),
+    variants: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
 });

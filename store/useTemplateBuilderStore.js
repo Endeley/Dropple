@@ -32,6 +32,10 @@ export const useTemplateBuilderStore = create((set, get) => ({
     pan: { x: 0, y: 0 },
   },
 
+  editingTextId: null,
+  setEditingTextId: (id) => set({ editingTextId: id }),
+  stopEditingText: () => set({ editingTextId: null }),
+
   /* --------------------------------------------------------
    * ACTIVE TOOL
    * -------------------------------------------------------- */
@@ -72,6 +76,41 @@ export const useTemplateBuilderStore = create((set, get) => ({
     set({ saveTimeout: timeout });
   },
 
+  generateThumbnail: async (scale = 2) => {
+    const { currentTemplate } = get();
+    const html2canvas = (await import("html2canvas")).default;
+
+    const element = document.getElementById("dropple-canvas");
+    if (!element) return null;
+
+    const canvas = await html2canvas(element, {
+      backgroundColor: null,
+      scale,
+      useCORS: true,
+    });
+
+    // Normalize width for consistent thumbnails (optional step)
+    const desiredWidth = 900;
+    const ratio = canvas.width / canvas.height;
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = desiredWidth;
+    tempCanvas.height = desiredWidth / ratio;
+    const ctx = tempCanvas.getContext("2d");
+    ctx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
+
+    const thumbnail = tempCanvas.toDataURL("image/webp", 0.9);
+
+    await fetch("/api/templates/thumbnail", {
+      method: "POST",
+      body: JSON.stringify({
+        id: currentTemplate.id,
+        thumbnail,
+      }),
+    });
+
+    return thumbnail;
+  },
+
   /* --------------------------------------------------------
    * TEMPLATE MODE / LOADING
    * -------------------------------------------------------- */
@@ -79,34 +118,37 @@ export const useTemplateBuilderStore = create((set, get) => ({
   setEditingMode: (value) => set({ editingMode: value }),
 
   loadTemplateFromDB: async (templateId) => {
-    console.log("Loading template:", templateId);
+    try {
+      const res = await fetch("/api/templates/get", {
+        method: "POST",
+        body: JSON.stringify({ id: templateId }),
+      });
 
-    const mockTemplate = {
-      id: templateId,
-      name: "Loaded Template",
-      mode: "uiux",
-      width: 1440,
-      height: 1024,
-      layers: [
-        {
-          id: "layer1",
-          type: "text",
-          content: "Hello World",
-          x: 120,
-          y: 140,
-          width: 300,
-          height: 60,
-          props: {
-            fontSize: 32,
-            fontWeight: 600,
-            color: "#222222",
-          },
+      const data = await res.json();
+      const tpl = data.template;
+
+      if (!tpl) {
+        console.error("Template not found:", templateId);
+        return;
+      }
+
+      set({
+        currentTemplate: {
+          id: tpl._id,
+          name: tpl.name,
+          description: tpl.description,
+          mode: tpl.mode,
+          width: tpl.width,
+          height: tpl.height,
+          layers: tpl.layers || [],
+          tags: tpl.tags || [],
+          thumbnail: tpl.thumbnail || "",
         },
-      ],
-      tags: ["ui", "app"],
-    };
-
-    set({ currentTemplate: mockTemplate });
+        editingMode: true,
+      });
+    } catch (err) {
+      console.error("Error loading template:", err);
+    }
   },
 
   /* --------------------------------------------------------
@@ -173,6 +215,23 @@ export const useTemplateBuilderStore = create((set, get) => ({
       props: {},
     });
     set({ selectedLayerId: id });
+  },
+
+  addComponentInstance: (component) => {
+    const id = "instance_" + crypto.randomUUID();
+    get().addLayer({
+      id,
+      type: "component-instance",
+      componentId: component._id,
+      nodes: component.nodes,
+      x: 200,
+      y: 200,
+      width: 300,
+      height: 200,
+      overrides: {},
+    });
+    set({ selectedLayerId: id });
+    get().triggerAutoSave();
   },
 
   deleteLayer: (layerId) => {
@@ -245,4 +304,22 @@ export const useTemplateBuilderStore = create((set, get) => ({
         tags,
       },
     }),
+
+  publishTemplate: async ({ title, description, price, tags, category }) => {
+    const { currentTemplate } = get();
+
+    await fetch("/api/templates/publish", {
+      method: "POST",
+      body: JSON.stringify({
+        id: currentTemplate.id,
+        title,
+        description,
+        price,
+        tags,
+        category,
+      }),
+    });
+
+    console.log("Template published:", currentTemplate.id);
+  },
 }));

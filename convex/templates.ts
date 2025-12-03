@@ -76,11 +76,17 @@ export const updateLayers = mutation({
 export const publishTemplate = mutation({
   args: {
     id: v.id("templates"),
+    title: v.string(),
+    description: v.optional(v.string()),
     price: v.optional(v.number()),
     tags: v.optional(v.array(v.string())),
+    category: v.optional(v.string()),
   },
-  handler: async ({ db }, { id, price, tags }) => {
+  handler: async ({ db }, { id, title, description, price, tags, category }) => {
     return await db.patch(id, {
+      name: title,
+      description,
+      category,
       isPublished: true,
       price: price ?? 0,
       tags: tags ?? [],

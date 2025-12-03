@@ -20,11 +20,9 @@ export default function EditTemplatePage({ params }) {
 
   // Load template once on page mount
   useEffect(() => {
-    if (templateId) {
-      loadTemplateFromDB(templateId);
-      setEditingMode(true);
-    }
-  }, [templateId, loadTemplateFromDB, setEditingMode]);
+    if (!templateId) return;
+    loadTemplateFromDB(templateId);
+  }, [templateId, loadTemplateFromDB]);
 
   return (
     <div className="w-full h-screen flex flex-col bg-gray-50">
