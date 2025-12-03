@@ -3,8 +3,14 @@
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 
 export default function TemplateToolbar() {
-  const { activeTool, setActiveTool, addTextLayer, addRectangleLayer, addImageLayer } =
-    useTemplateBuilderStore();
+  const {
+    activeTool,
+    setActiveTool,
+    addTextLayer,
+    addRectangleLayer,
+    addImageLayer,
+    addFrameLayer,
+  } = useTemplateBuilderStore();
 
   function handleToolClick(tool) {
     setActiveTool(tool);
@@ -12,6 +18,7 @@ export default function TemplateToolbar() {
     if (tool === "text") addTextLayer();
     if (tool === "shape") addRectangleLayer();
     if (tool === "image") addImageLayer();
+    if (tool === "frame") addFrameLayer();
   }
 
   const btn = (label, tool) => (
@@ -30,6 +37,7 @@ export default function TemplateToolbar() {
       {btn("Select", "select")}
       {btn("Text", "text")}
       {btn("Shape", "shape")}
+      {btn("Frame", "frame")}
       {btn("Image", "image")}
       {btn("Component", "component")}
     </div>

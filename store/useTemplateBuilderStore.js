@@ -2,6 +2,27 @@
 
 import { create } from "zustand";
 
+const defaultAutoLayout = {
+  enabled: false,
+  direction: "vertical",
+  padding: 16,
+  gap: 12,
+  align: "start",
+  hugging: false,
+};
+
+const defaultConstraints = {
+  horizontal: "left",
+  vertical: "top",
+};
+
+const defaultLayerMeta = {
+  locked: false,
+  hidden: false,
+  expanded: true,
+  name: "Layer",
+};
+
 export const useTemplateBuilderStore = create((set, get) => ({
   /* --------------------------------------------------------
    * CORE TEMPLATE STATE
@@ -17,14 +38,19 @@ export const useTemplateBuilderStore = create((set, get) => ({
     layers: [],
     tags: [],
   },
+  components: [],
 
   editingMode: false, // false = create, true = edit
+  isEditingComponent: false,
+  editingComponentId: null,
+  editingVariantId: null,
 
   /* --------------------------------------------------------
    * UI STATE
    * -------------------------------------------------------- */
 
   selectedLayerId: null,
+  selectedLayers: [],
   hoveredLayerId: null,
 
   canvas: {
@@ -32,9 +58,15 @@ export const useTemplateBuilderStore = create((set, get) => ({
     pan: { x: 0, y: 0 },
   },
 
+  snapThreshold: 6,
+  activeGuides: [],
+  setActiveGuides: (guides) => set({ activeGuides: guides }),
+
   editingTextId: null,
   setEditingTextId: (id) => set({ editingTextId: id }),
   stopEditingText: () => set({ editingTextId: null }),
+
+  setComponents: (components) => set({ components }),
 
   /* --------------------------------------------------------
    * ACTIVE TOOL
@@ -151,16 +183,74 @@ export const useTemplateBuilderStore = create((set, get) => ({
     }
   },
 
+  enterComponentEdit: (componentId, variantId = null, componentData = null) =>
+    set((state) => {
+      let components = state.components || [];
+      if (!components.find((c) => c._id === componentId) && componentData) {
+        components = [
+          ...components,
+          {
+            _id: componentId,
+            name: componentData.name || "Component",
+            nodes: componentData.nodes || [],
+            variants: componentData.variants || [],
+          },
+        ];
+      }
+
+      return {
+        components,
+        isEditingComponent: true,
+        editingComponentId: componentId,
+        editingVariantId: variantId,
+        selectedLayerId: null,
+        selectedLayers: [],
+      };
+    }),
+
+  exitComponentEdit: () =>
+    set({
+      isEditingComponent: false,
+      editingComponentId: null,
+      editingVariantId: null,
+      selectedLayerId: null,
+      selectedLayers: [],
+    }),
+
   /* --------------------------------------------------------
    * LAYER MANAGEMENT
    * -------------------------------------------------------- */
 
-  addLayer: (layer) => {
-    set({
-      currentTemplate: {
-        ...get().currentTemplate,
-        layers: [...get().currentTemplate.layers, layer],
-      },
+  addLayer: (layer, parentId = null) => {
+    const layerWithDefaults = {
+      parentId: parentId ?? layer.parentId ?? null,
+      children: layer.children ?? [],
+      autoLayout: layer.autoLayout ?? defaultAutoLayout,
+      constraints: layer.constraints ?? defaultConstraints,
+      locked: layer.locked ?? defaultLayerMeta.locked,
+      hidden: layer.hidden ?? defaultLayerMeta.hidden,
+      expanded: layer.expanded ?? defaultLayerMeta.expanded,
+      name: layer.name ?? defaultLayerMeta.name,
+      ...layer,
+    };
+
+    set((state) => {
+      let layers = [...state.currentTemplate.layers, layerWithDefaults];
+
+      if (parentId) {
+        layers = layers.map((l) =>
+          l.id === parentId && l.type === "frame"
+            ? { ...l, children: [...(l.children || []), layerWithDefaults.id] }
+            : l,
+        );
+      }
+
+      return {
+        currentTemplate: {
+          ...state.currentTemplate,
+          layers,
+        },
+      };
     });
 
     get().triggerAutoSave();
@@ -168,6 +258,10 @@ export const useTemplateBuilderStore = create((set, get) => ({
 
   addTextLayer: () => {
     const id = "text_" + crypto.randomUUID();
+    const parent = get()
+      .currentTemplate.layers.find(
+        (l) => l.id === get().selectedLayerId && l.type === "frame",
+      );
     get().addLayer({
       id,
       type: "text",
@@ -181,12 +275,16 @@ export const useTemplateBuilderStore = create((set, get) => ({
         fontWeight: 500,
         color: "#000",
       },
-    });
+    }, parent?.id);
     set({ selectedLayerId: id });
   },
 
   addRectangleLayer: () => {
     const id = "rect_" + crypto.randomUUID();
+    const parent = get()
+      .currentTemplate.layers.find(
+        (l) => l.id === get().selectedLayerId && l.type === "frame",
+      );
     get().addLayer({
       id,
       type: "rect",
@@ -198,12 +296,16 @@ export const useTemplateBuilderStore = create((set, get) => ({
         fill: "#3b82f6",
         borderRadius: 8,
       },
-    });
+    }, parent?.id);
     set({ selectedLayerId: id });
   },
 
   addImageLayer: (url = "/placeholder-image.png") => {
     const id = "img_" + crypto.randomUUID();
+    const parent = get()
+      .currentTemplate.layers.find(
+        (l) => l.id === get().selectedLayerId && l.type === "frame",
+      );
     get().addLayer({
       id,
       type: "image",
@@ -213,25 +315,124 @@ export const useTemplateBuilderStore = create((set, get) => ({
       width: 300,
       height: 200,
       props: {},
-    });
+    }, parent?.id);
     set({ selectedLayerId: id });
   },
 
-  addComponentInstance: (component) => {
+  addComponentInstance: (component, variantId = null) => {
     const id = "instance_" + crypto.randomUUID();
+    const parent = get()
+      .currentTemplate.layers.find(
+        (l) => l.id === get().selectedLayerId && l.type === "frame",
+      );
     get().addLayer({
       id,
       type: "component-instance",
       componentId: component._id,
+      componentNodes: component.nodes,
+      componentVariants: component.variants || [],
       nodes: component.nodes,
+      variantId,
       x: 200,
       y: 200,
       width: 300,
       height: 200,
       overrides: {},
-    });
+    }, parent?.id);
     set({ selectedLayerId: id });
     get().triggerAutoSave();
+  },
+
+  createGroup: () => {
+    const { selectedLayers, currentTemplate } = get();
+    if (!selectedLayers || selectedLayers.length < 2) return;
+
+    const children = selectedLayers
+      .map((id) => currentTemplate.layers.find((l) => l.id === id))
+      .filter(Boolean);
+    if (!children.length) return;
+
+    const minX = Math.min(...children.map((c) => c.x));
+    const minY = Math.min(...children.map((c) => c.y));
+    const maxX = Math.max(...children.map((c) => c.x + c.width));
+    const maxY = Math.max(...children.map((c) => c.y + c.height));
+
+    const groupId = "group_" + crypto.randomUUID();
+
+    const parentIdCommon = children.every((c) => c.parentId === children[0].parentId)
+      ? children[0].parentId
+      : null;
+
+    const groupLayer = {
+      id: groupId,
+      type: "group",
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY,
+      children: children.map((c) => c.id),
+      parentId: parentIdCommon,
+      constraints: defaultConstraints,
+      autoLayout: defaultAutoLayout,
+    };
+
+    const updatedLayers = currentTemplate.layers.map((l) =>
+      children.find((c) => c.id === l.id)
+        ? { ...l, x: l.x - minX, y: l.y - minY, parentId: groupId }
+        : l,
+    );
+
+    updatedLayers.push(groupLayer);
+
+    set({
+      currentTemplate: {
+        ...currentTemplate,
+        layers: updatedLayers,
+      },
+      selectedLayerId: groupId,
+      selectedLayers: [groupId],
+    });
+
+    get().triggerAutoSave();
+  },
+
+  setVariantForInstance: (layerId, variantId) => {
+    const template = get().currentTemplate;
+    const layer = template.layers.find((l) => l.id === layerId);
+    if (!layer) return;
+    layer.variantId = variantId === "default" ? null : variantId;
+    const componentVariants = layer.componentVariants || [];
+    const targetNodes =
+      variantId === "default"
+        ? layer.componentNodes
+        : componentVariants.find((v) => v.id === variantId)?.nodes;
+    if (targetNodes) {
+      layer.nodes = targetNodes;
+    }
+    set({ currentTemplate: { ...template } });
+    get().triggerAutoSave();
+  },
+
+  addFrameLayer: () => {
+    const id = "frame_" + crypto.randomUUID();
+    get().addLayer({
+      id,
+      type: "frame",
+      x: 200,
+      y: 200,
+      width: 300,
+      height: 300,
+      children: [],
+      autoLayout: {
+        enabled: true,
+        direction: "vertical",
+        padding: 20,
+        gap: 12,
+        align: "start",
+        hugging: false,
+      },
+    });
+    set({ selectedLayerId: id });
   },
 
   deleteLayer: (layerId) => {
@@ -248,17 +449,151 @@ export const useTemplateBuilderStore = create((set, get) => ({
   },
 
   updateLayer: (layerId, updatedData) => {
-    const updated = get().currentTemplate.layers.map((layer) =>
-      layer.id === layerId ? { ...layer, ...updatedData } : layer,
-    );
+    const state = get();
+
+    // Component master editing path
+    if (state.isEditingComponent && state.editingComponentId) {
+      let components = state.components.map((comp) => {
+        if (comp._id !== state.editingComponentId) return comp;
+        const compCopy = {
+          ...comp,
+          nodes: [...(comp.nodes || [])],
+          variants: comp.variants ? [...comp.variants] : [],
+        };
+
+        let targetNodes = compCopy.nodes;
+        if (state.editingVariantId) {
+          const variantIndex = compCopy.variants.findIndex(
+            (v) => v.id === state.editingVariantId,
+          );
+          if (variantIndex !== -1) {
+            const variant = compCopy.variants[variantIndex];
+            compCopy.variants[variantIndex] = {
+              ...variant,
+              nodes: [...(variant.nodes || [])],
+            };
+            targetNodes = compCopy.variants[variantIndex].nodes;
+          }
+        }
+
+        const idx = targetNodes.findIndex((n) => n.id === layerId);
+        if (idx !== -1) {
+          const prev = targetNodes[idx];
+          const next = { ...prev, ...updatedData };
+          targetNodes[idx] = next;
+        }
+
+        return compCopy;
+      });
+
+      const updatedComponent = components.find(
+        (c) => c._id === state.editingComponentId,
+      );
+      const targetNodes =
+        state.editingVariantId && updatedComponent
+          ? updatedComponent.variants?.find((v) => v.id === state.editingVariantId)?.nodes
+          : updatedComponent?.nodes;
+
+      const updatedLayers = state.currentTemplate.layers.map((l) => {
+        if (
+          l.type !== "component-instance" ||
+          l.componentId !== state.editingComponentId
+        )
+          return l;
+        const matchesVariant =
+          (l.variantId || null) === (state.editingVariantId || null);
+        if (!matchesVariant || !targetNodes) return l;
+        return {
+          ...l,
+          nodes: targetNodes,
+          componentNodes: updatedComponent?.nodes || l.componentNodes,
+          componentVariants: updatedComponent?.variants || l.componentVariants,
+        };
+      });
+
+      set({
+        components,
+        currentTemplate: { ...state.currentTemplate, layers: updatedLayers },
+      });
+      state.triggerAutoSave();
+      return;
+    }
+
+    // Normal template editing path
+    const updated = state.currentTemplate.layers.map((layer) => {
+      if (layer.id !== layerId) return layer;
+      const prevWidth = layer.width;
+      const prevHeight = layer.height;
+      const next = { ...layer, ...updatedData };
+      if (
+        (updatedData.width !== undefined && prevWidth !== updatedData.width) ||
+        (updatedData.height !== undefined && prevHeight !== updatedData.height)
+      ) {
+        next.oldWidth = prevWidth;
+        next.oldHeight = prevHeight;
+      }
+      return next;
+    });
 
     set({
       currentTemplate: {
-        ...get().currentTemplate,
+        ...state.currentTemplate,
         layers: updated,
       },
     });
 
+    state.triggerAutoSave();
+  },
+
+  toggleLayerLock: (id) => {
+    set((state) => {
+      const layers = state.currentTemplate.layers.map((l) =>
+        l.id === id ? { ...l, locked: !l.locked } : l,
+      );
+      return { currentTemplate: { ...state.currentTemplate, layers } };
+    });
+    get().triggerAutoSave();
+  },
+
+  toggleLayerVisibility: (id) => {
+    set((state) => {
+      const layers = state.currentTemplate.layers.map((l) =>
+        l.id === id ? { ...l, hidden: !l.hidden } : l,
+      );
+      return { currentTemplate: { ...state.currentTemplate, layers } };
+    });
+    get().triggerAutoSave();
+  },
+
+  toggleLayerExpand: (id) => {
+    set((state) => {
+      const layers = state.currentTemplate.layers.map((l) =>
+        l.id === id ? { ...l, expanded: !l.expanded } : l,
+      );
+      return { currentTemplate: { ...state.currentTemplate, layers } };
+    });
+  },
+
+  renameLayer: (id, name) => {
+    set((state) => {
+      const layers = state.currentTemplate.layers.map((l) =>
+        l.id === id ? { ...l, name } : l,
+      );
+      return { currentTemplate: { ...state.currentTemplate, layers } };
+    });
+    get().triggerAutoSave();
+  },
+
+  reorderLayers: (sourceId, targetId) => {
+    set((state) => {
+      const layers = [...state.currentTemplate.layers];
+      const sourceIndex = layers.findIndex((l) => l.id === sourceId);
+      const targetIndex = layers.findIndex((l) => l.id === targetId);
+      if (sourceIndex === -1 || targetIndex === -1) return state;
+      const [moved] = layers.splice(sourceIndex, 1);
+      layers.splice(targetIndex, 0, moved);
+      return { currentTemplate: { ...state.currentTemplate, layers } };
+    });
     get().triggerAutoSave();
   },
 
@@ -266,9 +601,24 @@ export const useTemplateBuilderStore = create((set, get) => ({
    * SELECTION + CANVAS INTERACTION
    * -------------------------------------------------------- */
 
-  selectLayer: (layerId) => set({ selectedLayerId: layerId }),
+  selectLayer: (layerId) => set({ selectedLayerId: layerId, selectedLayers: [layerId] }),
 
   deselectLayer: () => set({ selectedLayerId: null }),
+  setSelectedLayers: (ids) => set({ selectedLayers: ids, selectedLayerId: ids[0] ?? null }),
+  addSelectedLayer: (id) =>
+    set((state) => ({
+      selectedLayers: [...new Set([...state.selectedLayers, id])],
+      selectedLayerId: state.selectedLayerId ?? id,
+    })),
+  removeSelectedLayer: (id) =>
+    set((state) => {
+      const remaining = state.selectedLayers.filter((x) => x !== id);
+      return {
+        selectedLayers: remaining,
+        selectedLayerId: state.selectedLayerId === id ? remaining[0] ?? null : state.selectedLayerId,
+      };
+    }),
+  clearSelection: () => set({ selectedLayers: [], selectedLayerId: null }),
 
   hoverLayer: (layerId) => set({ hoveredLayerId: layerId }),
 
