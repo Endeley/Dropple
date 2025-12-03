@@ -61,14 +61,21 @@ export default defineSchema({
     category: v.string(),
     tags: v.array(v.string()),
     nodes: v.array(v.any()),
-    variants: v.array(
-      v.object({
-        id: v.string(),
-        name: v.string(),
-        nodes: v.array(v.any()),
-      }),
-    ),
+      variants: v.array(
+        v.object({
+          id: v.string(),
+          name: v.string(),
+          nodes: v.array(v.any()),
+        }),
+      ),
     createdAt: v.number(),
     updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
+  styles: defineTable({
+    userId: v.string(),
+    type: v.string(), // "color" | "text" | "effect"
+    name: v.string(),
+    value: v.any(),
+    createdAt: v.number(),
   }).index("by_user", ["userId"]),
 });

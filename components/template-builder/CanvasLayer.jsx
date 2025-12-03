@@ -27,6 +27,7 @@ export default function CanvasLayer({
     components,
     editingComponentId,
     editingVariantId,
+    styles,
   } = useTemplateBuilderStore();
 
   const ref = useRef(null);
@@ -331,21 +332,31 @@ export default function CanvasLayer({
     }
   }, [parent, layer, updateLayer]);
 
+  const styleProps = (() => {
+    const base = { ...(layer.props || {}) };
+    if (layer.styleId) {
+      const styleToken = styles?.find?.((s) => s._id === layer.styleId);
+      const tokenVal = styleToken?.value || {};
+      return { ...tokenVal, ...base, ...(layer.overrides || {}) };
+    }
+    return { ...base, ...(layer.overrides || {}) };
+  })();
+
   const style = {
     position: "absolute",
     left: renderX,
     top: renderY,
     width: layer.width,
     height: layer.height,
-    borderRadius: layer.props?.borderRadius || 0,
+    borderRadius: styleProps?.borderRadius || 0,
     overflow: "hidden",
-    color: layer.props?.color,
-    background: layer.props?.fill,
-    boxShadow: layer.props?.shadow,
-    border: layer.props?.borderWidth
-      ? `${layer.props.borderWidth}px solid ${layer.props.borderColor || "#000"}`
+    color: styleProps?.color,
+    background: styleProps?.fill,
+    boxShadow: styleProps?.shadow,
+    border: styleProps?.borderWidth
+      ? `${styleProps.borderWidth}px solid ${styleProps.borderColor || "#000"}`
       : undefined,
-    borderRadius: layer.props?.radius ?? layer.props?.borderRadius ?? 0,
+    borderRadius: styleProps?.radius ?? styleProps?.borderRadius ?? 0,
     pointerEvents: editingTextId === layer.id ? "auto" : "initial",
     outline: isSelected ? "1px dashed #3b82f6" : "none",
     cursor: layer.locked ? "not-allowed" : "move",
@@ -376,9 +387,9 @@ export default function CanvasLayer({
             updateLayer(layer.id, { content: e.target.innerText });
           }}
           style={{
-            fontSize: layer?.props?.fontSize || 18,
-            fontWeight: layer?.props?.fontWeight || 400,
-            color: layer?.props?.color || "#000",
+            fontSize: styleProps?.fontSize || 18,
+            fontWeight: styleProps?.fontWeight || 400,
+            color: styleProps?.color || "#000",
             outline: "none",
             cursor: editingTextId === layer.id ? "text" : "inherit",
             width: "100%",

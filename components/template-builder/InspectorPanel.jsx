@@ -9,6 +9,7 @@ import BorderPanel from "./inspector/BorderPanel";
 import RadiusPanel from "./inspector/RadiusPanel";
 import EffectsPanel from "./inspector/EffectsPanel";
 import ConstraintsPanel from "./inspector/ConstraintsPanel";
+import StylePicker from "./inspector/styles/StylePicker";
 
 export default function InspectorPanel() {
   const {
@@ -70,6 +71,7 @@ export default function InspectorPanel() {
       <PositionPanel layer={layer} />
       <SizePanel layer={layer} />
       <ConstraintsPanel layer={layer} />
+      <StylePicker layer={layer} />
 
       {layer.type === "text" && (
         <>

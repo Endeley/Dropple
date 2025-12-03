@@ -39,6 +39,7 @@ export const useTemplateBuilderStore = create((set, get) => ({
     tags: [],
   },
   components: [],
+  styles: [],
 
   editingMode: false, // false = create, true = edit
   isEditingComponent: false,
@@ -67,6 +68,7 @@ export const useTemplateBuilderStore = create((set, get) => ({
   stopEditingText: () => set({ editingTextId: null }),
 
   setComponents: (components) => set({ components }),
+  setStyles: (styles) => set({ styles }),
 
   /* --------------------------------------------------------
    * ACTIVE TOOL
@@ -231,6 +233,8 @@ export const useTemplateBuilderStore = create((set, get) => ({
       hidden: layer.hidden ?? defaultLayerMeta.hidden,
       expanded: layer.expanded ?? defaultLayerMeta.expanded,
       name: layer.name ?? defaultLayerMeta.name,
+      styleId: layer.styleId ?? null,
+      overrides: layer.overrides ?? {},
       ...layer,
     };
 
@@ -374,6 +378,8 @@ export const useTemplateBuilderStore = create((set, get) => ({
       parentId: parentIdCommon,
       constraints: defaultConstraints,
       autoLayout: defaultAutoLayout,
+      styleId: null,
+      overrides: {},
     };
 
     const updatedLayers = currentTemplate.layers.map((l) =>
@@ -480,6 +486,10 @@ export const useTemplateBuilderStore = create((set, get) => ({
         if (idx !== -1) {
           const prev = targetNodes[idx];
           const next = { ...prev, ...updatedData };
+          if (prev.styleId && updatedData.props) {
+            next.overrides = { ...(prev.overrides || {}), ...updatedData.props };
+            delete next.props;
+          }
           targetNodes[idx] = next;
         }
 
@@ -525,6 +535,15 @@ export const useTemplateBuilderStore = create((set, get) => ({
       const prevWidth = layer.width;
       const prevHeight = layer.height;
       const next = { ...layer, ...updatedData };
+
+      // If layer is linked to a style, route style-related changes to overrides
+      if (layer.styleId && updatedData.props) {
+        next.overrides = { ...layer.overrides, ...updatedData.props };
+        delete next.props;
+      } else if (updatedData.props && layer.overrides) {
+        next.overrides = { ...layer.overrides, ...updatedData.props };
+      }
+
       if (
         (updatedData.width !== undefined && prevWidth !== updatedData.width) ||
         (updatedData.height !== undefined && prevHeight !== updatedData.height)
@@ -578,6 +597,28 @@ export const useTemplateBuilderStore = create((set, get) => ({
     set((state) => {
       const layers = state.currentTemplate.layers.map((l) =>
         l.id === id ? { ...l, name } : l,
+      );
+      return { currentTemplate: { ...state.currentTemplate, layers } };
+    });
+    get().triggerAutoSave();
+  },
+
+  applyStyleToLayer: (layerId, style) => {
+    set((state) => {
+      const layers = state.currentTemplate.layers.map((l) =>
+        l.id === layerId
+          ? { ...l, styleId: style._id, overrides: {} }
+          : l,
+      );
+      return { currentTemplate: { ...state.currentTemplate, layers } };
+    });
+    get().triggerAutoSave();
+  },
+
+  detachStyle: (layerId) => {
+    set((state) => {
+      const layers = state.currentTemplate.layers.map((l) =>
+        l.id === layerId ? { ...l, styleId: null, overrides: {} } : l,
       );
       return { currentTemplate: { ...state.currentTemplate, layers } };
     });
