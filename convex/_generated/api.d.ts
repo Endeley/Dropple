@@ -11,6 +11,7 @@
 import type * as assets from "../assets.js";
 import type * as components_ from "../components.js";
 import type * as presence from "../presence.js";
+import type * as recommendations from "../recommendations.js";
 import type * as styles from "../styles.js";
 import type * as templates from "../templates.js";
 import type * as themes from "../themes.js";
@@ -26,6 +27,7 @@ declare const fullApi: ApiFromModules<{
   assets: typeof assets;
   components: typeof components_;
   presence: typeof presence;
+  recommendations: typeof recommendations;
   styles: typeof styles;
   templates: typeof templates;
   themes: typeof themes;

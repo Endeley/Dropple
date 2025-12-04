@@ -627,6 +627,39 @@ export const useTemplateBuilderStore = create((set, get) => {
       };
     }),
 
+  addAnimation: (animation, targetLayerIds = null) =>
+    set((state) => {
+      const pageIndex = state.pages.findIndex((p) => p.id === state.activePageId);
+      if (pageIndex === -1) return state;
+      const pages = [...state.pages];
+      const page = { ...pages[pageIndex], layers: [...(pages[pageIndex].layers || [])] };
+      const layerIds =
+        (targetLayerIds && targetLayerIds.length ? targetLayerIds : state.selectedLayers) || [];
+      if (!layerIds.length) return state;
+
+      const updatedLayers = page.layers.map((layer) => {
+        if (!layerIds.includes(layer.id)) return layer;
+        const animations = [...(layer.animations || [])];
+        const anim = {
+          ...animation,
+          id: animation?.id || "anim_" + crypto.randomUUID(),
+          tracks: (animation?.tracks || []).map((t) => ({
+            ...t,
+            keyframes: (t.keyframes || []).map((k) => ({ ...k })),
+          })),
+        };
+        animations.push(anim);
+        return { ...layer, animations };
+      });
+
+      pages[pageIndex] = { ...page, layers: updatedLayers };
+
+      return {
+        pages,
+        currentTemplate: { ...state.currentTemplate, layers: updatedLayers },
+      };
+    }),
+
   /* --------------------------------------------------------
    * ANIMATION KEYFRAMES
    * -------------------------------------------------------- */

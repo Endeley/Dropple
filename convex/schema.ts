@@ -170,4 +170,23 @@ export default defineSchema({
     }),
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
+  userBehavior: defineTable({
+    userId: v.string(),
+    action: v.string(), // viewed_template, used_template, viewed_asset, used_component, etc.
+    targetId: v.string(),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]),
+  embeddings: defineTable({
+    itemId: v.string(), // templateId | componentId | assetId
+    itemType: v.string(),
+    vector: v.array(v.number()),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+  }).index("by_item", ["itemId"]),
+  userEmbeddings: defineTable({
+    userId: v.string(),
+    vector: v.array(v.number()),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
 });

@@ -6,9 +6,15 @@ import LayerTree from "./layers/LayerTree";
 import ThemeSwitcher from "./ThemeSwitcher";
 import ThemeEditor from "./ThemeEditor";
 import AssetManager from "./AssetManager";
+import ComponentAIGenerator from "@/components/ai/ComponentAIGenerator";
+import AssetAIGenerator from "@/components/ai/AssetAIGenerator";
+import TemplateAIGenerator from "@/components/ai/TemplateAIGenerator";
+import AnimationAIGenerator from "@/components/ai/AnimationAIGenerator";
+import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 
 export default function BuilderSidebar() {
   const [tab, setTab] = useState("layers");
+  const addImageLayer = useTemplateBuilderStore((s) => s.addImageLayer);
 
   return (
     <div className="w-72 h-full border-r border-slate-200 bg-white shadow-sm flex flex-col text-gray-900">
@@ -29,10 +35,14 @@ export default function BuilderSidebar() {
       </div>
 
       <div className="flex-1 overflow-auto">
-        {tab === "layers" && <LayerTree />}
-
         {tab === "assets" && (
           <div className="p-3 space-y-3">
+            <AssetAIGenerator
+              onGenerated={(url) => {
+                if (!url) return;
+                addImageLayer(url);
+              }}
+            />
             <label className="block">
               <span className="px-3 py-2 bg-blue-600 text-white rounded cursor-pointer">
                 Upload Image
@@ -59,7 +69,8 @@ export default function BuilderSidebar() {
         )}
 
         {tab === "components" && (
-          <div className="p-3">
+          <div className="p-3 space-y-4">
+            <ComponentAIGenerator />
             <ComponentLibrary />
           </div>
         )}
@@ -68,6 +79,14 @@ export default function BuilderSidebar() {
           <div className="flex-1 overflow-auto">
             <ThemeSwitcher />
             <ThemeEditor />
+          </div>
+        )}
+
+        {tab === "layers" && (
+          <div className="p-3 space-y-3">
+            <AnimationAIGenerator />
+            <TemplateAIGenerator />
+            <LayerTree />
           </div>
         )}
       </div>

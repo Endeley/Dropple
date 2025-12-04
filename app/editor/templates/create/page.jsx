@@ -18,13 +18,47 @@ export default function CreateTemplatePage() {
   } = useTemplateBuilderStore();
 
   useEffect(() => {
+    const storedAI =
+      typeof window !== "undefined" ? localStorage.getItem("AI_TEMPLATE") : null;
     const stored = typeof window !== "undefined" ? localStorage.getItem("LOADED_TEMPLATE") : null;
     const storedComponent =
       typeof window !== "undefined" ? localStorage.getItem("ADD_COMPONENT") : null;
     const storedAsset =
       typeof window !== "undefined" ? localStorage.getItem("USE_ASSET") : null;
 
-    if (stored) {
+    if (storedAI) {
+      try {
+        const tpl = JSON.parse(storedAI);
+        const page = {
+          id: "page_1",
+          name: tpl.name || "Generated Page",
+          artboards: [],
+          layers: tpl.layers || [],
+        };
+        const newId = tpl.id || crypto.randomUUID();
+
+        useTemplateBuilderStore.setState({
+          currentTemplate: {
+            ...currentTemplate,
+            id: newId,
+            name: tpl.name || "AI Template",
+            description: tpl.description || "",
+            mode: tpl.mode || "uiux",
+            width: tpl.width || currentTemplate.width || 1440,
+            height: tpl.height || currentTemplate.height || 1024,
+            layers: tpl.layers || [],
+            tags: tpl.tags || [],
+            thumbnail: tpl.thumbnail || "",
+          },
+          pages: [page],
+          activePageId: page.id,
+        });
+      } catch (err) {
+        console.error("Failed to import AI template", err);
+      } finally {
+        localStorage.removeItem("AI_TEMPLATE");
+      }
+    } else if (stored) {
       try {
         const tpl = JSON.parse(stored);
         const newId = crypto.randomUUID();

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import TemplatePreviewCard from "@/components/template-builder/TemplatePreviewCard";
+import TemplateRecommendations from "@/components/recommendations/TemplateRecommendations";
 
 export default function MarketplacePage() {
   const [templates, setTemplates] = useState([]);
@@ -82,6 +83,10 @@ export default function MarketplacePage() {
             </Link>
           ))
         )}
+      </div>
+
+      <div className="px-6 pb-10">
+        <TemplateRecommendations />
       </div>
     </div>
   );
