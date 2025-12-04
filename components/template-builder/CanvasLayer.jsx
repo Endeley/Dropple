@@ -28,6 +28,8 @@ export default function CanvasLayer({
     editingComponentId,
     editingVariantId,
     styles,
+    themes,
+    activeThemeId,
   } = useTemplateBuilderStore();
 
   const ref = useRef(null);
@@ -226,7 +228,12 @@ export default function CanvasLayer({
     let crossMax = 0;
 
     children.forEach((child, idx) => {
-      const isVertical = autoLayout.direction === "vertical";
+      const isVertical =
+        directionOverride === "horizontal"
+          ? false
+          : directionOverride === "vertical"
+          ? true
+          : autoLayout.direction === "vertical";
       const newX = isVertical
         ? layer.x + autoLayout.padding
         : layer.x + offset;
@@ -332,6 +339,12 @@ export default function CanvasLayer({
     }
   }, [parent, layer, updateLayer]);
 
+  const activeTheme =
+    themes.find((t) => t._id === activeThemeId) || themes[0] || null;
+
+  const resolveThemeColor = (token) =>
+    (token && activeTheme?.tokens?.colors?.[token]) || null;
+
   const styleProps = (() => {
     const base = { ...(layer.props || {}) };
     if (layer.styleId) {
@@ -342,12 +355,33 @@ export default function CanvasLayer({
     return { ...base, ...(layer.overrides || {}) };
   })();
 
+  const themeToken =
+    layer.props?.themeToken ||
+    (layer.styleId?.startsWith?.("theme-color-")
+      ? layer.styleId.replace("theme-color-", "")
+      : null);
+  const themeColor = resolveThemeColor(themeToken);
+  if (themeColor) {
+    if (layer.type === "text") {
+      styleProps.color = themeColor;
+    } else {
+      styleProps.fill = themeColor;
+    }
+  }
+
+  const responsiveOverride = layer.responsive?.[activeBreakpoint] || {};
+  const width = responsiveOverride.width ?? layer.width;
+  const height = responsiveOverride.height ?? layer.height;
+  const directionOverride = responsiveOverride.autoLayout?.direction;
+  const visibility = responsiveOverride.visibility || "inherit";
+  if (visibility === "hidden") return null;
+
   const style = {
     position: "absolute",
     left: renderX,
     top: renderY,
-    width: layer.width,
-    height: layer.height,
+    width,
+    height,
     borderRadius: styleProps?.borderRadius || 0,
     overflow: "hidden",
     color: styleProps?.color,

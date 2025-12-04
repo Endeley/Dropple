@@ -25,7 +25,7 @@ export default function EditTemplatePage({ params }) {
   }, [templateId, loadTemplateFromDB]);
 
   return (
-    <div className="w-full h-screen flex flex-col bg-gray-50">
+    <div className="w-full min-h-screen flex flex-col bg-slate-50 text-gray-900">
       {/* Header */}
       <BuilderHeader />
 

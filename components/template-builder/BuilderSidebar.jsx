@@ -3,19 +3,24 @@ import { useState } from "react";
 import AssetLibrary from "./AssetLibrary";
 import ComponentLibrary from "./ComponentLibrary";
 import LayerTree from "./layers/LayerTree";
+import ThemeSwitcher from "./ThemeSwitcher";
+import ThemeEditor from "./ThemeEditor";
+import AssetManager from "./AssetManager";
 
 export default function BuilderSidebar() {
   const [tab, setTab] = useState("layers");
 
   return (
-    <div className="w-72 h-full border-r bg-white flex flex-col">
+    <div className="w-72 h-full border-r border-slate-200 bg-white shadow-sm flex flex-col text-gray-900">
       <div className="flex">
-        {["layers", "assets", "components"].map((key) => (
+        {["layers", "assets", "components", "themes"].map((key) => (
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`flex-1 py-2 border-b text-center capitalize ${
-              tab === key ? "bg-gray-100 font-semibold" : "hover:bg-gray-50"
+            className={`flex-1 py-2 border-b border-slate-200 text-center capitalize ${
+              tab === key
+                ? "bg-slate-100 font-semibold text-slate-900"
+                : "text-slate-700 hover:bg-slate-50"
             }`}
           >
             {key}
@@ -49,13 +54,20 @@ export default function BuilderSidebar() {
                 }}
               />
             </label>
-            <AssetLibrary />
+            <AssetManager />
           </div>
         )}
 
         {tab === "components" && (
           <div className="p-3">
             <ComponentLibrary />
+          </div>
+        )}
+
+        {tab === "themes" && (
+          <div className="flex-1 overflow-auto">
+            <ThemeSwitcher />
+            <ThemeEditor />
           </div>
         )}
       </div>

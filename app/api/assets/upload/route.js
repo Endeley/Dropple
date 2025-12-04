@@ -22,5 +22,9 @@ export async function POST(req) {
     },
   });
 
-  return Response.json(res);
+  return Response.json({
+    ...res,
+    size: file.size,
+    type: file.type,
+  });
 }

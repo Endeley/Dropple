@@ -8,23 +8,23 @@ export default function BuilderHeader() {
 
   return (
     <>
-      <div className="h-14 w-full border-b flex items-center justify-between px-4 bg-white">
+      <div className="h-14 w-full border-b border-slate-200 bg-white/95 backdrop-blur flex items-center justify-between px-4 shadow-sm sticky top-0 z-30">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold">Untitled Template</h1>
 
-          <button className="px-3 py-1 text-sm rounded-md bg-gray-100 hover:bg-gray-200">
+          <button className="px-3 py-1 text-sm rounded-md border border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200">
             Rename
           </button>
         </div>
 
         <div className="flex items-center gap-3">
-          <button className="px-4 py-2 bg-gray-100 rounded-md hover:bg-gray-200">
+          <button className="px-4 py-2 rounded-md border border-slate-200 bg-slate-100 text-slate-800 hover:bg-slate-200">
             Save
           </button>
 
           <button
             onClick={() => setShowPublish(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow"
           >
             Publish
           </button>

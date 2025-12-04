@@ -9,20 +9,117 @@ import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 import { useEffect } from "react";
 
 export default function CreateTemplatePage() {
-  const { currentTemplate, setEditingMode } = useTemplateBuilderStore();
+  const {
+    currentTemplate,
+    setEditingMode,
+    setComponents,
+    components,
+    addImageLayer,
+  } = useTemplateBuilderStore();
 
   useEffect(() => {
-    if (!currentTemplate.id) {
+    const stored = typeof window !== "undefined" ? localStorage.getItem("LOADED_TEMPLATE") : null;
+    const storedComponent =
+      typeof window !== "undefined" ? localStorage.getItem("ADD_COMPONENT") : null;
+    const storedAsset =
+      typeof window !== "undefined" ? localStorage.getItem("USE_ASSET") : null;
+
+    if (stored) {
+      try {
+        const tpl = JSON.parse(stored);
+        const newId = crypto.randomUUID();
+        const layers = tpl.layers || [];
+        const page = {
+          id: "page_1",
+          name: tpl.name || "Page 1",
+          artboards: [],
+          layers,
+        };
+
+        useTemplateBuilderStore.setState({
+          currentTemplate: {
+            ...currentTemplate,
+            id: newId,
+            name: tpl.name || "Imported Template",
+            description: tpl.description || "",
+            mode: tpl.mode || "uiux",
+            width: tpl.width || currentTemplate.width || 1440,
+            height: tpl.height || currentTemplate.height || 1024,
+            layers,
+            tags: tpl.tags || [],
+            thumbnail: tpl.thumbnail || "",
+          },
+          pages: [page],
+          activePageId: page.id,
+        });
+      } catch (err) {
+        console.error("Failed to import template from marketplace", err);
+      } finally {
+        localStorage.removeItem("LOADED_TEMPLATE");
+      }
+    } else if (!currentTemplate.id) {
       const newId = crypto.randomUUID();
       useTemplateBuilderStore.setState({
         currentTemplate: { ...currentTemplate, id: newId },
       });
     }
+
+    if (storedComponent) {
+      try {
+        const comp = JSON.parse(storedComponent);
+        const existing = components || [];
+        const id = comp._id || comp.id || "comp_" + crypto.randomUUID();
+        let parsedNodes = comp.nodes || [];
+        if ((!parsedNodes || parsedNodes.length === 0) && typeof comp.componentJSON === "string") {
+          try {
+            const parsed = JSON.parse(comp.componentJSON);
+            parsedNodes = parsed.nodes || parsed;
+          } catch (e) {
+            console.warn("Failed to parse component JSON, using fallback nodes");
+          }
+        }
+
+        const normalized = {
+          _id: id,
+          name: comp.name || comp.title || "Imported Component",
+          description: comp.description || "",
+          category: comp.category || "UI Kit",
+          tags: comp.tags || [],
+          previewImage: comp.previewImage || "",
+          nodes: parsedNodes || [],
+          variants: comp.variants || [],
+          componentJSON: comp.componentJSON,
+          price: comp.price ?? 0,
+        };
+        const next = existing.find((c) => c._id === id)
+          ? existing
+          : [...existing, normalized];
+        setComponents(next);
+      } catch (err) {
+        console.error("Failed to import component from marketplace", err);
+      } finally {
+        localStorage.removeItem("ADD_COMPONENT");
+      }
+    }
+
+    if (storedAsset) {
+      try {
+        const asset = JSON.parse(storedAsset);
+        const url = asset.url || asset.fileUrl || asset.previewUrl;
+        if (url) {
+          addImageLayer(url);
+        }
+      } catch (err) {
+        console.error("Failed to import asset into editor", err);
+      } finally {
+        localStorage.removeItem("USE_ASSET");
+      }
+    }
     setEditingMode(false);
-  }, [currentTemplate, setEditingMode]);
+  }, [addImageLayer, components, currentTemplate, setComponents, setEditingMode]);
 
   return (
-    <div className="w-full h-screen flex flex-col bg-gray-50">
+    <div className="w-full min-h-screen flex flex-col bg-slate-50 text-gray-900">
       {/* Header */}
       <BuilderHeader />
 

@@ -6,51 +6,87 @@ import CanvasLayer from "./CanvasLayer";
 import SmartGuides from "./SmartGuides";
 import MarqueeSelect from "./MarqueeSelect";
 import ComponentEditorCanvas from "./ComponentEditorCanvas";
+import KeyboardShortcuts from "./KeyboardShortcuts";
+import ExportCodeModal from "./ExportCodeModal";
+import PageSwitcher from "./PageSwitcher";
+import PrototypeConnections from "./PrototypeConnections";
+import DevicePreviewBar from "./DevicePreviewBar";
+import MultiplayerCursors from "./MultiplayerCursors";
 
 export default function BuilderCanvas() {
-  const { currentTemplate, isEditingComponent } = useTemplateBuilderStore();
+  const { currentTemplate, isEditingComponent, addLayer } = useTemplateBuilderStore();
   const containerRef = useRef(null);
 
   if (isEditingComponent) {
-    return <ComponentEditorCanvas />;
+    return (
+      <>
+        <KeyboardShortcuts />
+        <ExportCodeModal />
+        <ComponentEditorCanvas />
+      </>
+    );
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="flex-1 bg-gray-100 flex items-center justify-center overflow-auto relative"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={async (e) => {
-        e.preventDefault();
-        const file = e.dataTransfer.files?.[0];
-        if (!file) return;
-
-        const formData = new FormData();
-        formData.append("file", file);
-
-        const res = await fetch("/api/assets/upload", {
-          method: "POST",
-          body: formData,
-        });
-        const data = await res.json();
-        if (data?.url) {
-          useTemplateBuilderStore.getState().addImageLayer(data.url);
-        }
-      }}
-    >
+    <>
+      <DevicePreviewBar />
+      <PageSwitcher />
       <div
-        id="dropple-canvas"
-        className="relative bg-white shadow"
-        style={{ width: currentTemplate.width, height: currentTemplate.height }}
+        ref={containerRef}
+        className="flex-1 bg-slate-100 flex items-center justify-center overflow-auto relative"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={async (e) => {
+          e.preventDefault();
+          const assetUrl = e.dataTransfer.getData("asset-url");
+          if (assetUrl) {
+            const width = Number(e.dataTransfer.getData("asset-width")) || 300;
+            const height = Number(e.dataTransfer.getData("asset-height")) || 200;
+            addLayer({
+              id: "img_" + crypto.randomUUID(),
+              type: "image",
+              url: assetUrl,
+              x: e.clientX - 150,
+              y: e.clientY - 100,
+              width,
+              height,
+              props: {},
+            });
+            return;
+          }
+          const file = e.dataTransfer.files?.[0];
+          if (!file) return;
+
+          const formData = new FormData();
+          formData.append("file", file);
+
+          const res = await fetch("/api/assets/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await res.json();
+          if (data?.url) {
+            useTemplateBuilderStore.getState().addImageLayer(data.url);
+          }
+        }}
       >
-        {currentTemplate.layers
-          .filter((layer) => !layer.parentId)
-          .map((layer) => (
-            <CanvasLayer key={layer.id} layer={layer} offset={{ x: 0, y: 0 }} />
-          ))}
-        <SmartGuides />
+        <KeyboardShortcuts />
+        <ExportCodeModal />
+        <div
+          id="dropple-canvas"
+          className="relative bg-white border border-slate-200 shadow-lg rounded-md"
+          style={{ width: currentTemplate.width, height: currentTemplate.height }}
+        >
+          <MultiplayerCursors />
+          {currentTemplate.layers
+            .filter((layer) => !layer.parentId)
+            .map((layer) => (
+              <CanvasLayer key={layer.id} layer={layer} offset={{ x: 0, y: 0 }} />
+            ))}
+          <SmartGuides />
+          <PrototypeConnections layers={currentTemplate.layers} />
+        </div>
+        <MarqueeSelect containerRef={containerRef} layers={currentTemplate.layers} />
       </div>
-      <MarqueeSelect containerRef={containerRef} layers={currentTemplate.layers} />
-    </div>
+    </>
   );
 }

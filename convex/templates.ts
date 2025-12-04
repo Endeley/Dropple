@@ -125,3 +125,17 @@ export const getMarketplaceTemplates = query({
       .collect();
   },
 });
+
+export const incrementDownload = mutation({
+  args: { id: v.id("templates") },
+  handler: async ({ db }, { id }) => {
+    const template = await db.get(id);
+    if (!template) throw new Error("Template not found");
+
+    const current = template.purchases ?? 0;
+    await db.patch(id, {
+      purchases: current + 1,
+      updatedAt: Date.now(),
+    });
+  },
+});

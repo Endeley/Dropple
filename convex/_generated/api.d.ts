@@ -10,8 +10,10 @@
 
 import type * as assets from "../assets.js";
 import type * as components_ from "../components.js";
+import type * as presence from "../presence.js";
 import type * as styles from "../styles.js";
 import type * as templates from "../templates.js";
+import type * as themes from "../themes.js";
 import type * as users from "../users.js";
 
 import type {
@@ -23,8 +25,10 @@ import type {
 declare const fullApi: ApiFromModules<{
   assets: typeof assets;
   components: typeof components_;
+  presence: typeof presence;
   styles: typeof styles;
   templates: typeof templates;
+  themes: typeof themes;
   users: typeof users;
 }>;
 

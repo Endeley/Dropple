@@ -19,8 +19,8 @@ export default function ComponentEditorCanvas() {
     : component.nodes || [];
 
   return (
-    <div className="flex-1 bg-gray-50 flex flex-col" id="dropple-canvas">
-      <div className="p-3 bg-purple-700 text-white flex items-center justify-between">
+    <div className="flex-1 bg-slate-50 text-gray-900 flex flex-col" id="dropple-canvas">
+      <div className="p-3 bg-purple-700 text-white flex items-center justify-between shadow-sm">
         <span className="font-medium">
           Editing Component: {component.name || "Component"}
           {editingVariantId ? ` • Variant` : ""}
