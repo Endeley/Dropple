@@ -10,6 +10,9 @@ import ComponentAIGenerator from "@/components/ai/ComponentAIGenerator";
 import AssetAIGenerator from "@/components/ai/AssetAIGenerator";
 import TemplateAIGenerator from "@/components/ai/TemplateAIGenerator";
 import AnimationAIGenerator from "@/components/ai/AnimationAIGenerator";
+import BrandKitGenerator from "@/components/ai/BrandKitGenerator";
+import DesignCriticPanel from "@/components/ai/DesignCriticPanel";
+import PrototypeAIGenerator from "@/components/ai/PrototypeAIGenerator";
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 
 export default function BuilderSidebar() {
@@ -76,7 +79,8 @@ export default function BuilderSidebar() {
         )}
 
         {tab === "themes" && (
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-auto space-y-3 p-3">
+            <BrandKitGenerator />
             <ThemeSwitcher />
             <ThemeEditor />
           </div>
@@ -84,6 +88,8 @@ export default function BuilderSidebar() {
 
         {tab === "layers" && (
           <div className="p-3 space-y-3">
+            <DesignCriticPanel />
+            <PrototypeAIGenerator />
             <AnimationAIGenerator />
             <TemplateAIGenerator />
             <LayerTree />

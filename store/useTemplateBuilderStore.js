@@ -333,6 +333,7 @@ export const useTemplateBuilderStore = create((set, get) => {
     },
   ],
   activeThemeId: "theme-light",
+  agentMessages: [],
 
   editingMode: false, // false = create, true = edit
   isEditingComponent: false,
@@ -372,6 +373,7 @@ export const useTemplateBuilderStore = create((set, get) => {
   setStyles: (styles) => set({ styles }),
   setThemes: (themes) => set({ themes }),
   setActiveTheme: (id) => set({ activeThemeId: id }),
+  setAgentMessages: (messages) => set({ agentMessages: messages }),
   setActiveBreakpoint: (bp) => set({ activeBreakpoint: bp }),
   setScrubberTime: (t) => set({ scrubberTime: Math.max(0, t) }),
   setActivePage: (id) =>
