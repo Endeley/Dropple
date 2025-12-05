@@ -282,4 +282,81 @@ export default defineSchema({
     status: v.string(), // todo | doing | done
     createdAt: v.number(),
   }).index("by_priority", ["priority"]),
+  modules: defineTable({
+    name: v.string(),
+    version: v.string(),
+    json: v.any(),
+    authorId: v.string(),
+    type: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    downloads: v.number(),
+    rating: v.number(),
+  })
+    .index("by_name", ["name"])
+    .index("by_type", ["type"]),
+  knowledge_nodes: defineTable({
+    nodeId: v.string(),
+    category: v.string(),
+    content: v.string(),
+    embedding: v.optional(v.array(v.number())),
+    confidence: v.number(),
+    sourceAgent: v.string(),
+    relations: v.optional(v.any()),
+    projectsUsedIn: v.optional(v.any()),
+    lastUpdated: v.number(),
+  })
+    .index("by_node", ["nodeId"])
+    .index("by_category", ["category"])
+    .index("by_source", ["sourceAgent"]),
+  knowledge_relations: defineTable({
+    from: v.string(),
+    to: v.string(),
+    relation: v.string(), // improves | prevents | implies | contradicts | belongs_to etc.
+    weight: v.number(),
+    lastUpdated: v.number(),
+  }).index("by_from", ["from"]),
+  apiUsage: defineTable({
+    key: v.string(),
+    agent: v.string(),
+    count: v.number(),
+    timestamp: v.number(),
+  }).index("by_key", ["key"]),
+  orgs: defineTable({
+    name: v.string(),
+    ownerId: v.string(),
+    members: v.any(), // { userId: role }
+    teams: v.any(), // team ids or summaries
+    settings: v.any(),
+    createdAt: v.number(),
+  }).index("by_owner", ["ownerId"]),
+  teams: defineTable({
+    orgId: v.string(),
+    name: v.string(),
+    members: v.any(), // { userId: role }
+    aiAgents: v.any(), // [{ name, role }]
+    permissions: v.any(),
+    createdAt: v.number(),
+  }).index("by_org", ["orgId"]),
+  auditLogs: defineTable({
+    orgId: v.string(),
+    actor: v.string(), // human or AI
+    action: v.string(),
+    data: v.optional(v.any()),
+    timestamp: v.number(),
+  }).index("by_org", ["orgId"]),
+  aiPolicies: defineTable({
+    orgId: v.string(),
+    rules: v.any(), // governance rules
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_org", ["orgId"]),
+  ecosystemGraphs: defineTable({
+    orgId: v.string(),
+    nodes: v.any(), // [{ id, type, meta }]
+    edges: v.any(), // [{ from, to, relation }]
+    relationships: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_org", ["orgId"]),
 });

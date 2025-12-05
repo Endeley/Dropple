@@ -11,10 +11,6 @@ crons.cron("sprint-loop", "*/5 * * * * *", api.sprints.runLoop);
 
 crons.cron("ux-simulation", "*/10 * * * * *", api.agentQueue.uxSimulation);
 
-crons.cron("continuous-pipeline", "*/30 * * * *", async (ctx) => {
-  await ctx.runMutation(api.agentQueue.enqueueBuild, {});
-  await ctx.runMutation(api.agentQueue.enqueueTests, {});
-  await ctx.runMutation(api.agentQueue.enqueueDeploy, {});
-});
+crons.cron("continuous-pipeline", "*/30 * * * *", api.agentQueue.continuousPipeline);
 
 export default crons;

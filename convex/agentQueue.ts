@@ -129,3 +129,31 @@ export const enqueueDeploy = mutation(async ({ db }) => {
     updatedAt: Date.now(),
   });
 });
+
+export const continuousPipeline = mutation(async ({ db }) => {
+  await db.insert("agent_tasks", {
+    agent: "Build Agent",
+    prompt: "Run CI build.",
+    state: {},
+    status: "queued",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  });
+  await db.insert("agent_tasks", {
+    agent: "Test Agent",
+    prompt: "Run test suite.",
+    state: {},
+    status: "queued",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  });
+  await db.insert("agent_tasks", {
+    agent: "Deploy Agent",
+    prompt: "Deploy latest build.",
+    state: {},
+    status: "queued",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  });
+  return true;
+});
