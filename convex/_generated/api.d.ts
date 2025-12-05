@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as agentMemory from "../agentMemory.js";
 import type * as agentQueue from "../agentQueue.js";
 import type * as assets from "../assets.js";
 import type * as backlog from "../backlog.js";
@@ -33,6 +34,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  agentMemory: typeof agentMemory;
   agentQueue: typeof agentQueue;
   assets: typeof assets;
   backlog: typeof backlog;

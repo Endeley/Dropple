@@ -3,9 +3,10 @@
 import { useWorkspaceStore } from "@/store/useWorkspaceStore";
 import { useWorkspaceSync } from "@/store/useWorkspaceSync";
 import { usePresenceStore } from "@/store/usePresenceStore";
+import CursorsOverlay from "@/components/collaboration/CursorsOverlay";
 import RenderLayer from "./RenderLayer";
 
-export default function EditorCanvas() {
+export default function EditorCanvas({ projectId }) {
   useWorkspaceSync();
   const workspace = useWorkspaceStore((s) => s.workspace);
   const cursors = usePresenceStore((s) => s.cursors);
@@ -18,6 +19,7 @@ export default function EditorCanvas() {
       {page.layers?.map((layer) => (
         <RenderLayer key={layer.id} layer={layer} />
       ))}
+      <CursorsOverlay projectId={projectId} />
       {Object.entries(cursors).map(([id, pos]) => (
         <div
           key={id}

@@ -232,6 +232,16 @@ export default defineSchema({
     data: v.any(),
     createdAt: v.number(),
   }).index("by_type", ["type"]),
+  agent_memory: defineTable({
+    agentName: v.string(),
+    runs: v.number(),
+    successes: v.number(),
+    failures: v.number(),
+    corrections: v.optional(v.any()),
+    behaviorDeltas: v.optional(v.any()),
+    skillWeights: v.optional(v.any()),
+    lastUpdated: v.number(),
+  }).index("by_agent", ["agentName"]),
   style_memory: defineTable({
     userId: v.string(),
     tokens: v.optional(v.any()),
