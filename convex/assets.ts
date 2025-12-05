@@ -101,7 +101,7 @@ export const getUserAssets = query({
   args: {},
   handler: async ({ db, auth }) => {
     const identity = await auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
+    if (!identity) return [];
     const userId = identity.subject;
 
     return await db

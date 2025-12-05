@@ -1,9 +1,11 @@
-import { Geist, Geist_Mono } from 'next/font/google';
-import { StackProvider, StackTheme } from '@stackframe/stack';
-import { stackClientApp } from '../stack/client';
-import { ConvexProvider } from '../providers/ConvexProvider';
-import { UserProvider } from '../providers/UserProvider';
-import './globals.css';
+import { Geist, Geist_Mono } from "next/font/google";
+import { StackProvider, StackTheme } from "@stackframe/stack";
+import { stackClientApp } from "../stack/client";
+import { ConvexProvider } from "../providers/ConvexProvider";
+import { UserProvider } from "../providers/UserProvider";
+import "./globals.css";
+
+import AIDock from "@/components/ai-dock/AI_Dock";
 
 const geistSans = Geist({
     variable: '--font-geist-sans',
@@ -21,17 +23,20 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
-    return (
-        <html lang='en'>
-            <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-                <StackProvider app={stackClientApp}>
-                    <StackTheme>
-                        <ConvexProvider>
-                            <UserProvider>{children}</UserProvider>
-                        </ConvexProvider>
-                    </StackTheme>
-                </StackProvider>
-            </body>
-        </html>
-    );
+  return (
+    <html lang="en">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <StackProvider app={stackClientApp}>
+          <StackTheme>
+            <ConvexProvider>
+              <UserProvider>
+                {children}
+                <AIDock />
+              </UserProvider>
+            </ConvexProvider>
+          </StackTheme>
+        </StackProvider>
+      </body>
+    </html>
+  );
 }

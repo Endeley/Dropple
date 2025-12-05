@@ -189,4 +189,87 @@ export default defineSchema({
     vector: v.array(v.number()),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
+  agents: defineTable({
+    name: v.string(),
+    status: v.string(), // idle | running | failed | done
+    lastRun: v.optional(v.number()),
+  }).index("by_name", ["name"]),
+  agent_tasks: defineTable({
+    agent: v.string(), // "Brand Agent", etc.
+    prompt: v.optional(v.string()),
+    state: v.optional(v.any()),
+    status: v.string(), // queued | running | completed | failed
+    result: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_agent", ["agent"]),
+  messages: defineTable({
+    agent: v.string(),
+    content: v.string(),
+    references: v.optional(v.any()),
+    room: v.optional(v.string()),
+    timestamp: v.number(),
+  }).index("by_agent", ["agent"]),
+  workspace: defineTable({
+    data: v.any(),
+    updatedAt: v.number(),
+  }).index("by_updated", ["updatedAt"]),
+  snapshots: defineTable({
+    data: v.any(),
+    createdAt: v.number(),
+  }).index("by_created", ["createdAt"]),
+  events: defineTable({
+    type: v.string(),
+    actor: v.string(),
+    layerId: v.optional(v.string()),
+    payload: v.optional(v.any()),
+    timestamp: v.number(),
+  }).index("by_time", ["timestamp"]),
+  simulation_results: defineTable({
+    type: v.string(), // scenario | ux_test
+    data: v.any(),
+    createdAt: v.number(),
+  }).index("by_type", ["type"]),
+  style_memory: defineTable({
+    userId: v.string(),
+    tokens: v.optional(v.any()),
+    patterns: v.optional(v.any()),
+    componentStyles: v.optional(v.any()),
+    animationPrefs: v.optional(v.any()),
+    interactionPrefs: v.optional(v.any()),
+    lastUpdated: v.number(),
+  }).index("by_user", ["userId"]),
+  style_events: defineTable({
+    userId: v.string(),
+    eventType: v.string(),
+    data: v.any(),
+    timestamp: v.number(),
+  }).index("by_user", ["userId"]),
+  brand_memory: defineTable({
+    projectId: v.string(),
+    tokens: v.optional(v.any()),
+    components: v.optional(v.any()),
+    typography: v.optional(v.any()),
+    layoutDNA: v.optional(v.any()),
+    animationDNA: v.optional(v.any()),
+    lastUpdated: v.optional(v.number()),
+  }).index("by_project", ["projectId"]),
+  sprints: defineTable({
+    number: v.number(),
+    goals: v.any(),
+    tasks: v.any(),
+    status: v.string(), // planning | active | complete
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
+  }).index("by_status", ["status"]),
+  backlog: defineTable({
+    title: v.string(),
+    description: v.string(),
+    priority: v.number(),
+    assignedTo: v.optional(v.string()),
+    status: v.string(), // todo | doing | done
+    createdAt: v.number(),
+  }).index("by_priority", ["priority"]),
 });

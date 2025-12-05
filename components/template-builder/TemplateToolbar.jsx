@@ -27,8 +27,8 @@ export default function TemplateToolbar() {
       onClick={() => handleToolClick(tool)}
       className={`px-3 py-1 text-sm font-medium rounded-md border transition-colors ${
         activeTool === tool
-          ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-          : "border-slate-200 text-slate-700 bg-white hover:bg-slate-50"
+          ? "bg-purple-600 text-white border-purple-600 shadow-sm"
+          : "border-purple-100 text-purple-700 bg-white hover:bg-purple-50"
       }`}
     >
       {label}
@@ -45,7 +45,7 @@ export default function TemplateToolbar() {
       {btn("Component", "component")}
       <button
         onClick={() => addArtboard()}
-        className="ml-2 px-3 py-1 text-sm font-medium rounded-md border border-emerald-500 text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
+        className="ml-2 px-3 py-1 text-sm font-medium rounded-md border border-purple-600 text-purple-700 bg-purple-50 hover:bg-purple-100"
       >
         + Artboard
       </button>

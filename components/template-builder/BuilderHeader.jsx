@@ -12,19 +12,19 @@ export default function BuilderHeader() {
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold">Untitled Template</h1>
 
-          <button className="px-3 py-1 text-sm rounded-md border border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200">
+          <button className="px-3 py-1 text-sm rounded-md border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100">
             Rename
           </button>
         </div>
 
         <div className="flex items-center gap-3">
-          <button className="px-4 py-2 rounded-md border border-slate-200 bg-slate-100 text-slate-800 hover:bg-slate-200">
+          <button className="px-4 py-2 rounded-md border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100">
             Save
           </button>
 
           <button
             onClick={() => setShowPublish(true)}
-            className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow"
+            className="px-4 py-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 shadow-sm hover:shadow"
           >
             Publish
           </button>
