@@ -26,6 +26,7 @@ import type * as modules from "../modules.js";
 import type * as orgs from "../orgs.js";
 import type * as presence from "../presence.js";
 import type * as recommendations from "../recommendations.js";
+import type * as render from "../render.js";
 import type * as sensory from "../sensory.js";
 import type * as sprints from "../sprints.js";
 import type * as styleMemory from "../styleMemory.js";
@@ -62,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   orgs: typeof orgs;
   presence: typeof presence;
   recommendations: typeof recommendations;
+  render: typeof render;
   sensory: typeof sensory;
   sprints: typeof sprints;
   styleMemory: typeof styleMemory;

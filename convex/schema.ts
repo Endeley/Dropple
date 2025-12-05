@@ -13,12 +13,16 @@ export default defineSchema({
     .index("by_email", ["email"]),
   templates: defineTable({
     name: v.string(),
-    description: v.optional(v.string()),
     mode: v.string(),
+    description: v.optional(v.string()),
+    category: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
+    authorId: v.optional(v.string()),
     userId: v.string(),
     thumbnail: v.optional(v.string()),
-    tags: v.array(v.string()),
-    category: v.optional(v.string()),
+    isPublished: v.boolean(),
+    version: v.number(),
+    templateData: v.optional(v.any()),
     width: v.number(),
     height: v.number(),
     layers: v.array(
@@ -33,14 +37,18 @@ export default defineSchema({
         url: v.optional(v.string()),
         content: v.optional(v.string()),
         props: v.optional(v.any()),
+        name: v.optional(v.string()),
+        visible: v.optional(v.boolean()),
+        locked: v.optional(v.boolean()),
+        layout: v.optional(v.any()),
+        children: v.optional(v.array(v.string())),
+        animations: v.optional(v.array(v.any())),
       }),
     ),
-    isPublished: v.boolean(),
     price: v.optional(v.number()),
     purchases: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
-    version: v.number(),
   })
     .index("by_user", ["userId"])
     .index("by_mode", ["mode"])
@@ -123,6 +131,7 @@ export default defineSchema({
   }).index("by_project", ["projectId"]),
   components: defineTable({
     userId: v.string(),
+    authorId: v.optional(v.string()),
     name: v.string(),
     description: v.optional(v.string()),
     category: v.string(),
@@ -130,13 +139,8 @@ export default defineSchema({
     previewImage: v.optional(v.string()),
     componentJSON: v.optional(v.string()),
     nodes: v.array(v.any()),
-    variants: v.array(
-      v.object({
-        id: v.string(),
-        name: v.string(),
-        nodes: v.array(v.any()),
-      }),
-    ),
+    props: v.optional(v.any()),
+    variants: v.optional(v.any()),
     isPremium: v.optional(v.boolean()),
     price: v.optional(v.number()),
     downloads: v.optional(v.number()),
@@ -406,4 +410,32 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_context", ["contextId"]),
+  sceneGraphs: defineTable({
+    contextId: v.string(),
+    scene: v.any(), // unified scene graph (nodes, cameras, lights, materials, animations)
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_context", ["contextId"]),
+  renderJobs: defineTable({
+    type: v.string(), // 2d | motion | video | 3d | ar
+    target: v.optional(v.string()),
+    priority: v.optional(v.string()),
+    status: v.string(), // queued | rendering | completed | failed
+    sceneRef: v.optional(v.string()),
+    payload: v.optional(v.any()),
+    result: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_status", ["status"]),
+  worlds: defineTable({
+    name: v.string(),
+    prompt: v.optional(v.string()),
+    sceneGraphId: v.optional(v.id("sceneGraphs")),
+    status: v.string(), // draft | building | ready | exported
+    exports: v.optional(v.any()),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_status", ["status"]),
 });

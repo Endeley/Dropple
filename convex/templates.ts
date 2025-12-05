@@ -14,82 +14,66 @@ const layerSchema = v.object({
   props: v.optional(v.any()),
 });
 
-export const createTemplate = mutation({
+export const saveTemplate = mutation({
   args: {
-    templateData: v.object({
-      name: v.string(),
-      mode: v.string(),
-      thumbnail: v.optional(v.string()),
-      tags: v.optional(v.array(v.string())),
-      category: v.optional(v.string()),
-      width: v.number(),
-      height: v.number(),
-      layers: v.array(layerSchema),
-      price: v.optional(v.number()),
-    }),
+    id: v.optional(v.id("templates")),
+    name: v.string(),
+    category: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
+    authorId: v.optional(v.string()),
+    templateData: v.any(),
+    thumbnail: v.optional(v.string()),
+    mode: v.string(),
   },
-  handler: async ({ db, auth }, { templateData }) => {
+  handler: async ({ db, auth }, args) => {
     const identity = await auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
     const userId = identity.subject;
     const now = Date.now();
 
+    if (args.id) {
+      const existing = await db.get(args.id);
+      if (!existing) throw new Error("Template not found");
+      return await db.patch(args.id, {
+        name: args.name,
+        category: args.category,
+        tags: args.tags ?? [],
+        authorId: args.authorId ?? userId,
+        templateData: args.templateData,
+        thumbnail: args.thumbnail ?? undefined,
+        mode: args.mode,
+        version: (existing.version ?? 1) + 1,
+        updatedAt: now,
+      });
+    }
+
     return await db.insert("templates", {
-      ...templateData,
+      name: args.name,
+      mode: args.mode,
+      category: args.category,
+      tags: args.tags ?? [],
+      authorId: args.authorId ?? userId,
       userId,
-      tags: templateData.tags ?? [],
+      templateData: args.templateData,
+      thumbnail: args.thumbnail ?? undefined,
+      isPublished: false,
+      version: 1,
       createdAt: now,
       updatedAt: now,
-      version: 1,
-      isPublished: false,
-    });
-  },
-});
-
-export const updateTemplate = mutation({
-  args: {
-    id: v.id("templates"),
-    data: v.any(),
-  },
-  handler: async ({ db }, { id, data }) => {
-    return await db.patch(id, {
-      ...data,
-      updatedAt: Date.now(),
-      version: (data?.version ?? 1) + 1,
-    });
-  },
-});
-
-export const updateLayers = mutation({
-  args: {
-    id: v.id("templates"),
-    layers: v.array(layerSchema),
-  },
-  handler: async ({ db }, { id, layers }) => {
-    return await db.patch(id, {
-      layers,
-      updatedAt: Date.now(),
+      width: args.templateData?.width ?? 1080,
+      height: args.templateData?.height ?? 1080,
+      layers: args.templateData?.nodes ?? [],
+      price: args.templateData?.price,
+      purchases: 0,
     });
   },
 });
 
 export const publishTemplate = mutation({
-  args: {
-    id: v.id("templates"),
-    title: v.string(),
-    description: v.optional(v.string()),
-    price: v.optional(v.number()),
-    tags: v.optional(v.array(v.string())),
-    category: v.optional(v.string()),
-  },
-  handler: async ({ db }, { id, title, description, price, tags, category }) => {
+  args: { id: v.id("templates") },
+  handler: async ({ db }, { id }) => {
     return await db.patch(id, {
-      name: title,
-      description,
-      category,
       isPublished: true,
-      price: price ?? 0,
-      tags: tags ?? [],
       updatedAt: Date.now(),
     });
   },
@@ -102,40 +86,9 @@ export const getTemplate = query({
   },
 });
 
-export const getUserTemplates = query({
-  args: {},
-  handler: async ({ db, auth }) => {
-    const identity = await auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-    const userId = identity.subject;
-
-    return await db
-      .query("templates")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
-  },
-});
-
-export const getMarketplaceTemplates = query({
+export const listTemplates = query({
   args: {},
   handler: async ({ db }) => {
-    return await db
-      .query("templates")
-      .withIndex("by_published", (q) => q.eq("isPublished", true))
-      .collect();
-  },
-});
-
-export const incrementDownload = mutation({
-  args: { id: v.id("templates") },
-  handler: async ({ db }, { id }) => {
-    const template = await db.get(id);
-    if (!template) throw new Error("Template not found");
-
-    const current = template.purchases ?? 0;
-    await db.patch(id, {
-      purchases: current + 1,
-      updatedAt: Date.now(),
-    });
+    return await db.query("templates").order("desc").collect();
   },
 });

@@ -4,18 +4,12 @@ import { v } from "convex/values";
 export const createComponent = mutation({
   args: {
     name: v.string(),
+    authorId: v.optional(v.string()),
     category: v.string(),
     tags: v.array(v.string()),
     nodes: v.array(v.any()),
-    variants: v.optional(
-      v.array(
-        v.object({
-          id: v.string(),
-          name: v.string(),
-          nodes: v.array(v.any()),
-        }),
-      ),
-    ),
+    props: v.optional(v.any()),
+    variants: v.optional(v.any()),
   },
   handler: async ({ db, auth }, data) => {
     const identity = await auth.getUserIdentity();
@@ -24,6 +18,7 @@ export const createComponent = mutation({
 
     return await db.insert("components", {
       userId,
+      authorId: data.authorId ?? userId,
       ...data,
       variants: data.variants ?? [],
       createdAt: Date.now(),
@@ -86,6 +81,10 @@ export const getMarketplaceComponents = query({
   handler: async ({ db }) => {
     return await db.query("components").collect();
   },
+});
+
+export const listComponents = query(async ({ db }) => {
+  return await db.query("components").collect();
 });
 
 export const uploadComponent = mutation({
