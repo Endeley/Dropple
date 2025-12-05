@@ -359,4 +359,51 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_org", ["orgId"]),
+  deployments: defineTable({
+    projectId: v.string(),
+    target: v.string(), // vercel | cloudflare | aws | gcp | azure | fly | do | edge
+    region: v.optional(v.string()),
+    status: v.string(), // queued | deploying | healthy | failed | rolled_back
+    url: v.optional(v.string()),
+    error: v.optional(v.string()),
+    meta: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_project", ["projectId"]),
+  processes: defineTable({
+    pid: v.number(),
+    agent: v.string(),
+    state: v.string(), // running | sleeping | waiting | terminated
+    priority: v.string(),
+    cpu: v.number(),
+    memory: v.number(),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_agent", ["agent"])
+    .index("by_pid", ["pid"]),
+  systemEvents: defineTable({
+    type: v.string(),
+    payload: v.optional(v.any()),
+    actor: v.optional(v.string()),
+    timestamp: v.number(),
+  }).index("by_type", ["type"]),
+  sensoryInputs: defineTable({
+    kind: v.string(), // vision | audio | video | 3d | ar
+    source: v.optional(v.string()),
+    refId: v.optional(v.string()),
+    url: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+    embedding: v.optional(v.array(v.number())),
+    createdAt: v.number(),
+  }).index("by_kind", ["kind"]),
+  spatialGraphs: defineTable({
+    contextId: v.string(),
+    nodes: v.any(),
+    edges: v.any(),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_context", ["contextId"]),
 });

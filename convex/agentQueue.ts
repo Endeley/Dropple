@@ -157,3 +157,25 @@ export const continuousPipeline = mutation(async ({ db }) => {
   });
   return true;
 });
+
+export const autonomousCycle = mutation(async ({ db }) => {
+  const now = Date.now();
+  const tasks = [
+    { agent: "Product Manager Agent", prompt: "Autonomous roadmap check.", state: {}, createdAt: now },
+    { agent: "UX Agent", prompt: "Autonomous UX health check.", state: {}, createdAt: now },
+    { agent: "UI Agent", prompt: "Autonomous UI consistency check.", state: {}, createdAt: now },
+    { agent: "Layout Agent", prompt: "Autonomous layout QA.", state: {}, createdAt: now },
+    { agent: "Code Agent", prompt: "Autonomous code refactor opportunities.", state: {}, createdAt: now },
+    { agent: "Build Agent", prompt: "Autonomous stability build.", state: {}, createdAt: now },
+    { agent: "Test Agent", prompt: "Autonomous regression tests.", state: {}, createdAt: now },
+  ];
+
+  for (const t of tasks) {
+    await db.insert("agent_tasks", {
+      ...t,
+      status: "queued",
+      updatedAt: now,
+    });
+  }
+  return true;
+});
