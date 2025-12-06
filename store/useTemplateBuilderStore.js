@@ -32,6 +32,42 @@ const defaultLayerMeta = {
   animations: [],
 };
 
+const DEFAULT_TIMELINE_DURATION = 4000;
+const DEFAULT_TIMELINE_FPS = 60;
+const TIMELINE_TRACKS = [
+  { property: "position", defaultValue: { x: 0, y: 0 } },
+  { property: "scale", defaultValue: { x: 1, y: 1 } },
+  { property: "rotation", defaultValue: 0 },
+  { property: "opacity", defaultValue: 1 },
+  { property: "color", defaultValue: "#ffffff" },
+  { property: "filter", defaultValue: { blur: 0, contrast: 100, saturate: 100 } },
+  { property: "clipPath", defaultValue: "none" },
+  { property: "transform3d", defaultValue: { rotateX: 0, rotateY: 0, translateZ: 0 } },
+];
+
+const buildTracksFromLayer = (layer) =>
+  TIMELINE_TRACKS.map((track) => ({
+    property: track.property,
+    keyframes: [
+      {
+        time: 0,
+        value:
+          typeof track.defaultValue === "object"
+            ? { ...track.defaultValue }
+            : track.defaultValue,
+        easing: "ease-out",
+      },
+      {
+        time: 1200,
+        value:
+          typeof track.defaultValue === "object"
+            ? { ...track.defaultValue }
+            : track.defaultValue,
+        easing: "ease-in-out",
+      },
+    ],
+  }));
+
 export const useTemplateBuilderStore = create((set, get) => {
   const getActiveContext = () => {
     const state = get();
@@ -284,6 +320,14 @@ export const useTemplateBuilderStore = create((set, get) => {
     },
   ],
   activePageId: "page_1",
+  timeline: {
+    duration: DEFAULT_TIMELINE_DURATION,
+    zoom: 1,
+    loop: true,
+    playing: false,
+    speed: 1,
+    fps: DEFAULT_TIMELINE_FPS,
+  },
   breakpoints: {
     base: 0,
     tablet: 768,
@@ -375,7 +419,53 @@ export const useTemplateBuilderStore = create((set, get) => {
   setActiveTheme: (id) => set({ activeThemeId: id }),
   setAgentMessages: (messages) => set({ agentMessages: messages }),
   setActiveBreakpoint: (bp) => set({ activeBreakpoint: bp }),
-  setScrubberTime: (t) => set({ scrubberTime: Math.max(0, t) }),
+  setScrubberTime: (t) =>
+    set((state) => {
+      const duration = state.timeline?.duration || DEFAULT_TIMELINE_DURATION;
+      const next = Math.max(0, Math.min(t, duration));
+      return { scrubberTime: next };
+    }),
+  setTimelineDuration: (ms) =>
+    set((state) => {
+      const duration = Math.max(200, ms || DEFAULT_TIMELINE_DURATION);
+      return {
+        timeline: { ...(state.timeline || {}), duration },
+        scrubberTime: Math.min(state.scrubberTime, duration),
+      };
+    }),
+  setTimelineZoom: (zoom) =>
+    set((state) => ({
+      timeline: {
+        ...(state.timeline || {}),
+        zoom: Math.max(0.25, Math.min(zoom || 1, 4)),
+      },
+    })),
+  setTimelineSpeed: (speed) =>
+    set((state) => ({
+      timeline: {
+        ...(state.timeline || {}),
+        speed: Math.max(0.25, Math.min(speed || 1, 3)),
+      },
+    })),
+  setTimelineLoop: (loop) =>
+    set((state) => ({
+      timeline: { ...(state.timeline || {}), loop: Boolean(loop) },
+    })),
+  playTimeline: () =>
+    set((state) => ({
+      timeline: { ...(state.timeline || {}), playing: true },
+    })),
+  pauseTimeline: () =>
+    set((state) => ({
+      timeline: { ...(state.timeline || {}), playing: false },
+    })),
+  toggleTimelinePlayback: () =>
+    set((state) => ({
+      timeline: {
+        ...(state.timeline || {}),
+        playing: !state.timeline?.playing,
+      },
+    })),
   setActivePage: (id) =>
     set((state) => {
       const active = state.pages.find((p) => p.id === id) || state.pages[0];
@@ -642,13 +732,55 @@ export const useTemplateBuilderStore = create((set, get) => {
       const updatedLayers = page.layers.map((layer) => {
         if (!layerIds.includes(layer.id)) return layer;
         const animations = [...(layer.animations || [])];
+        const baseTracks =
+          animation?.tracks?.length > 0
+            ? animation.tracks
+            : buildTracksFromLayer(layer);
+        const duration =
+          animation?.duration ||
+          state.timeline?.duration ||
+          DEFAULT_TIMELINE_DURATION;
         const anim = {
           ...animation,
           id: animation?.id || "anim_" + crypto.randomUUID(),
-          tracks: (animation?.tracks || []).map((t) => ({
+          name: animation?.name || "Motion",
+          duration,
+          tracks: baseTracks.map((t) => ({
             ...t,
             keyframes: (t.keyframes || []).map((k) => ({ ...k })),
           })),
+        };
+        animations.push(anim);
+        return { ...layer, animations };
+      });
+
+      pages[pageIndex] = { ...page, layers: updatedLayers };
+
+      return {
+        pages,
+        currentTemplate: { ...state.currentTemplate, layers: updatedLayers },
+      };
+    }),
+
+  ensureTimelineForSelection: () =>
+    set((state) => {
+      const pageIndex = state.pages.findIndex((p) => p.id === state.activePageId);
+      if (pageIndex === -1) return state;
+      const layerIds = state.selectedLayers || [];
+      if (!layerIds.length) return state;
+      const pages = [...state.pages];
+      const page = { ...pages[pageIndex], layers: [...(pages[pageIndex].layers || [])] };
+
+      const updatedLayers = page.layers.map((layer) => {
+        if (!layerIds.includes(layer.id)) return layer;
+        const animations = [...(layer.animations || [])];
+        if (animations.length > 0) return layer;
+        const anim = {
+          id: "anim_" + crypto.randomUUID(),
+          name: "Timeline",
+          duration: state.timeline?.duration || DEFAULT_TIMELINE_DURATION,
+          easing: "ease-in-out",
+          tracks: buildTracksFromLayer(layer),
         };
         animations.push(anim);
         return { ...layer, animations };
@@ -687,9 +819,14 @@ export const useTemplateBuilderStore = create((set, get) => {
       animations[animIdx] = { ...animations[animIdx], tracks };
       page.layers[layerIndex] = { ...page.layers[layerIndex], animations };
       pages[pageIndex] = page;
+      const nextDuration = Math.max(
+        state.timeline?.duration || DEFAULT_TIMELINE_DURATION,
+        (time || 0) + 120,
+      );
       return {
         pages,
         currentTemplate: { ...state.currentTemplate, layers: page.layers },
+        timeline: { ...(state.timeline || {}), duration: nextDuration },
       };
     }),
 
@@ -715,9 +852,14 @@ export const useTemplateBuilderStore = create((set, get) => {
       animations[animIdx] = { ...animations[animIdx], tracks };
       page.layers[layerIndex] = { ...page.layers[layerIndex], animations };
       pages[pageIndex] = page;
+      const nextDuration = Math.max(
+        state.timeline?.duration || DEFAULT_TIMELINE_DURATION,
+        (time || 0) + 120,
+      );
       return {
         pages,
         currentTemplate: { ...state.currentTemplate, layers: page.layers },
+        timeline: { ...(state.timeline || {}), duration: nextDuration },
       };
     }),
 

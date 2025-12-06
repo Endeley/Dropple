@@ -2,16 +2,12 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+First, run the development server (Turbopack is disabled by default to avoid the current panic):
 
 ```bash
-npm run dev
+npm run dev          # webpack dev server
 # or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run dev:turbo    # opt in to Turbopack (currently unstable here)
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.

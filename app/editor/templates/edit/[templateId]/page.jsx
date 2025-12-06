@@ -8,6 +8,7 @@ import TemplateToolbar from "@/components/template-builder/TemplateToolbar";
 import BuilderSidebar from "@/components/template-builder/BuilderSidebar";
 import BuilderCanvas from "@/components/template-builder/BuilderCanvas";
 import BuilderRightPanel from "@/components/template-builder/BuilderRightPanel";
+import TimelineDock from "@/components/template-builder/TimelineDock";
 
 export default function EditTemplatePage({ params }) {
   const { templateId } = params;
@@ -43,6 +44,9 @@ export default function EditTemplatePage({ params }) {
         {/* Right Inspector Panel */}
         <BuilderRightPanel />
       </div>
+
+      {/* Timeline */}
+      <TimelineDock />
     </div>
   );
 }

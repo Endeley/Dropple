@@ -5,6 +5,7 @@ import TemplateToolbar from "@/components/template-builder/TemplateToolbar";
 import BuilderSidebar from "@/components/template-builder/BuilderSidebar";
 import BuilderCanvas from "@/components/template-builder/BuilderCanvas";
 import BuilderRightPanel from "@/components/template-builder/BuilderRightPanel";
+import TimelineDock from "@/components/template-builder/TimelineDock";
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 import { useEffect } from "react";
 
@@ -171,6 +172,9 @@ export default function CreateTemplatePage() {
         {/* Right Panel (Inspector / Properties) */}
         <BuilderRightPanel />
       </div>
+
+      {/* Timeline */}
+      <TimelineDock />
     </div>
   );
 }
