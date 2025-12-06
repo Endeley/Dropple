@@ -1,15 +1,14 @@
 "use client";
 
-import TimelineContainer from "@/components/timeline/TimelineContainer";
 import { useEffect } from "react";
+import TimelineContainer from "@/components/timeline/TimelineContainer";
 import { useTimelineStore } from "@/zustand/useTimelineStore";
 import { useSelectionStore } from "@/zustand/selectionStore";
-import { generateVideoThumbnail, generateVideoThumbnails } from "@/lib/video-core/thumbnails";
 import { generateWaveformFromUrl } from "@/lib/audio-core/waveform";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
-export default function VideoTimeline() {
+export default function PodcastTimeline() {
   const tracks = useTimelineStore((s) => s.tracks);
   const setTracks = useTimelineStore((s) => s.setTracks);
   const addClip = useTimelineStore((s) => s.addClip);
@@ -22,9 +21,9 @@ export default function VideoTimeline() {
   useEffect(() => {
     if (!tracks?.length) {
       setTracks([
-        { id: "v1", type: "video", name: "Video 1", clips: [] },
-        { id: "a1", type: "audio", name: "Audio 1", clips: [] },
-        { id: "fx1", type: "effect", name: "Effects", clips: [] },
+        { id: "main", type: "audio", name: "Main Audio", clips: [] },
+        { id: "music", type: "audio", name: "Music", clips: [] },
+        { id: "sfx", type: "audio", name: "SFX", clips: [] },
       ]);
     }
   }, [tracks?.length, setTracks]);
@@ -43,34 +42,7 @@ export default function VideoTimeline() {
       start,
       duration,
       waveform: asset.waveform,
-      thumbnail: asset.thumbnail,
-      thumbnails: asset.thumbnails,
     });
-
-    if (asset.type === "video") {
-      generateVideoThumbnails(asset.url, 3)
-        .then((thumbs) => {
-          const primary = thumbs?.[0] || null;
-          updateClip(trackId, clipId, { thumbnail: primary, thumbnails: thumbs });
-          if (asset._id) {
-            updateAssetMetadata({
-              id: asset._id,
-              thumbnail: primary || undefined,
-              thumbnails: thumbs?.length ? thumbs : undefined,
-            }).catch(() => {});
-          }
-        })
-        .catch(() => {
-          generateVideoThumbnail(asset.url)
-            .then((thumb) => {
-              updateClip(trackId, clipId, { thumbnail: thumb });
-              if (asset._id) {
-                updateAssetMetadata({ id: asset._id, thumbnail: thumb }).catch(() => {});
-              }
-            })
-            .catch(() => {});
-        });
-    }
 
     if (asset.type === "audio" && !asset.waveform) {
       generateWaveformFromUrl(asset.url, 120)

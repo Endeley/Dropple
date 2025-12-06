@@ -6,11 +6,12 @@ import UIUXTools from "./components/UIUXTools";
 import UIUXCanvas from "./components/UIUXCanvas";
 import UIUXProperties from "./components/UIUXProperties";
 import UIUXPrototypePanel from "./components/UIUXPrototypePanel";
+import UIUXTopBar from "./components/UIUXTopBar";
 
 export default function UIUXWorkspace() {
   return (
     <WorkspaceShell
-      top={<ModeSwitcher />}
+      top={<UIUXTopBar />}
       left={<UIUXTools />}
       canvas={<UIUXCanvas />}
       right={<UIUXProperties />}

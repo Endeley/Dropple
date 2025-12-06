@@ -54,6 +54,17 @@ export const useTimelineStore = create((set, get) => ({
   setLayers: (layers) => set({ layers }),
   setTracks: (tracks) => set({ tracks }),
 
+  updateClip: (trackId, clipId, updates) =>
+    set((state) => ({
+      tracks: state.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        return {
+          ...t,
+          clips: (t.clips || []).map((c) => (c.id === clipId ? { ...c, ...updates } : c)),
+        };
+      }),
+    })),
+
   addClip: (trackId, clip) =>
     set((state) => ({
       tracks: state.tracks.map((t) =>
@@ -70,6 +81,9 @@ export const useTimelineStore = create((set, get) => ({
                   assetId: clip.assetId,
                   type: clip.type,
                   name: clip.name,
+                  thumbnail: clip.thumbnail,
+                  thumbnails: clip.thumbnails,
+                  waveform: clip.waveform,
                 },
               ],
             }

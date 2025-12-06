@@ -4,7 +4,7 @@ import ModeSwitcher from "@/components/workspace/ModeSwitcher";
 import { useTimelineStore } from "@/zustand/useTimelineStore";
 import { useSelectionStore } from "@/zustand/selectionStore";
 
-export default function VideoTopBar() {
+export default function PodcastTopBar() {
   const playing = useTimelineStore((s) => s.playing);
   const togglePlay = useTimelineStore((s) => s.togglePlay);
   const currentTime = useTimelineStore((s) => s.currentTime);

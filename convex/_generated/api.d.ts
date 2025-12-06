@@ -40,6 +40,7 @@ import type * as system from "../system.js";
 import type * as teams from "../teams.js";
 import type * as templates from "../templates.js";
 import type * as themes from "../themes.js";
+import type * as updateAssetMetadata from "../updateAssetMetadata.js";
 import type * as users from "../users.js";
 import type * as workspace from "../workspace.js";
 
@@ -82,6 +83,7 @@ declare const fullApi: ApiFromModules<{
   teams: typeof teams;
   templates: typeof templates;
   themes: typeof themes;
+  updateAssetMetadata: typeof updateAssetMetadata;
   users: typeof users;
   workspace: typeof workspace;
 }>;

@@ -6,11 +6,12 @@ import GraphicTools from "./components/GraphicTools";
 import GraphicCanvas from "./components/GraphicCanvas";
 import GraphicProperties from "./components/GraphicProperties";
 import GraphicLayers from "./components/GraphicLayers";
+import GraphicTopBar from "./components/GraphicTopBar";
 
 export default function GraphicWorkspace() {
   return (
     <WorkspaceShell
-      top={<ModeSwitcher />}
+      top={<GraphicTopBar />}
       left={<GraphicTools />}
       canvas={<GraphicCanvas />}
       right={<GraphicProperties />}

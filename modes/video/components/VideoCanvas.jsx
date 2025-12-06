@@ -9,6 +9,15 @@ export default function VideoCanvas() {
   const playing = useTimelineStore((s) => s.playing);
   const currentTime = useTimelineStore((s) => s.currentTime);
   const setTime = useTimelineStore((s) => s.setTime);
+  const tracks = useTimelineStore((s) => s.tracks);
+  const duration = useTimelineStore((s) => s.duration);
+  const selectedIds = useSelectionStore((s) => s.selectedIds);
+
+  const activeVideoClip =
+    tracks
+      ?.find((t) => t.type === "video" && t.clips?.length)
+      ?.clips?.slice()
+      .sort((a, b) => (a.start || 0) - (b.start || 0))[0] || null;
 
   useEffect(() => {
     const el = videoRef.current;
@@ -37,11 +46,35 @@ export default function VideoCanvas() {
     }
   }, [currentTime]);
 
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !activeVideoClip?.src) return;
+    if (el.src !== activeVideoClip.src) {
+      el.src = activeVideoClip.src;
+      el.load();
+    }
+  }, [activeVideoClip?.src]);
+
+  const handleScrub = (e) => {
+    const container = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - container.left;
+    const ratio = Math.min(1, Math.max(0, x / container.width));
+    setTime(ratio * duration);
+  };
+
   return (
     <CanvasHost>
-      <div className="flex items-center justify-center w-full h-full">
+      <div
+        className="flex items-center justify-center w-full h-full"
+        onMouseDown={handleScrub}
+        onMouseMove={(e) => {
+          if (e.buttons === 1) handleScrub(e);
+        }}
+      >
         <div
-          className="relative bg-black shadow-2xl rounded-lg overflow-hidden"
+          className={`relative bg-black shadow-2xl rounded-lg overflow-hidden ${
+            selectedIds?.length ? "ring-2 ring-blue-400/60" : ""
+          }`}
           style={{ width: "70%", aspectRatio: "16 / 9" }}
         >
           <video

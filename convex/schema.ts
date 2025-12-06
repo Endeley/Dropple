@@ -56,18 +56,28 @@ export default defineSchema({
     .index("by_category", ["category"]),
   assets: defineTable({
     userId: v.string(),
+    projectId: v.optional(v.id("projects")),
     name: v.string(),
-    fileId: v.string(),
+    fileId: v.optional(v.string()),
+    storageId: v.optional(v.id("_storage")),
     url: v.string(),
     filename: v.optional(v.string()),
-    type: v.optional(v.string()),
+    type: v.optional(v.string()), // mime or friendly type
     size: v.optional(v.number()),
     width: v.optional(v.number()),
     height: v.optional(v.number()),
-    tags: v.array(v.string()),
+    duration: v.optional(v.number()),
+    waveform: v.optional(v.array(v.number())),
+    thumbnail: v.optional(v.string()),
+    thumbnails: v.optional(v.array(v.string())),
+    colors: v.optional(v.array(v.string())),
+    tags: v.optional(v.array(v.string())),
     folder: v.optional(v.string()),
     createdAt: v.number(),
-  }).index("by_user", ["userId"]),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_project", ["projectId"]),
   presence: defineTable({
     userId: v.string(),
     projectId: v.string(),
@@ -508,19 +518,4 @@ export default defineSchema({
   })
     .index("by_scene", ["sceneId"])
     .index("by_project", ["projectId"]),
-  assets: defineTable({
-    projectId: v.optional(v.string()),
-    userId: v.string(),
-    name: v.string(),
-    type: v.string(), // image | video | audio | ai | document | etc.
-    url: v.string(),
-    size: v.number(),
-    width: v.optional(v.number()),
-    height: v.optional(v.number()),
-    duration: v.optional(v.number()),
-    waveform: v.optional(v.array(v.number())),
-    colors: v.optional(v.array(v.string())),
-    tags: v.optional(v.array(v.string())),
-    createdAt: v.number(),
-  }).index("by_project", ["projectId"]),
 });

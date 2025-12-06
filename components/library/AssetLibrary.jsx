@@ -54,10 +54,39 @@ export default function AssetLibrary({ onSelect }) {
               <img src={asset.url} className="w-full h-24 object-cover" alt={asset.name} />
             )}
             {asset.type === "video" && (
-              <video src={asset.url} className="w-full h-24 object-cover" />
+              <div className="w-full h-24 relative flex overflow-hidden">
+                {asset.thumbnails?.length ? (
+                  asset.thumbnails.map((thumb, idx) => (
+                    <div
+                      key={idx}
+                      className="flex-1 bg-center bg-cover"
+                      style={{ backgroundImage: `url(${thumb})` }}
+                    />
+                  ))
+                ) : (
+                  <video src={asset.url} className="absolute inset-0 w-full h-full object-cover" />
+                )}
+                <div className="absolute bottom-1 right-1 bg-black/60 text-xs px-2 py-0.5 rounded">
+                  🎬
+                </div>
+              </div>
             )}
             {asset.type === "audio" && (
-              <div className="h-24 flex items-center justify-center text-neutral-300">🎵 Audio</div>
+              <div className="h-24 flex items-end gap-[2px] px-2 pb-2 bg-neutral-800">
+                {asset.waveform?.length ? (
+                  asset.waveform.slice(0, 80).map((v, i) => (
+                    <div
+                      key={i}
+                      className="bg-blue-400/70"
+                      style={{ width: "2px", height: `${Math.min(1, Math.max(0, v)) * 100}%` }}
+                    />
+                  ))
+                ) : (
+                  <div className="w-full text-center text-neutral-300 flex items-center justify-center">
+                    🎵 Audio
+                  </div>
+                )}
+              </div>
             )}
             {asset.type === "ai" && (
               <img

@@ -5,21 +5,33 @@ export const uploadAsset = mutation({
   args: {
     name: v.string(),
     type: v.string(),
-    url: v.string(),
-    size: v.number(),
+    url: v.optional(v.string()),
+    storageId: v.optional(v.id("_storage")),
+    size: v.optional(v.number()),
     width: v.optional(v.number()),
     height: v.optional(v.number()),
     duration: v.optional(v.number()),
     projectId: v.optional(v.id("projects")),
     waveform: v.optional(v.array(v.number())),
+    thumbnail: v.optional(v.string()),
+    thumbnails: v.optional(v.array(v.string())),
     colors: v.optional(v.array(v.string())),
     tags: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity?.();
+    const storageId = args.storageId;
+    const resolvedUrl =
+      args.url ||
+      (storageId ? await ctx.storage.getUrl(storageId) : null) ||
+      "";
     return ctx.db.insert("assets", {
       ...args,
+      url: resolvedUrl,
+      size: args.size ?? 0,
       createdAt: Date.now(),
-      userId: ctx.auth?.identity?.tokenIdentifier || "anonymous",
+      updatedAt: Date.now(),
+      userId: identity?.tokenIdentifier || "anonymous",
     });
   },
 });

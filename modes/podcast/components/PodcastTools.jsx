@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import AssetLibrary from "@/components/library/AssetLibrary";
 import { useTimelineStore } from "@/zustand/useTimelineStore";
 
-export default function VideoTools() {
-  const tabs = ["Media", "Transitions", "Effects", "Titles", "Audio", "Templates"];
-  const [active, setActive] = useState("Media");
+export default function PodcastTools() {
+  const tabs = ["Audio", "Music", "SFX", "Voice", "Effects"];
+  const [active, setActive] = useState("Audio");
   const tracks = useTimelineStore((s) => s.tracks);
   const setTracks = useTimelineStore((s) => s.setTracks);
   const addClip = useTimelineStore((s) => s.addClip);
@@ -14,33 +14,30 @@ export default function VideoTools() {
   useEffect(() => {
     if (!tracks?.length) {
       setTracks([
-        { id: "v1", type: "video", name: "Video 1", clips: [] },
-        { id: "a1", type: "audio", name: "Audio 1", clips: [] },
-        { id: "fx1", type: "effect", name: "Effects", clips: [] },
+        { id: "main", type: "audio", name: "Main Audio", clips: [] },
+        { id: "music", type: "audio", name: "Music", clips: [] },
+        { id: "sfx", type: "audio", name: "SFX", clips: [] },
       ]);
     }
   }, [tracks?.length, setTracks]);
 
-  const defaultVideoTrackId = useMemo(() => {
+  const defaultAudioTrackId = useMemo(() => {
     if (tracks?.length) {
-      return tracks.find((t) => t.type === "video")?.id || tracks[0].id;
+      return tracks.find((t) => t.type === "audio")?.id || tracks[0].id;
     }
-    return "v1";
+    return "main";
   }, [tracks]);
 
   const handleAddAsset = (asset) => {
     const duration =
       asset?.duration && asset.duration > 0 ? asset.duration : asset?.length || 2000;
-    addClip(defaultVideoTrackId, {
+    addClip(defaultAudioTrackId, {
       assetId: asset._id || asset.id,
       src: asset.url,
       type: asset.type,
       name: asset.name,
       start: 0,
       duration,
-      waveform: asset.waveform,
-      thumbnail: asset.thumbnail,
-      thumbnails: asset.thumbnails,
     });
   };
 
@@ -60,12 +57,10 @@ export default function VideoTools() {
         ))}
       </div>
 
-      {active === "Media" && <AssetLibrary onSelect={handleAddAsset} />}
+      {active === "Audio" && <AssetLibrary onSelect={handleAddAsset} />}
 
-      {active !== "Media" && (
-        <div className="text-sm text-neutral-500 px-2">
-          {active} panel coming soon.
-        </div>
+      {active !== "Audio" && (
+        <div className="text-sm text-neutral-500 px-2">{active} panel coming soon.</div>
       )}
     </div>
   );
