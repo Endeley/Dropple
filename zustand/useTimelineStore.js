@@ -54,6 +54,29 @@ export const useTimelineStore = create((set, get) => ({
   setLayers: (layers) => set({ layers }),
   setTracks: (tracks) => set({ tracks }),
 
+  addClip: (trackId, clip) =>
+    set((state) => ({
+      tracks: state.tracks.map((t) =>
+        t.id === trackId
+          ? {
+              ...t,
+              clips: [
+                ...(t.clips || []),
+                {
+                  id: clip.id || generateId(),
+                  start: clip.start ?? 0,
+                  duration: clip.duration ?? 1000,
+                  src: clip.src,
+                  assetId: clip.assetId,
+                  type: clip.type,
+                  name: clip.name,
+                },
+              ],
+            }
+          : t,
+      ),
+    })),
+
   addTrack: ({ targetId, property, name, targetType = "node" }) => {
     const newTrack = {
       id: generateId(),
