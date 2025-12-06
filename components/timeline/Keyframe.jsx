@@ -5,6 +5,7 @@ import { useTimelineStore } from "@/zustand/useTimelineStore";
 
 export default function Keyframe({ frame, trackId, pxPerMs = 0.1, duration = 5000 }) {
   const moveKeyframe = useTimelineStore((s) => s.moveKeyframe);
+  const openCurveEditor = useTimelineStore((s) => s.openCurveEditor);
   const [dragging, setDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [startTime, setStartTime] = useState(frame.t || 0);
@@ -38,6 +39,10 @@ export default function Keyframe({ frame, trackId, pxPerMs = 0.1, duration = 500
         setStartX(e.clientX);
         setStartTime(frame.t || 0);
         setDragging(true);
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        openCurveEditor(trackId, frame.id);
       }}
     />
   );

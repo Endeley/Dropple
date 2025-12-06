@@ -12,10 +12,12 @@ import PageSwitcher from "./PageSwitcher";
 import PrototypeConnections from "./PrototypeConnections";
 import DevicePreviewBar from "./DevicePreviewBar";
 import MultiplayerCursors from "./MultiplayerCursors";
+import { useTimelinePlayer } from "@/zustand/useTimelinePlayer";
 
 export default function BuilderCanvas() {
   const { currentTemplate, isEditingComponent, addLayer } = useTemplateBuilderStore();
   const containerRef = useRef(null);
+  useTimelinePlayer();
 
   if (isEditingComponent) {
     return (

@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { convexClient } from "@/lib/convex/client";
 
 const generateId = () =>
   typeof crypto !== "undefined" && crypto.randomUUID
@@ -14,7 +15,15 @@ export const useTimelineStore = create((set, get) => ({
   currentTime: 0,
   playing: false,
   zoom: 1,
+  fps: 60,
+  tracks: [],
   layers: [],
+  curveEditor: {
+    open: false,
+    trackId: null,
+    keyframeId: null,
+    selectedKeyframe: null,
+  },
 
   /* --- Actions --- */
   play: () => set({ playing: true }),
@@ -37,14 +46,21 @@ export const useTimelineStore = create((set, get) => ({
       zoom: clamp(z || 1, 0.25, 4),
     })),
 
-  setLayers: (layers) => set({ layers }),
+  setFps: (fps) =>
+    set(() => ({
+      fps: Math.max(1, fps || 1),
+    })),
 
-  addTrack: ({ targetId, property, name }) => {
+  setLayers: (layers) => set({ layers }),
+  setTracks: (tracks) => set({ tracks }),
+
+  addTrack: ({ targetId, property, name, targetType = "node" }) => {
     const newTrack = {
       id: generateId(),
       targetId,
       property,
       name: name || property,
+      targetType,
       keyframes: [],
     };
     set({ layers: [...get().layers, newTrack] });
@@ -76,5 +92,98 @@ export const useTimelineStore = create((set, get) => ({
         return { ...t, keyframes };
       }),
     });
+  },
+
+  playTimelineForTarget: async (timelineId, targetId) => {
+    // Placeholder hook for wiring timelines to state machines; currently reuse loadFromServer
+    return get().loadFromServer(timelineId, targetId);
+  },
+
+  updateKeyframeEase: (trackId, keyId, handleType, point) => {
+    set((state) => {
+      const layers = state.layers.map((t) => {
+        if (t.id !== trackId) return t;
+        const keyframes = t.keyframes.map((k) => {
+          if (k.id !== keyId) return k;
+          const nextEase = {
+            type: "bezier",
+            in: k.ease?.in || { x: 0.25, y: 0.1 },
+            out: k.ease?.out || { x: 0.25, y: 1 },
+          };
+          nextEase[handleType] = { ...(nextEase[handleType] || {}), ...point };
+          return { ...k, ease: nextEase };
+        });
+        return { ...t, keyframes };
+      });
+      const editor = state.curveEditor;
+      const selected =
+        editor?.trackId && editor?.keyframeId
+          ? layers
+              .find((l) => l.id === editor.trackId)
+              ?.keyframes.find((k) => k.id === editor.keyframeId) || null
+          : null;
+      return {
+        layers,
+        curveEditor: { ...(editor || {}), selectedKeyframe: selected },
+      };
+    });
+  },
+
+  openCurveEditor: (trackId, keyId) => {
+    const layers = get().layers;
+    const layer = layers.find((l) => l.id === trackId);
+    const kf = layer?.keyframes?.find((k) => k.id === keyId) || null;
+    set({
+      curveEditor: {
+        open: true,
+        trackId,
+        keyframeId: keyId,
+        selectedKeyframe: kf,
+      },
+    });
+  },
+
+  closeCurveEditor: () =>
+    set({
+      curveEditor: {
+        open: false,
+        trackId: null,
+        keyframeId: null,
+        selectedKeyframe: null,
+      },
+    }),
+
+  /* --- Persistence --- */
+  saveToServer: async (projectId, sceneId) => {
+    const state = get();
+    if (!sceneId) return;
+    try {
+      await convexClient.mutation("animations:saveAnimation", {
+        projectId: projectId || null,
+        sceneId,
+        duration: state.duration,
+        fps: state.fps || 60,
+        layers: state.layers,
+      });
+    } catch (err) {
+      console.error("Failed to save animation", err);
+    }
+  },
+
+  loadFromServer: async (sceneId) => {
+    if (!sceneId) return;
+    try {
+      const data = await convexClient.query("animations:getAnimation", { sceneId });
+      if (!data) return;
+      set({
+        duration: data.duration,
+        fps: data.fps || 60,
+        layers: data.layers || [],
+        currentTime: 0,
+        playing: false,
+      });
+    } catch (err) {
+      console.error("Failed to load animation", err);
+    }
   },
 }));

@@ -438,4 +438,89 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_status", ["status"]),
+  pageTransitions: defineTable({
+    from: v.string(), // route or scene id
+    to: v.string(),
+    transitionIn: v.optional(v.any()), // timeline JSON
+    transitionOut: v.optional(v.any()), // timeline JSON
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_from_to", ["from", "to"])
+    .index("by_from", ["from"]),
+  stateMachines: defineTable({
+    componentId: v.string(),
+    states: v.array(v.string()),
+    transitions: v.array(
+      v.object({
+        from: v.string(),
+        to: v.string(),
+        trigger: v.string(),
+        condition: v.optional(v.string()),
+        timelineId: v.optional(v.id("animations")),
+      }),
+    ),
+    variables: v.optional(v.any()),
+    createdAt: v.number(),
+  }).index("by_component", ["componentId"]),
+  componentBehaviors: defineTable({
+    componentId: v.string(),
+    behaviors: v.array(
+      v.object({
+        type: v.string(), // hover | hoverMove | drag | scroll | swipe | tilt | tap | press etc.
+        config: v.optional(v.any()),
+        onTrigger: v.optional(v.string()),
+        timelineId: v.optional(v.id("animations")),
+      }),
+    ),
+    createdAt: v.number(),
+  }).index("by_component", ["componentId"]),
+  audioAssets: defineTable({
+    projectId: v.optional(v.string()),
+    name: v.string(),
+    url: v.string(),
+    duration: v.number(),
+    waveform: v.array(v.number()),
+    createdAt: v.number(),
+  }).index("by_project", ["projectId"]),
+  animations: defineTable({
+    projectId: v.optional(v.string()), // use string ids to avoid coupling to missing tables
+    sceneId: v.string(),
+    duration: v.number(),
+    fps: v.number(),
+    layers: v.array(
+      v.object({
+        id: v.string(),
+        targetId: v.string(),
+        property: v.string(),
+        keyframes: v.array(
+          v.object({
+            id: v.string(),
+            t: v.number(),
+            value: v.any(),
+            ease: v.optional(v.string()),
+          }),
+        ),
+      }),
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_scene", ["sceneId"])
+    .index("by_project", ["projectId"]),
+  assets: defineTable({
+    projectId: v.optional(v.string()),
+    userId: v.string(),
+    name: v.string(),
+    type: v.string(), // image | video | audio | ai | document | etc.
+    url: v.string(),
+    size: v.number(),
+    width: v.optional(v.number()),
+    height: v.optional(v.number()),
+    duration: v.optional(v.number()),
+    waveform: v.optional(v.array(v.number())),
+    colors: v.optional(v.array(v.string())),
+    tags: v.optional(v.array(v.string())),
+    createdAt: v.number(),
+  }).index("by_project", ["projectId"]),
 });

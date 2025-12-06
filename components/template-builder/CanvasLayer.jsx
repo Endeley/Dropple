@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
+import { useComponentRegistry } from "@/zustand/useComponentRegistry";
+import { useSceneGraph } from "@/zustand/useSceneGraph";
+import { useStateMachine } from "@/zustand/useStateMachine";
+import { useBehaviorsStore } from "@/zustand/useBehaviorsStore";
 
 export default function CanvasLayer({
   layer,
@@ -33,6 +37,22 @@ export default function CanvasLayer({
   } = useTemplateBuilderStore();
 
   const ref = useRef(null);
+  const { register, unregister } = useComponentRegistry((state) => ({
+    register: state.register,
+    unregister: state.unregister,
+  }));
+  const { upsertNode, removeNode } = useSceneGraph((state) => ({
+    upsertNode: state.upsertNode,
+    removeNode: state.removeNode,
+  }));
+  const { triggerEvent, loadMachine } = useStateMachine((state) => ({
+    triggerEvent: state.triggerEvent,
+    loadMachine: state.loadMachine,
+  }));
+  const { trigger: triggerBehavior, loadBehaviors } = useBehaviorsStore((state) => ({
+    trigger: state.trigger,
+    loadBehaviors: state.loadBehaviors,
+  }));
   const [dragging, setDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const renderX = (parentOffset?.x || 0) + layer.x;
@@ -45,6 +65,28 @@ export default function CanvasLayer({
       ref.current.focus();
     }
   }, [editingTextId, layer.id]);
+
+  useEffect(() => {
+    if (!layer?.id) return;
+    register(layer.id, ref);
+    return () => unregister(layer.id);
+  }, [layer?.id, register, unregister]);
+
+  useEffect(() => {
+    if (!layer?.id) return;
+    upsertNode(layer.id, layer.parentId || null);
+    return () => removeNode(layer.id);
+  }, [layer?.id, layer?.parentId, upsertNode, removeNode]);
+
+  useEffect(() => {
+    if (!layer?.id) return;
+    loadMachine(layer.id);
+  }, [layer?.id, loadMachine]);
+
+  useEffect(() => {
+    if (!layer?.id) return;
+    loadBehaviors(layer.id);
+  }, [layer?.id, loadBehaviors]);
 
   const isSelected = selectedLayerId === layer.id || selectedLayers.includes(layer.id);
   const parent = isComponentMaster
@@ -195,6 +237,38 @@ export default function CanvasLayer({
     setDragging(false);
     setActiveGuides([]);
   }
+
+  const interactionHandlers = {
+    onMouseEnter: () => {
+      triggerEvent(layer.id, "onHover");
+      triggerBehavior(layer.id, "hover");
+    },
+    onMouseLeave: () => {
+      triggerEvent(layer.id, "onUnhover");
+      triggerBehavior(layer.id, "hoverLeave");
+    },
+    onMouseDown: (e) => {
+      handleMouseDown(e);
+      triggerEvent(layer.id, "onPress");
+      triggerBehavior(layer.id, "press");
+    },
+    onMouseUp: () => {
+      handleMouseUp();
+      triggerEvent(layer.id, "onRelease");
+      triggerBehavior(layer.id, "release");
+    },
+    onClick: () => {
+      triggerEvent(layer.id, "onClick");
+      triggerBehavior(layer.id, "tap");
+    },
+    onMouseMove: (e) => {
+      handleMouseMove(e);
+      triggerBehavior(layer.id, "hoverMove", {
+        x: e.clientX,
+        y: e.clientY,
+      });
+    },
+  };
 
   const renderComponentChildren = () => {
     const nodesBase = layer.componentNodes || layer.nodes || [];
@@ -400,9 +474,12 @@ export default function CanvasLayer({
     <div
       style={style}
       className="select-none"
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
+      onMouseDown={interactionHandlers.onMouseDown}
+      onMouseMove={interactionHandlers.onMouseMove}
+      onMouseUp={interactionHandlers.onMouseUp}
+      onMouseEnter={interactionHandlers.onMouseEnter}
+      onMouseLeave={interactionHandlers.onMouseLeave}
+      onClick={interactionHandlers.onClick}
       ref={ref}
     >
       {layer.type === "text" && (
