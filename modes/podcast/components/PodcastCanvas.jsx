@@ -3,6 +3,7 @@
 import CanvasHost from "@/components/canvas/CanvasHost";
 import { useEffect, useMemo, useRef } from "react";
 import { useTimelineStore } from "@/zustand/useTimelineStore";
+import { useSelectionStore } from "@/zustand/selectionStore";
 
 export default function PodcastCanvas() {
   const audioRef = useRef(null);

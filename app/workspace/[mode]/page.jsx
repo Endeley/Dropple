@@ -1,7 +1,9 @@
 "use client";
 
 import ModeLoader from "@/components/workspace/ModeLoader";
+import { use } from "react";
 
 export default function WorkspacePage({ params }) {
-  return <ModeLoader mode={params.mode} />;
+  const resolvedParams = use(params);
+  return <ModeLoader mode={resolvedParams.mode} />;
 }

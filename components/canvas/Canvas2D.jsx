@@ -1,12 +1,16 @@
 "use client";
 
 import CanvasHost from "./CanvasHost";
+import NodeRenderer from "./NodeRenderer";
 import TransformControls from "./TransformControls";
+import { useNodeTreeStore } from "@/zustand/nodeTreeStore";
 
 export default function Canvas2D() {
+  const nodes = useNodeTreeStore((s) => s.nodes);
+
   return (
-    <CanvasHost>
-      <div className="absolute top-0 left-0 w-full h-full">{/* 2D elements will render here */}</div>
+    <CanvasHost nodeMap={nodes}>
+      <NodeRenderer />
       <TransformControls />
     </CanvasHost>
   );

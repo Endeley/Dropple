@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useGlobalStore } from "@/zustand/globalModeStore";
 
 const MODES = [
@@ -18,17 +19,24 @@ const MODES = [
 
 export default function ModeSwitcher() {
   const { mode, setMode } = useGlobalStore();
+  const router = useRouter();
+
+  const handleSelect = (id) => {
+    setMode(id);
+    router.push(`/workspace/${id}`);
+  };
+
   return (
-    <div className="flex gap-4 px-4 text-sm overflow-x-auto">
+    <div className="flex gap-2 px-4 text-sm overflow-x-auto">
       {MODES.map((m) => (
         <button
           key={m.id}
-          onClick={() => setMode(m.id)}
-          className={
+          onClick={() => handleSelect(m.id)}
+          className={`px-2 py-1 rounded whitespace-nowrap transition ${
             mode === m.id
-              ? "text-blue-400 font-semibold whitespace-nowrap"
-              : "text-neutral-400 hover:text-white transition whitespace-nowrap"
-          }
+              ? "text-white font-semibold bg-gradient-to-r from-violet-500 via-fuchsia-500 to-blue-400"
+              : "text-neutral-600 hover:text-neutral-900"
+          }`}
         >
           {m.label}
         </button>

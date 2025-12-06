@@ -3,6 +3,7 @@
 import CanvasHost from "@/components/canvas/CanvasHost";
 import { useEffect, useRef } from "react";
 import { useTimelineStore } from "@/zustand/useTimelineStore";
+import { useSelectionStore } from "@/zustand/selectionStore";
 
 export default function VideoCanvas() {
   const videoRef = useRef(null);

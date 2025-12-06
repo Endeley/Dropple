@@ -1,11 +1,11 @@
 "use client";
 
-export default function TransformControls({ bounds }) {
+export default function TransformControls({ bounds, onResizeStart }) {
   if (!bounds) return null;
   return (
     <div
       id="transform-overlay"
-      className="absolute border border-blue-500 pointer-events-none"
+      className="absolute border border-fuchsia-400 pointer-events-none"
       style={{
         left: bounds.x,
         top: bounds.y,
@@ -26,16 +26,24 @@ export default function TransformControls({ bounds }) {
         <div
           key={h}
           data-handle={h}
-          className="absolute w-3 h-3 bg-white rounded-sm border border-blue-500 pointer-events-auto"
+          className="absolute w-3 h-3 bg-white rounded-sm border border-fuchsia-400 pointer-events-auto"
           style={handleStyle(h, bounds)}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            onResizeStart?.(e, h);
+          }}
         />
       ))}
       <div
         data-handle="rotate"
-        className="absolute w-4 h-4 bg-yellow-300 rounded-full border border-yellow-500 pointer-events-auto"
+        className="absolute w-4 h-4 bg-yellow-300 rounded-full border border-yellow-500 pointer-events-auto cursor-grab"
         style={{
           left: bounds.width / 2 - 8,
-          top: -24,
+          top: -28,
+        }}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          onResizeStart?.(e, "rotate");
         }}
       />
     </div>
