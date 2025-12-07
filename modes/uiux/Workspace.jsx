@@ -6,15 +6,19 @@ import UIUXCanvas from "./components/UIUXCanvas";
 import UIUXProperties from "./components/UIUXProperties";
 import UIUXTopBar from "./components/UIUXTopBar";
 import UIUXBottomBar from "./components/UIUXBottomBar";
+import AssetBrowser from "./components/AssetBrowser";
 
 export default function UIUXWorkspace() {
   return (
-    <WorkspaceShell
-      top={<UIUXTopBar />}
-      left={<UIUXTools />}
-      canvas={<UIUXCanvas />}
-      right={<UIUXProperties />}
-      bottom={<UIUXBottomBar />}
-    />
+    <>
+      <WorkspaceShell
+        top={<UIUXTopBar />}
+        left={<UIUXTools />}
+        canvas={<UIUXCanvas />}
+        right={<UIUXProperties />}
+        bottom={<UIUXBottomBar />}
+      />
+      <AssetBrowser />
+    </>
   );
 }

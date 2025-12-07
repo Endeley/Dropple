@@ -4,6 +4,9 @@ import { useToolStore } from "@/zustand/toolStore";
 import { useRef, useMemo } from "react";
 import { useNodeTreeStore } from "@/zustand/nodeTreeStore";
 import { useSelectionStore } from "@/zustand/selectionStore";
+import { useAssetBrowserStore } from "@/zustand/assetBrowserStore";
+import { useComponentStore } from "@/zustand/componentStore";
+import { useUndoStore } from "@/zustand/undoStore";
 
 export default function UIUXTools() {
   const { tool, setTool } = useToolStore();
@@ -16,6 +19,10 @@ export default function UIUXTools() {
   const selectedIds = useSelectionStore((s) => s.selectedIds);
   const fileRef = useRef(null);
   const frames = useMemo(() => rootIds.map((id) => nodes[id]).filter((n) => n?.type === "frame"), [nodes, rootIds]);
+  const openBrowser = useAssetBrowserStore((s) => s.openBrowser);
+  const addComponent = useComponentStore((s) => s.addComponent);
+  const components = useComponentStore((s) => s.components);
+  const pushHistory = useUndoStore((s) => s.push);
 
   const buttonClass = (id) =>
     `w-full px-3 py-2 text-left rounded-md text-sm font-medium transition border ${
@@ -62,6 +69,64 @@ export default function UIUXTools() {
     if (selectedIds.includes(frameId)) {
       deselectAll();
     }
+  };
+
+  const handleCreateComponent = () => {
+    if (!selectedIds.length) return;
+    const id = selectedIds[0];
+    const node = nodes[id];
+    if (!node || node.type !== "frame") return;
+    const componentId = "component_" + crypto.randomUUID();
+    const tree = {};
+    const collect = (nid) => {
+      const n = nodes[nid];
+      if (!n) return;
+      tree[nid] = { ...n };
+      (n.children || []).forEach(collect);
+    };
+    collect(id);
+    addComponent({
+      id: componentId,
+      name: node.name || "Component",
+      nodes: tree,
+      rootIds: [id],
+      variants: [],
+      props: {},
+    });
+    const before = {
+      kind: "tree",
+      before: {
+        nodes: JSON.parse(JSON.stringify(nodes)),
+        rootIds: [...rootIds],
+        components: JSON.parse(JSON.stringify(components)),
+      },
+    };
+
+    removeNode(id);
+    addNode({
+      id,
+      type: "component-instance",
+      componentId,
+      variantId: null,
+      propOverrides: {},
+      nodeOverrides: {},
+      x: node.x,
+      y: node.y,
+      width: node.width,
+      height: node.height,
+      rotation: node.rotation,
+      parent: node.parent,
+      children: [],
+    });
+    setSelectedManual([id]);
+    const afterSnapshotNodes = useNodeTreeStore.getState().nodes;
+    const afterRootIds = useNodeTreeStore.getState().rootIds;
+    before.after = {
+      nodes: JSON.parse(JSON.stringify(afterSnapshotNodes)),
+      rootIds: [...afterRootIds],
+      components: JSON.parse(JSON.stringify(useComponentStore.getState().components)),
+    };
+    pushHistory(before);
   };
 
   const handleImageUpload = (e) => {
@@ -138,6 +203,9 @@ export default function UIUXTools() {
           <button className={buttonClass("boolean")} onClick={() => setTool("boolean")}>
             Boolean Tools
           </button>
+          <button className={buttonClass("vector-edit")} onClick={() => setTool("vector-edit")}>
+            Vector Edit
+          </button>
         </div>
       </div>
 
@@ -157,13 +225,13 @@ export default function UIUXTools() {
           <button className={buttonClass("component")} onClick={() => setTool("component")}>
             Component
           </button>
-          <button className={buttonClass("template")} onClick={() => setTool("template")}>
+          <button className={buttonClass("template")} onClick={() => openBrowser("templates")}>
             Templates
           </button>
-          <button className={buttonClass("icon")} onClick={() => setTool("icon")}>
+          <button className={buttonClass("icon")} onClick={() => openBrowser("icons")}>
             Icons
           </button>
-          <button className={buttonClass("widget")} onClick={() => setTool("widget")}>
+          <button className={buttonClass("widget")} onClick={() => openBrowser("assets")}>
             Interactive Widgets
           </button>
         </div>
@@ -203,6 +271,16 @@ export default function UIUXTools() {
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
+                    <button
+                      className="text-[11px] text-neutral-500 hover:text-violet-600 px-2 py-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedManual([frame.id]);
+                        handleCreateComponent();
+                      }}
+                    >
+                      Make Component
+                    </button>
                     <button
                       className="text-[11px] text-neutral-500 hover:text-red-500 px-2 py-1"
                       onClick={(e) => {
