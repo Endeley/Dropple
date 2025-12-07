@@ -1,13 +1,13 @@
 "use client";
 
-export default function CanvasGrid() {
+export default function CanvasGrid({ size = 24 }) {
   return (
     <div
-      className="absolute inset-0 pointer-events-none opacity-30"
+      className="absolute inset-0 pointer-events-none opacity-60"
       style={{
         backgroundImage:
-          "linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)",
-        backgroundSize: "40px 40px",
+          "linear-gradient(to right, rgba(124,58,237,0.18) 1px, transparent 1px), linear-gradient(to bottom, rgba(124,58,237,0.18) 1px, transparent 1px)",
+        backgroundSize: `${size}px ${size}px`,
       }}
     />
   );

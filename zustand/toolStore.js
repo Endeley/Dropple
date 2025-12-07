@@ -7,6 +7,7 @@ export const useToolStore = create((set) => ({
   setTool: (tool) => set({ tool }),
   gridSize: 8,
   snapToGrid: false,
+  setSnapToGrid: (snapToGrid) => set({ snapToGrid }),
   toggleGrid: () =>
     set((state) => ({
       snapToGrid: !state.snapToGrid,

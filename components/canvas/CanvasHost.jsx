@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import CanvasGrid from "./CanvasGrid";
 import CanvasRulers from "./CanvasRulers";
 import CanvasOverlays from "./CanvasOverlays";
@@ -11,6 +11,9 @@ import { applyResize, calculateAngle } from "@/lib/canvas-core/transforms";
 import { useToolStore } from "@/zustand/toolStore";
 import { getSnapPoints, snapValue } from "@/lib/canvas-core/snapping";
 import { useSnappingStore } from "@/zustand/snappingStore";
+import { useCanvasState } from "@/lib/canvas-core/canvasState";
+
+const clampZoom = (value) => Math.min(8, Math.max(0.1, value));
 
 export default function CanvasHost({
   children,
@@ -34,10 +37,37 @@ export default function CanvasHost({
   const containerRef = useRef(null);
   const rotateRef = useRef(null);
   const panRef = useRef(null);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
+  const pan = useCanvasState((s) => s.pan);
+  const setPan = useCanvasState((s) => s.setPan);
+  const zoom = useCanvasState((s) => s.zoom);
+  const setZoom = useCanvasState((s) => s.setZoom);
+  const showGrid = useCanvasState((s) => s.gridVisible);
+  const showRulers = useCanvasState((s) => s.rulersVisible);
+  const [isPanning, setIsPanning] = useState(false);
+  const [spacePressed, setSpacePressed] = useState(false);
 
-  const selectedBounds = getSelectedBounds(selectedIds, nodeMap);
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        setSpacePressed(true);
+      }
+    };
+    const handleKeyUp = (e) => {
+      if (e.code === "Space") {
+        setSpacePressed(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, []);
+
+  const activeNodeMap = nodeMap && Object.keys(nodeMap).length ? nodeMap : nodes;
+  const selectedBounds = getSelectedBounds(selectedIds, activeNodeMap);
 
   const toLocal = (clientX, clientY) => {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -87,16 +117,20 @@ export default function CanvasHost({
       return;
     }
 
-    if (enablePanZoom && (e.button === 1 || e.button === 2)) {
+    const tool = useToolStore.getState().tool;
+    const isBackground = e.target === e.currentTarget;
+
+    // Panning: middle/right click, or space + left click.
+    if (enablePanZoom && (e.button === 1 || e.button === 2 || (spacePressed && e.button === 0))) {
       panRef.current = {
         startX: e.clientX,
         startY: e.clientY,
         panStart: { ...pan },
       };
+      setIsPanning(true);
       return;
     }
 
-    const tool = useToolStore.getState().tool;
     const { x: localX, y: localY } = toLocal(e.clientX, e.clientY);
 
     if (tool !== "select") {
@@ -249,6 +283,7 @@ export default function CanvasHost({
     resizeRef.current = null;
     rotateRef.current = null;
     panRef.current = null;
+    setIsPanning(false);
     if (creationRef.current) {
       creationRef.current = null;
       useToolStore.getState().setTool("select");
@@ -256,25 +291,36 @@ export default function CanvasHost({
     clearGuides();
   };
 
+  const onMouseLeave = () => {
+    panRef.current = null;
+    setIsPanning(false);
+  };
+
+  const cursorClass =
+    enablePanZoom && isPanning
+      ? "cursor-grabbing"
+      : enablePanZoom && spacePressed
+        ? "cursor-grab"
+        : "cursor-default";
+
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full overflow-hidden bg-neutral-100"
+      className={`relative w-full h-full overflow-hidden bg-[#f4f5f7] ${cursorClass}`}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
+      onMouseLeave={onMouseLeave}
       onWheel={(e) => {
         if (!enablePanZoom) return;
-        if (e.ctrlKey || e.metaKey) {
-          e.preventDefault();
-          const factor = e.deltaY > 0 ? 0.95 : 1.05;
-          const nextZoom = Math.min(4, Math.max(0.2, zoom * factor));
-          setZoom(nextZoom);
-        }
+        e.preventDefault();
+        const factor = e.deltaY > 0 ? 0.95 : 1.05;
+        const nextZoom = clampZoom(zoom * factor);
+        setZoom(nextZoom);
       }}
     >
-      <CanvasRulers />
-      <CanvasGrid />
+      {showRulers && <CanvasRulers />}
+      {showGrid && <CanvasGrid size={gridSize * 4} />}
 
       <div
         id="dropple-canvas-content"
@@ -288,7 +334,7 @@ export default function CanvasHost({
       </div>
 
       <CanvasOverlays
-        nodeMap={nodeMap}
+        nodeMap={activeNodeMap}
         selectionBox={selectionBox}
         startResize={startResize}
         pan={pan}
