@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useState } from "react";
@@ -51,7 +52,7 @@ export default function AssetLibrary({ onSelect }) {
             }}
           >
             {asset.type === "image" && (
-              <img src={asset.url} className="w-full h-24 object-cover" alt={asset.name} />
+              <img src={asset.url} className="w-full h-24 object-cover" alt={asset.name || "asset"} />
             )}
             {asset.type === "video" && (
               <div className="w-full h-24 relative flex overflow-hidden">

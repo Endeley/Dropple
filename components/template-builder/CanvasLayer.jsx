@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -57,8 +58,7 @@ export default function CanvasLayer({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const renderX = (parentOffset?.x || 0) + layer.x;
   const renderY = (parentOffset?.y || 0) + layer.y;
-
-  if (layer.hidden) return null;
+  const isHidden = layer.hidden;
 
   useEffect(() => {
     if (editingTextId === layer.id && ref.current) {
@@ -92,14 +92,18 @@ export default function CanvasLayer({
   const parent = isComponentMaster
     ? null
     : currentTemplate.layers.find((l) => (l.children || []).includes(layer.id));
-  const autoLayout = layer.autoLayout || {
-    enabled: false,
-    direction: "vertical",
-    padding: 16,
-    gap: 12,
-    align: "start",
-    hugging: false,
-  };
+  const autoLayout = useMemo(
+    () =>
+      layer.autoLayout || {
+        enabled: false,
+        direction: "vertical",
+        padding: 16,
+        gap: 12,
+        align: "start",
+        hugging: false,
+      },
+    [layer.autoLayout],
+  );
 
   const getComponentNode = (id) => {
     if (!isComponentMaster) return null;
@@ -111,6 +115,8 @@ export default function CanvasLayer({
         : comp.nodes;
     return nodes?.find((n) => n.id === id) || null;
   };
+
+  // Do not early return before hooks; hide via visibility later if needed.
 
   function handleMouseDown(e) {
     if (editingTextId === layer.id) return;
@@ -292,8 +298,8 @@ export default function CanvasLayer({
 
   useEffect(() => {
     if (isComponentMaster) return;
-    if (layer.type !== "frame" || !autoLayout.enabled) return;
-
+    if (layer.type !== "frame") return;
+    if (!autoLayout.enabled) return;
     const children = (layer.children || [])
       .map((id) => currentTemplate.layers.find((l) => l.id === id))
       .filter(Boolean);
@@ -301,19 +307,15 @@ export default function CanvasLayer({
     let offset = autoLayout.padding;
     let crossMax = 0;
 
-    children.forEach((child, idx) => {
+    children.forEach((child) => {
       const isVertical =
         directionOverride === "horizontal"
           ? false
           : directionOverride === "vertical"
           ? true
           : autoLayout.direction === "vertical";
-      const newX = isVertical
-        ? layer.x + autoLayout.padding
-        : layer.x + offset;
-      const newY = isVertical
-        ? layer.y + offset
-        : layer.y + autoLayout.padding;
+      const newX = isVertical ? layer.x + autoLayout.padding : layer.x + offset;
+      const newY = isVertical ? layer.y + offset : layer.y + autoLayout.padding;
 
       if (child.x !== newX || child.y !== newY) {
         updateLayer(child.id, { x: newX, y: newY });
@@ -325,38 +327,22 @@ export default function CanvasLayer({
 
     if (autoLayout.hugging) {
       const hasChildren = children.length > 0;
-      const mainSize = hasChildren
-        ? offset - autoLayout.gap + autoLayout.padding
-        : autoLayout.padding * 2;
+      const mainSize = hasChildren ? offset - autoLayout.gap + autoLayout.padding : autoLayout.padding * 2;
       if (autoLayout.direction === "vertical") {
         const newHeight = mainSize;
-        const newWidth = Math.max(
-          layer.width,
-          autoLayout.padding * 2 + crossMax,
-        );
+        const newWidth = Math.max(layer.width, autoLayout.padding * 2 + crossMax);
         if (layer.height !== newHeight || layer.width !== newWidth) {
           updateLayer(layer.id, { height: newHeight, width: newWidth });
         }
       } else {
         const newWidth = mainSize;
-        const newHeight = Math.max(
-          layer.height,
-          autoLayout.padding * 2 + crossMax,
-        );
+        const newHeight = Math.max(layer.height, autoLayout.padding * 2 + crossMax);
         if (layer.width !== newWidth || layer.height !== newHeight) {
           updateLayer(layer.id, { width: newWidth, height: newHeight });
         }
       }
     }
-  }, [
-    layer,
-    autoLayout,
-    currentTemplate.layers,
-    updateLayer,
-    layer.children,
-    layer.width,
-    layer.height,
-  ]);
+  }, [isComponentMaster, layer, autoLayout.enabled, autoLayout.direction, autoLayout.padding, autoLayout.gap, autoLayout.hugging, currentTemplate.layers, updateLayer, layer.children, layer.width, layer.height, directionOverride]);
 
   useEffect(() => {
     if (isComponentMaster) return;
@@ -398,12 +384,7 @@ export default function CanvasLayer({
       newHeight = layer.height * ratioY;
     }
 
-    if (
-      newX !== layer.x ||
-      newY !== layer.y ||
-      newWidth !== layer.width ||
-      newHeight !== layer.height
-    ) {
+    if (newX !== layer.x || newY !== layer.y || newWidth !== layer.width || newHeight !== layer.height) {
       updateLayer(layer.id, {
         x: newX,
         y: newY,
@@ -411,10 +392,9 @@ export default function CanvasLayer({
         height: newHeight,
       });
     }
-  }, [parent, layer, updateLayer]);
+  }, [isComponentMaster, parent, layer, updateLayer]);
 
-  const activeTheme =
-    themes.find((t) => t._id === activeThemeId) || themes[0] || null;
+  const activeTheme = themes.find((t) => t._id === activeThemeId) || themes[0] || null;
 
   const resolveThemeColor = (token) =>
     (token && activeTheme?.tokens?.colors?.[token]) || null;
@@ -431,9 +411,7 @@ export default function CanvasLayer({
 
   const themeToken =
     layer.props?.themeToken ||
-    (layer.styleId?.startsWith?.("theme-color-")
-      ? layer.styleId.replace("theme-color-", "")
-      : null);
+    (layer.styleId?.startsWith?.("theme-color-") ? layer.styleId.replace("theme-color-", "") : null);
   const themeColor = resolveThemeColor(themeToken);
   if (themeColor) {
     if (layer.type === "text") {
@@ -456,6 +434,7 @@ export default function CanvasLayer({
     top: renderY,
     width,
     height,
+    display: isHidden ? "none" : "block",
     borderRadius: styleProps?.borderRadius || 0,
     overflow: "hidden",
     color: styleProps?.color,
@@ -517,7 +496,7 @@ export default function CanvasLayer({
       {layer.type === "image" && (
         <img
           src={layer.url}
-          alt="Layer"
+          alt={layer.name || "Layer"}
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
         />
       )}

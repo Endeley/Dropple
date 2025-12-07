@@ -35,7 +35,6 @@ export const useStateMachine = create((set, get) => ({
       // Optional condition string eval (basic)
       if (t.condition) {
         try {
-          // eslint-disable-next-line no-eval
           if (!eval(t.condition)) continue;
         } catch (err) {
           console.warn("State condition eval failed", err);

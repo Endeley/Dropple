@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { Id } from "./_generated/dataModel";
 
 const layerSchema = v.object({
   id: v.string(),
@@ -23,31 +24,77 @@ export const saveTemplate = mutation({
     authorId: v.optional(v.string()),
     templateData: v.any(),
     thumbnail: v.optional(v.string()),
+    thumbnailUrl: v.optional(v.string()),
     mode: v.string(),
+    description: v.optional(v.string()),
+    visibility: v.optional(v.string()),
+    thumbnailBytes: v.optional(v.array(v.number())),
+    templateJsonString: v.optional(v.string()),
+    creatorName: v.optional(v.string()),
+    creatorAvatar: v.optional(v.string()),
+    license: v.optional(v.string()),
+    price: v.optional(v.number()),
   },
-  handler: async ({ db, auth }, args) => {
+  handler: async ({ db, auth, storage }, args) => {
     const identity = await auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
     const userId = identity.subject;
     const now = Date.now();
+    const makePublished = args.visibility === "public";
+
+    let thumbnailUrl: string | undefined = args.thumbnailUrl || undefined;
+    let templateJsonUrl: string | undefined = undefined;
+
+    if (args.thumbnailBytes) {
+      const buf = new Uint8Array(args.thumbnailBytes);
+      const storageId = await (storage as any).store(buf);
+      if (storageId) thumbnailUrl = ((await storage.getUrl(storageId)) as string | null) || undefined;
+    }
+
+    if (args.templateJsonString) {
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode(args.templateJsonString);
+      const storageId = await (storage as any).store(bytes);
+      if (storageId) templateJsonUrl = ((await storage.getUrl(storageId)) as string | null) || undefined;
+    }
 
     if (args.id) {
       const existing = await db.get(args.id);
       if (!existing) throw new Error("Template not found");
+      const nextVersion = (existing.version ?? 1) + 1;
+      const versions = existing.versions || [];
+      if (templateJsonUrl || thumbnailUrl) {
+        versions.push({
+          version: nextVersion,
+          templateJsonUrl: templateJsonUrl ?? existing.templateJsonUrl,
+          thumbnailUrl: thumbnailUrl ?? existing.thumbnailUrl,
+          createdAt: now,
+        });
+      }
       return await db.patch(args.id, {
         name: args.name,
         category: args.category,
         tags: args.tags ?? [],
         authorId: args.authorId ?? userId,
         templateData: args.templateData,
-        thumbnail: args.thumbnail ?? undefined,
+        thumbnail: args.thumbnail ?? existing.thumbnail,
+        thumbnailUrl: thumbnailUrl ?? existing.thumbnailUrl,
+        templateJsonUrl: templateJsonUrl ?? existing.templateJsonUrl,
         mode: args.mode,
-        version: (existing.version ?? 1) + 1,
+        description: args.description,
+        version: nextVersion,
+        versions,
         updatedAt: now,
+        isPublished: makePublished ? true : existing.isPublished,
+        publishedAt: makePublished && !existing.isPublished ? now : existing.publishedAt,
+        creatorName: args.creatorName ?? existing.creatorName,
+        creatorAvatar: args.creatorAvatar ?? existing.creatorAvatar,
+        license: args.license ?? existing.license ?? "free",
+        price: args.price ?? existing.price,
       });
     }
 
-    return await db.insert("templates", {
+    const insertedId = await db.insert("templates", {
       name: args.name,
       mode: args.mode,
       category: args.category,
@@ -56,16 +103,38 @@ export const saveTemplate = mutation({
       userId,
       templateData: args.templateData,
       thumbnail: args.thumbnail ?? undefined,
-      isPublished: false,
+      thumbnailUrl,
+      templateJsonUrl,
+      description: args.description,
+      isPublished: makePublished,
       version: 1,
+      versions: [
+        {
+          version: 1,
+          templateJsonUrl,
+          thumbnailUrl,
+          createdAt: now,
+        },
+      ],
       createdAt: now,
       updatedAt: now,
+      publishedAt: makePublished ? now : undefined,
       width: args.templateData?.width ?? 1080,
       height: args.templateData?.height ?? 1080,
       layers: args.templateData?.nodes ?? [],
-      price: args.templateData?.price,
+      price: args.price ?? args.templateData?.price,
       purchases: 0,
+      insertCount: 0,
+      viewCount: 0,
+      favoriteCount: 0,
+      searchClicks: 0,
+      score: 0,
+      creatorName: args.creatorName,
+      creatorAvatar: args.creatorAvatar,
+      license: args.license ?? "free",
     });
+
+    return insertedId;
   },
 });
 
@@ -90,5 +159,85 @@ export const listTemplates = query({
   args: {},
   handler: async ({ db }) => {
     return await db.query("templates").order("desc").collect();
+  },
+});
+
+export const getMarketplaceTemplates = query({
+  args: {},
+  handler: async ({ db }) => {
+    return await db
+      .query("templates")
+      .withIndex("by_published", (q) => q.eq("isPublished", true))
+      .collect();
+  },
+});
+
+export const getTrendingTemplates = query({
+  args: { days: v.optional(v.number()) },
+  handler: async ({ db }, { days }) => {
+    const windowMs = (days ?? 7) * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const events = await db.query("templateEvents").collect();
+    const windowed = events.filter((e) => e.createdAt >= now - windowMs);
+    const scores: Record<string, number> = {};
+    windowed.forEach((e) => {
+      const w =
+        e.type === "insert"
+          ? 4
+          : e.type === "favorite"
+            ? 6
+            : e.type === "search_select"
+              ? 1
+              : e.type === "preview"
+                ? 0.5
+                : 1.5; // view
+      scores[e.templateId] = (scores[e.templateId] || 0) + w;
+    });
+    const templates = await db.query("templates").withIndex("by_published", (q) => q.eq("isPublished", true)).collect();
+    return templates
+      .map((t) => ({ ...t, score: scores[t._id as Id<"templates">] || 0 }))
+      .sort((a, b) => (b.score || 0) - (a.score || 0))
+      .slice(0, 20);
+  },
+});
+
+export const getPopularTemplates = query({
+  args: {},
+  handler: async ({ db }) => {
+    const templates = await db.query("templates").withIndex("by_published", (q) => q.eq("isPublished", true)).collect();
+    return templates.sort((a, b) => (b.insertCount || 0) - (a.insertCount || 0)).slice(0, 20);
+  },
+});
+
+export const getRecentTemplates = query({
+  args: {},
+  handler: async ({ db }) => {
+    return await db
+      .query("templates")
+      .withIndex("by_published", (q) => q.eq("isPublished", true))
+      .order("desc")
+      .collect();
+  },
+});
+
+export const getRecommendedTemplates = query({
+  args: { userId: v.optional(v.string()) },
+  handler: async ({ db, auth }, { userId }) => {
+    const identity = await auth.getUserIdentity();
+    const uid = userId || identity?.subject;
+    const templates = await db.query("templates").withIndex("by_published", (q) => q.eq("isPublished", true)).collect();
+    if (!uid) return templates.slice(0, 12);
+    const events = await db
+      .query("templateEvents")
+      .withIndex("by_user", (q) => q.eq("userId", uid))
+      .collect();
+    const usedCategories = new Set(
+      events
+        .map((e) => templates.find((t) => t._id === e.templateId)?.category)
+        .filter(Boolean) as string[],
+    );
+    const filtered = templates.filter((t) => !usedCategories.size || (t.category && usedCategories.has(t.category)));
+    if (filtered.length) return filtered.slice(0, 12);
+    return templates.slice(0, 12);
   },
 });

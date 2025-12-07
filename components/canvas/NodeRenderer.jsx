@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useNodeTreeStore } from "@/zustand/nodeTreeStore";
@@ -6,13 +7,251 @@ import { useTextEditStore } from "@/zustand/textEditStore";
 import { computeLayout } from "@/lib/text/layoutEngine";
 import { backspace, forwardDelete, insertChar } from "@/lib/text/applyEdit";
 import { applyStyleToRange } from "@/lib/text/applyStyleToRange";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { usePrototypeStore } from "@/zustand/prototypeStore";
+import { resolveAsset } from "@/lib/assets/resolveAsset";
+import { useCollaborationStore } from "@/zustand/collaborationStore";
 import { captureAfterAndPush, captureBefore } from "@/zustand/undoStore";
 import { useToolStore } from "@/zustand/toolStore";
 import { useVectorEditStore } from "@/zustand/vectorEditStore";
 import { resolveValue } from "@/lib/tokens/resolveValue";
 import { useComponentStore } from "@/zustand/componentStore";
 import { measureResolvedBounds, resolveInstance } from "@/lib/components/resolveInstance";
+
+function RichTextNode({
+  node,
+  editingId,
+  caretIndex,
+  selectionStart,
+  selectionEnd,
+  isSelecting,
+  startEditing,
+  beginSelection,
+  updateSelection,
+  endSelection,
+  pendingStyle,
+  setPendingStyle,
+  setCaret,
+  updateNode,
+}) {
+  const maxWidth = node.autoWidth ? Infinity : node.width || 200;
+  const layout = useMemo(() => computeLayout(node.spans || [], maxWidth), [node.spans, maxWidth]);
+  const charMap = layout.charMap;
+
+  const getCaretFromClick = (offsetX, offsetY) => {
+    if (!charMap.length) return 0;
+    let closest = 0;
+    let minDist = Infinity;
+    charMap.forEach((c, idx) => {
+      const inY = offsetY >= c.y && offsetY <= c.y + c.height;
+      const dx = Math.abs(offsetX - c.x);
+      const dy = inY ? 0 : Math.min(Math.abs(offsetY - c.y), Math.abs(offsetY - (c.y + c.height)));
+      const dist = dx + dy;
+      if (dist < minDist) {
+        minDist = dist;
+        closest = idx;
+      }
+    });
+    return closest;
+  };
+
+  const handleMouseDown = (e) => {
+    if (editingId !== node.id) {
+      startEditing(node.id, charMap.length);
+    }
+    const idx = getCaretFromClick(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
+    beginSelection(idx);
+    e.stopPropagation();
+  };
+
+  const handleMouseMove = (e) => {
+    if (editingId !== node.id || !isSelecting) return;
+    const idx = getCaretFromClick(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
+    updateSelection(idx);
+  };
+
+  const handleMouseUp = () => {
+    if (editingId === node.id) endSelection();
+  };
+
+  const selStart = Math.min(selectionStart ?? 0, selectionEnd ?? 0);
+  const selEnd = Math.max(selectionStart ?? 0, selectionEnd ?? 0);
+
+  const selectionBlocks =
+    editingId === node.id && selectionStart !== null && selectionEnd !== null
+      ? charMap.slice(selStart, selEnd + 1).map((c, i) => (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: c.x,
+              top: c.y,
+              width: c.width,
+              height: c.height,
+              background: "rgba(80, 150, 255, 0.25)",
+              pointerEvents: "none",
+            }}
+          />
+        ))
+      : null;
+
+  const caretChar = charMap[Math.min(caretIndex, Math.max(charMap.length - 1, 0))] || {
+    x: 0,
+    y: 0,
+    height: layout.height || 20,
+  };
+
+  const editorRef = useRef(null);
+  useEffect(() => {
+    if (editingId === node.id && editorRef.current) {
+      editorRef.current.focus();
+    }
+  }, [editingId, node.id]);
+
+  const handleKeyDown = (e) => {
+    if (editingId !== node.id) return;
+    const spansCopy = (node.spans || []).map((s) => ({ ...s }));
+    const selection =
+      selectionStart !== null && selectionEnd !== null ? { start: selectionStart, end: selectionEnd } : { start: caretIndex, end: caretIndex };
+    const hasSelectionRange = selectionStart !== null && selectionEnd !== null && selectionStart !== selectionEnd;
+
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+      e.preventDefault();
+      if (hasSelectionRange) {
+        captureBefore(node, caretIndex, selectionStart, selectionEnd);
+        const newSpans = applyStyleToRange(spansCopy, selectionStart, selectionEnd, { fontWeight: 700 });
+        const nextLayout = computeLayout(newSpans, maxWidth);
+        updateNode(node.id, { spans: newSpans, height: nextLayout.height });
+        setCaret(Math.max(selectionStart, selectionEnd));
+        captureAfterAndPush(node, Math.max(selectionStart, selectionEnd), selectionStart, selectionEnd, "format");
+      } else {
+        setPendingStyle({ fontWeight: 700 });
+      }
+      return;
+    }
+
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "i") {
+      e.preventDefault();
+      if (hasSelectionRange) {
+        captureBefore(node, caretIndex, selectionStart, selectionEnd);
+        const newSpans = applyStyleToRange(spansCopy, selectionStart, selectionEnd, { italic: true });
+        const nextLayout = computeLayout(newSpans, maxWidth);
+        updateNode(node.id, { spans: newSpans, height: nextLayout.height });
+        setCaret(Math.max(selectionStart, selectionEnd));
+        captureAfterAndPush(node, Math.max(selectionStart, selectionEnd), selectionStart, selectionEnd, "format");
+      } else {
+        setPendingStyle({ italic: true });
+      }
+      return;
+    }
+
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "u") {
+      e.preventDefault();
+      if (hasSelectionRange) {
+        captureBefore(node, caretIndex, selectionStart, selectionEnd);
+        const newSpans = applyStyleToRange(spansCopy, selectionStart, selectionEnd, { underline: true });
+        const nextLayout = computeLayout(newSpans, maxWidth);
+        updateNode(node.id, { spans: newSpans, height: nextLayout.height });
+        setCaret(Math.max(selectionStart, selectionEnd));
+        captureAfterAndPush(node, Math.max(selectionStart, selectionEnd), selectionStart, selectionEnd, "format");
+      } else {
+        setPendingStyle({ underline: true });
+      }
+      return;
+    }
+
+    if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      captureBefore(node, caretIndex, selectionStart, selectionEnd);
+      const styleToApply = selection && selection.start !== selection.end ? {} : pendingStyle || {};
+      const { spans: newSpans, newCaret } = insertChar(spansCopy, caretIndex, selection, e.key, styleToApply);
+      const nextLayout = computeLayout(newSpans, maxWidth);
+      updateNode(node.id, { spans: newSpans, height: nextLayout.height });
+      setCaret(newCaret);
+      captureAfterAndPush(node, newCaret, newCaret, newCaret, "text-insert");
+      return;
+    }
+
+    if (e.key === "Backspace") {
+      e.preventDefault();
+      captureBefore(node, caretIndex, selectionStart, selectionEnd);
+      const { spans: newSpans, newCaret } = backspace(spansCopy, caretIndex, selection);
+      const nextLayout = computeLayout(newSpans, maxWidth);
+      updateNode(node.id, { spans: newSpans, height: nextLayout.height });
+      setCaret(newCaret);
+      captureAfterAndPush(node, newCaret, newCaret, newCaret, "text-delete");
+      return;
+    }
+
+    if (e.key === "Delete") {
+      e.preventDefault();
+      captureBefore(node, caretIndex, selectionStart, selectionEnd);
+      const { spans: newSpans, newCaret } = forwardDelete(spansCopy, caretIndex, selection);
+      const nextLayout = computeLayout(newSpans, maxWidth);
+      updateNode(node.id, { spans: newSpans, height: nextLayout.height });
+      setCaret(newCaret);
+      captureAfterAndPush(node, newCaret, newCaret, newCaret, "text-delete");
+    }
+  };
+
+  const lineElems = layout.lines.map((line, idx) => (
+    <div key={idx} style={{ height: line.lineHeight || "auto", lineHeight: `${line.lineHeight}px` }}>
+      {line.runs.map((run, i) => (
+        <span
+          key={`${idx}-${i}`}
+          style={{
+            fontFamily: run.style.fontFamily || "Inter",
+            fontSize: run.style.fontSize || 16,
+            fontWeight: run.style.fontWeight || 400,
+            color: resolveValue(run.style.color) || "#fff",
+            letterSpacing: run.style.letterSpacing || 0,
+            fontStyle: run.style.italic ? "italic" : "normal",
+            textDecoration: run.style.underline ? "underline" : "none",
+            whiteSpace: "pre",
+          }}
+        >
+          {run.text}
+        </span>
+      ))}
+    </div>
+  ));
+
+  return (
+    <div
+      style={{
+        width: node.autoWidth ? "fit-content" : "100%",
+        height: node.autoHeight ? "auto" : "100%",
+        color: resolveValue(node.fill) || "#fff",
+        position: "relative",
+      }}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onDoubleClick={(e) => {
+        startEditing(node.id, charMap.length);
+        e.stopPropagation();
+      }}
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
+      ref={editorRef}
+    >
+      {selectionBlocks}
+      <div>{lineElems}</div>
+      {editingId === node.id && (
+        <div
+          style={{
+            position: "absolute",
+            left: caretChar.x,
+            top: caretChar.y,
+            width: 2,
+            height: caretChar.height || 18,
+            background: "#4efcff",
+          }}
+        />
+      )}
+    </div>
+  );
+}
 
 const toPathD = (segments = []) => {
   if (!segments.length) return "";
@@ -94,6 +333,8 @@ export default function NodeRenderer({ onNodePointerDown }) {
   const setTool = useToolStore((s) => s.setTool);
   const vectorDragRef = useRef(null);
   const getComponent = useComponentStore((s) => s.getComponent);
+  const triggerInteractions = usePrototypeStore((s) => s.triggerInteractions);
+  const presence = useCollaborationStore((s) => s.presence);
 
   const buildTransform = (node) => {
     const t3d = node.transform3d || {};
@@ -138,7 +379,55 @@ export default function NodeRenderer({ onNodePointerDown }) {
     return { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
   };
 
-  const startVectorDrag = (e, node, anchorIndex, handle = "anchor") => {
+  const onVectorDrag = useCallback(
+    (e) => {
+      const drag = vectorDragRef.current;
+      if (!drag) return;
+      const { nodeId, handle, anchorIndex, startX, startY, initialSegments } = drag;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      const node = nodes[nodeId];
+      if (!node) return;
+      const segs = JSON.parse(JSON.stringify(initialSegments));
+      const seg = segs[anchorIndex];
+      if (!seg) return;
+      if (handle === "anchor") {
+        seg.x += dx;
+        seg.y += dy;
+        if (seg.cx1 !== undefined && seg.cy1 !== undefined) {
+          seg.cx1 += dx;
+          seg.cy1 += dy;
+        }
+        if (seg.cx2 !== undefined && seg.cy2 !== undefined) {
+          seg.cx2 += dx;
+          seg.cy2 += dy;
+        }
+      } else if (handle === "cx1") {
+        seg.cx1 += dx;
+        seg.cy1 += dy;
+      } else if (handle === "cx2") {
+        seg.cx2 += dx;
+        seg.cy2 += dy;
+      }
+      const bounds = recomputePathBounds(segs);
+      updateNode(nodeId, {
+        segments: segs,
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+      });
+    },
+    [nodes, updateNode],
+  );
+
+  const endVectorDrag = useCallback(() => {
+    vectorDragRef.current = null;
+    window.removeEventListener("mousemove", onVectorDrag);
+  }, [onVectorDrag]);
+
+  const startVectorDrag = useCallback(
+    (e, node, anchorIndex, handle = "anchor") => {
     e.stopPropagation();
     setEditingPath(node.id);
     setVectorSelection({ anchorIndex, handleType: handle });
@@ -150,61 +439,22 @@ export default function NodeRenderer({ onNodePointerDown }) {
       startY: e.clientY,
       initialSegments: JSON.parse(JSON.stringify(node.segments || [])),
     };
+    const upHandler = () => {
+      endVectorDrag();
+      window.removeEventListener("mouseup", upHandler);
+    };
     window.addEventListener("mousemove", onVectorDrag);
-    window.addEventListener("mouseup", endVectorDrag);
-  };
-
-  const onVectorDrag = (e) => {
-    const drag = vectorDragRef.current;
-    if (!drag) return;
-    const { nodeId, handle, anchorIndex, startX, startY, initialSegments } = drag;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    const node = nodes[nodeId];
-    if (!node) return;
-    const segs = JSON.parse(JSON.stringify(initialSegments));
-    const seg = segs[anchorIndex];
-    if (!seg) return;
-    if (handle === "anchor") {
-      seg.x += dx;
-      seg.y += dy;
-      if (seg.cx1 !== undefined && seg.cy1 !== undefined) {
-        seg.cx1 += dx;
-        seg.cy1 += dy;
-      }
-      if (seg.cx2 !== undefined && seg.cy2 !== undefined) {
-        seg.cx2 += dx;
-        seg.cy2 += dy;
-      }
-    } else if (handle === "cx1") {
-      seg.cx1 += dx;
-      seg.cy1 += dy;
-    } else if (handle === "cx2") {
-      seg.cx2 += dx;
-      seg.cy2 += dy;
-    }
-    const bounds = recomputePathBounds(segs);
-    updateNode(nodeId, {
-      segments: segs,
-      x: bounds.x,
-      y: bounds.y,
-      width: bounds.width,
-      height: bounds.height,
-    });
-  };
-
-  const endVectorDrag = () => {
-    vectorDragRef.current = null;
-    window.removeEventListener("mousemove", onVectorDrag);
-    window.removeEventListener("mouseup", endVectorDrag);
-  };
+    window.addEventListener("mouseup", upHandler);
+  },
+  [endVectorDrag, onVectorDrag, setEditingPath, setVectorSelection],
+);
 
   useEffect(() => {
     return () => {
       window.removeEventListener("mousemove", onVectorDrag);
       window.removeEventListener("mouseup", endVectorDrag);
     };
-  }, []);
+  }, [onVectorDrag, endVectorDrag]);
 
   const renderNode = (id) => {
     const node = nodes[id];
@@ -515,7 +765,7 @@ export default function NodeRenderer({ onNodePointerDown }) {
       case "image":
         content = (
           <img
-            src={node.src}
+            src={resolveAsset(node.assetId) || node.src}
             alt={node.name || ""}
             className="w-full h-full object-cover"
             style={{ pointerEvents: "none" }}
@@ -535,253 +785,82 @@ export default function NodeRenderer({ onNodePointerDown }) {
           </div>
         );
         break;
-      case "richtext": {
-        const maxWidth = node.autoWidth ? Infinity : node.width || 200;
-        const layout = computeLayout(node.spans || [], maxWidth);
-        const lineElems = [];
-        layout.lines.forEach((line, idx) => {
-          const spans = line.runs.map((run, i) => (
-            <span
-              key={`${idx}-${i}`}
-              style={{
-                fontFamily: run.style.fontFamily || "Inter",
-                fontSize: run.style.fontSize || 16,
-                fontWeight: run.style.fontWeight || 400,
-                color: resolveValue(run.style.color) || "#fff",
-                letterSpacing: run.style.letterSpacing || 0,
-                fontStyle: run.style.italic ? "italic" : "normal",
-                textDecoration: run.style.underline ? "underline" : "none",
-                whiteSpace: "pre",
-              }}
-            >
-              {run.text}
-            </span>
-          ));
-          lineElems.push(
-            <div key={idx} style={{ height: line.lineHeight || "auto", lineHeight: `${line.lineHeight}px` }}>
-              {spans}
-            </div>,
-          );
-        });
-
-        const charMap = layout.charMap;
-        const getCaretFromClick = (offsetX, offsetY) => {
-          if (!charMap.length) return 0;
-          // find char by line proximity first
-          let closest = 0;
-          let minDist = Infinity;
-          charMap.forEach((c, idx) => {
-            const inY = offsetY >= c.y && offsetY <= c.y + c.height;
-            const dx = Math.abs(offsetX - c.x);
-            const dy = inY ? 0 : Math.min(Math.abs(offsetY - c.y), Math.abs(offsetY - (c.y + c.height)));
-            const dist = dx + dy;
-            if (dist < minDist) {
-              minDist = dist;
-              closest = idx;
-            }
-          });
-          return closest;
-        };
-
-        const handleMouseDown = (e) => {
-          if (editingId !== node.id) {
-            startEditing(node.id, charMap.length);
-          }
-          const idx = getCaretFromClick(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-          beginSelection(idx);
-          e.stopPropagation();
-        };
-
-        const handleMouseMove = (e) => {
-          if (editingId !== node.id || !isSelecting) return;
-          const idx = getCaretFromClick(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-          updateSelection(idx);
-        };
-
-        const handleMouseUp = (e) => {
-          if (editingId === node.id) endSelection();
-        };
-
-        const selStart = Math.min(selectionStart ?? 0, selectionEnd ?? 0);
-        const selEnd = Math.max(selectionStart ?? 0, selectionEnd ?? 0);
-
-        const selectionBlocks =
-          editingId === node.id && selectionStart !== null && selectionEnd !== null
-            ? charMap.slice(selStart, selEnd + 1).map((c, i) => (
-                <div
-                  key={i}
-                  style={{
-                    position: "absolute",
-                    left: c.x,
-                    top: c.y,
-                    width: c.width,
-                    height: c.height,
-                    background: "rgba(80, 150, 255, 0.25)",
-                    pointerEvents: "none",
-                  }}
-                />
-              ))
-            : null;
-
-        const caretChar = charMap[Math.min(caretIndex, Math.max(charMap.length - 1, 0))] || { x: 0, y: 0, height: layout.height || 20 };
-
-        const editorRef = useRef(null);
-        useEffect(() => {
-          if (editingId === node.id && editorRef.current) {
-            editorRef.current.focus();
-          }
-        }, [editingId, node.id]);
-
-        const handleKeyDown = (e) => {
-          if (editingId !== node.id) return;
-          const spansCopy = (node.spans || []).map((s) => ({ ...s }));
-          const selection =
-            selectionStart !== null && selectionEnd !== null
-              ? { start: selectionStart, end: selectionEnd }
-              : { start: caretIndex, end: caretIndex };
-
-          const hasSelectionRange = selectionStart !== null && selectionEnd !== null && selectionStart !== selectionEnd;
-
-          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
-            e.preventDefault();
-            if (hasSelectionRange) {
-              captureBefore(node, caretIndex, selectionStart, selectionEnd);
-              const newSpans = applyStyleToRange(spansCopy, selectionStart, selectionEnd, { fontWeight: 700 });
-              const nextLayout = computeLayout(newSpans, maxWidth);
-              updateNode(node.id, { spans: newSpans, height: nextLayout.height });
-              setCaret(Math.max(selectionStart, selectionEnd));
-              captureAfterAndPush(node, Math.max(selectionStart, selectionEnd), selectionStart, selectionEnd, "format");
-            } else {
-              setPendingStyle({ fontWeight: 700 });
-            }
-            return;
-          }
-
-          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "i") {
-            e.preventDefault();
-            if (hasSelectionRange) {
-              captureBefore(node, caretIndex, selectionStart, selectionEnd);
-              const newSpans = applyStyleToRange(spansCopy, selectionStart, selectionEnd, { italic: true });
-              const nextLayout = computeLayout(newSpans, maxWidth);
-              updateNode(node.id, { spans: newSpans, height: nextLayout.height });
-              setCaret(Math.max(selectionStart, selectionEnd));
-              captureAfterAndPush(node, Math.max(selectionStart, selectionEnd), selectionStart, selectionEnd, "format");
-            } else {
-              setPendingStyle({ italic: true });
-            }
-            return;
-          }
-
-          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "u") {
-            e.preventDefault();
-            if (hasSelectionRange) {
-              captureBefore(node, caretIndex, selectionStart, selectionEnd);
-              const newSpans = applyStyleToRange(spansCopy, selectionStart, selectionEnd, { underline: true });
-              const nextLayout = computeLayout(newSpans, maxWidth);
-              updateNode(node.id, { spans: newSpans, height: nextLayout.height });
-              setCaret(Math.max(selectionStart, selectionEnd));
-              captureAfterAndPush(node, Math.max(selectionStart, selectionEnd), selectionStart, selectionEnd, "format");
-            } else {
-              setPendingStyle({ underline: true });
-            }
-            return;
-          }
-
-          if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
-            e.preventDefault();
-            captureBefore(node, caretIndex, selectionStart, selectionEnd);
-            const styleToApply = selection && selection.start !== selection.end ? {} : pendingStyle || {};
-            const { spans: newSpans, newCaret } = insertChar(
-              spansCopy,
-              caretIndex,
-              selection,
-              e.key,
-              styleToApply,
-            );
-            const nextLayout = computeLayout(newSpans, maxWidth);
-            updateNode(node.id, { spans: newSpans, height: nextLayout.height });
-            setCaret(newCaret);
-            captureAfterAndPush(node, newCaret, newCaret, newCaret, "text-insert");
-            return;
-          }
-
-          if (e.key === "Backspace") {
-            e.preventDefault();
-            captureBefore(node, caretIndex, selectionStart, selectionEnd);
-            const { spans: newSpans, newCaret } = backspace(spansCopy, caretIndex, selection);
-            const nextLayout = computeLayout(newSpans, maxWidth);
-            updateNode(node.id, { spans: newSpans, height: nextLayout.height });
-            setCaret(newCaret);
-            captureAfterAndPush(node, newCaret, newCaret, newCaret, "text-delete");
-            return;
-          }
-
-          if (e.key === "Delete") {
-            e.preventDefault();
-            captureBefore(node, caretIndex, selectionStart, selectionEnd);
-            const { spans: newSpans, newCaret } = forwardDelete(spansCopy, caretIndex, selection);
-            const nextLayout = computeLayout(newSpans, maxWidth);
-            updateNode(node.id, { spans: newSpans, height: nextLayout.height });
-            setCaret(newCaret);
-            captureAfterAndPush(node, newCaret, newCaret, newCaret, "text-delete");
-          }
-        };
-
+      case "richtext":
         content = (
-          <div
-            style={{
-              width: node.autoWidth ? "fit-content" : "100%",
-              height: node.autoHeight ? "auto" : "100%",
-              color: resolveValue(node.fill) || "#fff",
-              position: "relative",
-            }}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onDoubleClick={(e) => {
-              startEditing(node.id, charMap.length);
-              e.stopPropagation();
-            }}
-            onKeyDown={handleKeyDown}
-            tabIndex={0}
-            ref={editorRef}
-          >
-            {selectionBlocks}
-            <div>{lineElems}</div>
-            {editingId === node.id && (
-              <div
-                style={{
-                  position: "absolute",
-                  left: caretChar.x,
-                  top: caretChar.y,
-                  width: 2,
-                  height: caretChar.height || 18,
-                  background: "#4efcff",
-                }}
-              />
-            )}
-          </div>
+          <RichTextNode
+            node={node}
+            editingId={editingId}
+            caretIndex={caretIndex}
+            selectionStart={selectionStart}
+            selectionEnd={selectionEnd}
+            isSelecting={isSelecting}
+            startEditing={startEditing}
+            beginSelection={beginSelection}
+            updateSelection={updateSelection}
+            endSelection={endSelection}
+            pendingStyle={pendingStyle}
+            setPendingStyle={setPendingStyle}
+            setCaret={setCaret}
+            updateNode={updateNode}
+          />
         );
         break;
-      }
       default:
         content = <div className="bg-neutral-700 w-full h-full" />;
     }
 
-    return (
-      <div
-        key={id}
-        style={style}
-        onMouseDown={(e) => {
-          setSelectedManual([id]);
-          onNodePointerDown?.(e, id);
-        }}
-      >
-        {content}
-        {node.children?.map((childId) => renderNode(childId))}
-      </div>
-    );
+  return (
+    <div
+      key={id}
+      style={style}
+      onMouseDown={(e) => {
+        setSelectedManual([id]);
+        onNodePointerDown?.(e, id);
+      }}
+      onClick={() => triggerInteractions(id, "onClick")}
+    >
+      {content}
+      {node.children?.map((childId) => renderNode(childId))}
+    </div>
+  );
   };
 
-  return <>{rootIds.map((id) => renderNode(id))}</>;
+  return (
+    <>
+      {rootIds.map((id) => renderNode(id))}
+      {/* Presence cursors */}
+      {Object.entries(presence || {}).map(([userId, p]) => {
+        if (!p?.cursor) return null;
+        const color = p.color || "#7c3aed";
+        return (
+          <div
+            key={userId}
+            className="pointer-events-none absolute"
+            style={{
+              left: p.cursor.x,
+              top: p.cursor.y,
+              transform: "translate(-50%, -50%)",
+              zIndex: 9999,
+            }}
+          >
+            <div
+              style={{
+                width: 8,
+                height: 8,
+                background: color,
+                borderRadius: "50%",
+                boxShadow: `0 0 0 2px #fff`,
+              }}
+            />
+            <div
+              className="text-[10px] px-1 py-0.5 rounded bg-white border border-neutral-200 shadow-sm mt-1"
+              style={{ color }}
+            >
+              {p.name || userId}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
 }

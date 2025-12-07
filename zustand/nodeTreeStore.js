@@ -7,6 +7,15 @@ const defaultConstraints = {
   vertical: "top",
 };
 
+const defaultResponsiveFrame = {
+  mode: "fixed", // fixed | responsive | fluid | adaptive
+  minWidth: 320,
+  maxWidth: 1920,
+  adaptiveLayouts: {},
+  baseWidth: null,
+  baseHeight: null,
+};
+
 const defaultTransform3d = {
   rotateX: 0,
   rotateY: 0,
@@ -21,17 +30,31 @@ const defaultTransform3d = {
 const defaultLayout = {
   enabled: false,
   direction: "vertical",
+  directionByBreakpoint: {},
+  wrap: false,
   alignment: "start",
   spacing: 8,
+  spacingToken: null,
   padding: { top: 16, right: 16, bottom: 16, left: 16 },
   primaryAxisSizing: "fixed", // hug | fixed
   counterAxisSizing: "fixed", // hug | fill | fixed
+};
+
+const spacingTokens = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
 };
 
 const withDefaults = (node = {}) => ({
   constraints: { ...defaultConstraints, ...(node.constraints || {}) },
   layout: { ...defaultLayout, ...(node.layout || {}) },
   transform3d: { ...defaultTransform3d, ...(node.transform3d || {}) },
+  interactions: node.interactions || [],
+  responsive: { ...defaultResponsiveFrame, ...(node.responsive || {}) },
+  aspectRatio: node.aspectRatio ?? null,
   ...node,
 });
 
@@ -55,47 +78,208 @@ const collectSubtreeIds = (nodes, rootId, acc = []) => {
   return acc;
 };
 
-const applyAutoLayout = (nodes, containerId) => {
+const resolveBreakpointOverride = (frame, activeBreakpointId) => {
+  const layoutMap = frame?.responsive?.adaptiveLayouts || {};
+  return activeBreakpointId && layoutMap[activeBreakpointId] ? layoutMap[activeBreakpointId] : null;
+};
+
+const reflowFrame = (nodes, frame, viewportWidth, activeBreakpointId) => {
+  if (!frame) return nodes;
+  const baseWidth = frame.responsive?.baseWidth || frame.width || viewportWidth || 0;
+  const baseHeight = frame.responsive?.baseHeight || frame.height || 0;
+  const responsive = { ...defaultResponsiveFrame, ...(frame.responsive || {}), baseWidth, baseHeight };
+  let targetWidth = frame.width || baseWidth;
+  switch (responsive.mode) {
+    case "responsive":
+    case "fluid":
+    case "adaptive":
+      targetWidth = Math.max(responsive.minWidth, Math.min(responsive.maxWidth, viewportWidth || baseWidth));
+      break;
+    case "fixed":
+    default:
+      targetWidth = frame.width || baseWidth;
+      break;
+  }
+  let targetHeight = frame.height || baseHeight;
+  if (frame.aspectRatio) {
+    targetHeight = targetWidth / frame.aspectRatio;
+  }
+  const override = resolveBreakpointOverride(frame, activeBreakpointId);
+  if (override) {
+    targetWidth = override.width ?? targetWidth;
+    targetHeight = override.height ?? targetHeight;
+  }
+
+  const nextNodes = { ...nodes };
+  const updatedFrame = {
+    ...frame,
+    width: targetWidth,
+    height: targetHeight,
+    responsive,
+  };
+  nextNodes[frame.id] = updatedFrame;
+
+  const scaleX = baseWidth ? targetWidth / baseWidth : 1;
+  const scaleY = baseHeight ? targetHeight / baseHeight : 1;
+
+  (frame.children || []).forEach((childId) => {
+    const child = nextNodes[childId];
+    if (!child) return;
+    const c = child.constraints || defaultConstraints;
+    let nx = child.x ?? 0;
+    let ny = child.y ?? 0;
+    let nw = child.width ?? 0;
+    let nh = child.height ?? 0;
+
+    const rightOffset = baseWidth - ((child.x ?? 0) + (child.width ?? 0));
+    const bottomOffset = baseHeight - ((child.y ?? 0) + (child.height ?? 0));
+
+    switch (c.horizontal) {
+      case "left-right":
+        nx = child.x ?? 0;
+        nw = Math.max(1, targetWidth - nx - rightOffset);
+        break;
+      case "center":
+        nw = child.width ?? 0;
+        nx = Math.max(0, (targetWidth - nw) / 2);
+        break;
+      case "right":
+        nw = child.width ?? 0;
+        nx = Math.max(0, targetWidth - rightOffset - nw);
+        break;
+      case "scale":
+        nx = (child.x ?? 0) * scaleX;
+        nw = (child.width ?? 0) * scaleX;
+        break;
+      default:
+        nx = child.x ?? 0;
+        nw = child.width ?? 0;
+        break;
+    }
+
+    switch (c.vertical) {
+      case "top-bottom":
+        ny = child.y ?? 0;
+        nh = Math.max(1, targetHeight - ny - bottomOffset);
+        break;
+      case "center":
+        nh = child.height ?? 0;
+        ny = Math.max(0, (targetHeight - nh) / 2);
+        break;
+      case "bottom":
+        nh = child.height ?? 0;
+        ny = Math.max(0, targetHeight - bottomOffset - nh);
+        break;
+      case "scale":
+        ny = (child.y ?? 0) * scaleY;
+        nh = (child.height ?? 0) * scaleY;
+        break;
+      default:
+        ny = child.y ?? 0;
+        nh = child.height ?? 0;
+        break;
+    }
+
+    nextNodes[childId] = { ...child, x: nx, y: ny, width: nw, height: nh };
+  });
+
+  if (updatedFrame.layout?.enabled) {
+    return applyAutoLayout(nextNodes, frame.id);
+  }
+
+  return nextNodes;
+};
+
+const parseSpacing = (value, size, token) => {
+  if (token && spacingTokens[token]) return spacingTokens[token];
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.startsWith("token:")) {
+      const t = trimmed.replace("token:", "");
+      if (spacingTokens[t]) return spacingTokens[t];
+    }
+    if (trimmed.endsWith("%")) {
+      const pct = parseFloat(trimmed.replace("%", "")) || 0;
+      return (pct / 100) * size;
+    }
+    if (spacingTokens[trimmed]) return spacingTokens[trimmed];
+    const num = parseFloat(trimmed);
+    if (!Number.isNaN(num)) return num;
+  }
+  return 0;
+};
+
+const clampSize = (value, min, max) => {
+  let v = value;
+  if (typeof min === "number") v = Math.max(min, v);
+  if (typeof max === "number") v = Math.min(max, v);
+  return v;
+};
+
+const applyAutoLayout = (nodes, containerId, opts = {}) => {
   const container = nodes[containerId];
   if (!container?.layout?.enabled) return nodes;
   const layout = { ...defaultLayout, ...(container.layout || {}) };
+  const activeDirection = layout.directionByBreakpoint?.[opts.breakpointId] || layout.direction;
   const childrenIds = container.children || [];
   let cursorX = layout.padding.left;
   let cursorY = layout.padding.top;
   let maxWidth = 0;
   let maxHeight = 0;
+  let lineExtent = 0;
+  const spacingValue = parseSpacing(
+    layout.spacing,
+    activeDirection === "vertical" ? container.height || 0 : container.width || 0,
+    layout.spacingToken,
+  );
   const nextNodes = { ...nodes };
 
   childrenIds.forEach((childId, idx) => {
     const child = nextNodes[childId];
     if (!child) return;
-    const spacing = idx === 0 ? 0 : layout.spacing || 0;
-    if (layout.direction === "vertical") {
+    const spacing = idx === 0 ? 0 : spacingValue;
+    if (activeDirection === "vertical") {
       cursorY += spacing;
       const width =
         layout.counterAxisSizing === "fill"
           ? Math.max(1, (container.width || child.width || 0) - layout.padding.left - layout.padding.right)
           : child.width || 0;
-      nextNodes[childId] = { ...child, x: layout.padding.left, y: cursorY, width };
-      cursorY += child.height || 0;
-      maxWidth = Math.max(maxWidth, width);
-      maxHeight = cursorY;
+      const clampedWidth = clampSize(width, child.minWidth, child.maxWidth);
+      const clampedHeight = clampSize(child.height || 0, child.minHeight, child.maxHeight);
+      if (layout.wrap && container.height && cursorY + (child.height || 0) > (container.height || 0)) {
+        cursorY = layout.padding.top;
+        cursorX = maxWidth + spacing;
+      }
+      nextNodes[childId] = { ...child, x: cursorX, y: cursorY, width: clampedWidth, height: clampedHeight };
+      cursorY += clampedHeight;
+      maxWidth = Math.max(maxWidth, cursorX + clampedWidth);
+      maxHeight = Math.max(maxHeight, cursorY);
+      lineExtent = Math.max(lineExtent, clampedWidth);
     } else {
       cursorX += spacing;
       const height =
         layout.counterAxisSizing === "fill"
           ? Math.max(1, (container.height || child.height || 0) - layout.padding.top - layout.padding.bottom)
           : child.height || 0;
-      nextNodes[childId] = { ...child, x: cursorX, y: layout.padding.top, height };
-      cursorX += child.width || 0;
-      maxWidth = cursorX;
-      maxHeight = Math.max(maxHeight, height);
+      const clampedHeight = clampSize(height, child.minHeight, child.maxHeight);
+      const clampedWidth = clampSize(child.width || 0, child.minWidth, child.maxWidth);
+      if (layout.wrap && container.width && cursorX + (child.width || 0) > (container.width || 0)) {
+        cursorX = layout.padding.left;
+        cursorY += lineExtent + spacing;
+        lineExtent = 0;
+      }
+      nextNodes[childId] = { ...child, x: cursorX, y: cursorY, height: clampedHeight, width: clampedWidth };
+      cursorX += clampedWidth;
+      maxWidth = Math.max(maxWidth, cursorX);
+      maxHeight = Math.max(maxHeight, cursorY + clampedHeight);
+      lineExtent = Math.max(lineExtent, clampedHeight);
     }
   });
 
   const nextContainer = { ...container, layout };
   if (layout.primaryAxisSizing === "hug") {
-    if (layout.direction === "vertical") {
+    if (activeDirection === "vertical") {
       nextContainer.height = maxHeight + layout.padding.bottom;
     } else {
       nextContainer.width = maxWidth + layout.padding.right;
@@ -177,6 +361,36 @@ export const useNodeTreeStore = create((set, get) => ({
         nextNodes = applyAutoLayout(nextNodes, merged.parent);
       }
       return { nodes: nextNodes, rootIds: state.rootIds };
+    }),
+
+  updateResponsive: (id, responsive) =>
+    set((state) => {
+      if (!state.nodes[id]) return state;
+      const current = state.nodes[id];
+      const mergedResponsive = { ...defaultResponsiveFrame, ...(current.responsive || {}), ...(responsive || {}) };
+      const merged = withDefaults({ ...current, responsive: mergedResponsive });
+      const nodes = { ...state.nodes, [id]: merged };
+      let nextNodes = nodes;
+      if (merged.layout?.enabled) {
+        nextNodes = applyAutoLayout(nextNodes, id);
+      }
+      if (merged.parent && nextNodes[merged.parent]?.layout?.enabled) {
+        nextNodes = applyAutoLayout(nextNodes, merged.parent);
+      }
+      return { nodes: nextNodes, rootIds: state.rootIds };
+    }),
+
+  applyResponsiveLayout: (viewportWidth = 1440, activeBreakpointId = null) =>
+    set((state) => {
+      let nextNodes = { ...state.nodes };
+      const frameIds = state.rootIds.filter((id) => state.nodes[id]?.type === "frame");
+      frameIds.forEach((fid) => {
+        nextNodes = reflowFrame(nextNodes, nextNodes[fid], viewportWidth, activeBreakpointId);
+        if (nextNodes[fid]?.layout?.enabled) {
+          nextNodes = applyAutoLayout(nextNodes, fid, { breakpointId: activeBreakpointId });
+        }
+      });
+      return { nodes: nextNodes };
     }),
 
   removeNode: (id) =>

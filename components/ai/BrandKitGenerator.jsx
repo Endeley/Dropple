@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useState } from "react";
@@ -132,7 +133,7 @@ export default function BrandKitGenerator() {
               <img
                 key={url}
                 src={url}
-                alt="logo"
+                alt={brandKit.name ? `${brandKit.name} logo` : "logo"}
                 className="w-16 h-16 object-contain border rounded bg-white"
               />
             ))}

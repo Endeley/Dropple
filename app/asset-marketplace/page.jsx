@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 const CATEGORY_OPTIONS = [
   { value: "", label: "All" },
@@ -89,11 +90,15 @@ export default function AssetMarketplacePage() {
             >
               <div className="h-36 bg-gray-100">
                 {asset.previewUrl ? (
-                  <img
-                    src={asset.previewUrl}
-                    alt={asset.title}
-                    className="w-full h-full object-cover"
-                  />
+                  <div className="relative w-full h-full">
+                    <Image
+                      src={asset.previewUrl}
+                      alt={asset.title || "Asset preview"}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                    />
+                  </div>
                 ) : (
                   <div className="w-full h-full bg-gray-200" />
                 )}

@@ -1,20 +1,29 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 
 export default function AssetLibrary() {
   const [assets, setAssets] = useState([]);
 
-  useEffect(() => {
-    loadAssets();
-  }, []);
-
-  async function loadAssets() {
+  const loadAssets = useCallback(async () => {
     const res = await fetch("/api/assets/list", { method: "GET" });
     const data = await res.json();
     setAssets(data.assets || []);
-  }
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const res = await fetch("/api/assets/list", { method: "GET" });
+      const data = await res.json();
+      if (mounted) setAssets(data.assets || []);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   async function handleInsert(url) {
     useTemplateBuilderStore.getState().addImageLayer(url);
@@ -29,6 +38,7 @@ export default function AssetLibrary() {
           <img
             key={a.assetId ?? a._id ?? a.fileId}
             src={a.url}
+            alt={a.name || "asset"}
             onClick={() => handleInsert(a.url)}
             className="w-full h-20 object-cover rounded cursor-pointer hover:ring-2 hover:ring-blue-500"
           />

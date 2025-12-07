@@ -7,6 +7,8 @@ import { Section } from "@/components/properties/Section";
 import { useTextEditStore } from "@/zustand/textEditStore";
 import { SpanTypographyPanel } from "@/components/properties/typography/SpanTypographyPanel";
 import { ComponentInstancePanel } from "@/components/properties/ComponentInstancePanel";
+import { usePrototypeStore } from "@/zustand/prototypeStore";
+import { usePageStore } from "@/zustand/pageStore";
 
 const labelClass = "text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500";
 const inputClass =
@@ -29,6 +31,7 @@ export default function UIUXProperties() {
   const textEditingId = useTextEditStore((s) => s.editingId);
   const selectionStart = useTextEditStore((s) => s.selectionStart);
   const selectionEnd = useTextEditStore((s) => s.selectionEnd);
+  const currentBreakpointId = usePageStore((s) => s.currentBreakpointId);
 
   const selection = useMemo(() => {
     if (!selectedIds.length) return null;
@@ -54,7 +57,13 @@ export default function UIUXProperties() {
   const isComponentInstance = selection?.type === "component-instance";
   const layout = selection?.layout || {};
   const constraints = selection?.constraints || {};
+  const responsive = selection?.responsive || {};
   const transform3d = selection?.transform3d || {};
+  const triggerList = ["onClick", "onHover", "onPress"];
+  const frames = useMemo(
+    () => Object.values(nodes).filter((n) => n.type === "frame"),
+    [nodes],
+  );
   const hasTextSelection =
     selection?.type === "richtext" &&
     textEditingId === selection?.id &&
@@ -141,6 +150,52 @@ export default function UIUXProperties() {
           <button className={miniButton}>Flip H</button>
           <button className={miniButton}>Flip V</button>
         </div>
+        {isFrame ? (
+          <div className="grid grid-cols-3 gap-2 mt-2">
+            <div>
+              <div className={labelClass}>Aspect Ratio</div>
+              <input
+                className={inputClass}
+                placeholder="e.g. 1.777"
+                defaultValue={selection?.aspectRatio || ""}
+                onBlur={(e) =>
+                  selection &&
+                  updateNode(selection.id, {
+                    aspectRatio: e.target.value ? parseFloat(e.target.value) : null,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <div className={labelClass}>Min Width</div>
+              <input
+                className={inputClass}
+                placeholder="320"
+                defaultValue={responsive?.minWidth}
+                onBlur={(e) =>
+                  selection &&
+                  updateNode(selection.id, {
+                    responsive: { ...(selection.responsive || {}), minWidth: parseFloat(e.target.value || "320") },
+                  })
+                }
+              />
+            </div>
+            <div>
+              <div className={labelClass}>Max Width</div>
+              <input
+                className={inputClass}
+                placeholder="1920"
+                defaultValue={responsive?.maxWidth}
+                onBlur={(e) =>
+                  selection &&
+                  updateNode(selection.id, {
+                    responsive: { ...(selection.responsive || {}), maxWidth: parseFloat(e.target.value || "1920") },
+                  })
+                }
+              />
+            </div>
+          </div>
+        ) : null}
       </Section>
 
       <Section title="Constraints & Layout" defaultOpen>
@@ -151,19 +206,99 @@ export default function UIUXProperties() {
           >
             Auto Layout {layout.enabled ? "On" : "Off"}
           </button>
-          <select
-            className={inputClass}
-            value={constraints.horizontal || "left"}
-            onChange={(e) =>
-              selection && updateNode(selection.id, { constraints: { ...(constraints || {}), horizontal: e.target.value } })
-            }
-          >
-            <option value="left">Left</option>
-            <option value="center">Center</option>
-            <option value="right">Right</option>
-            <option value="scale">Scale</option>
-          </select>
+          {isFrame ? (
+            <select
+              className={inputClass}
+              value={responsive?.mode || "fixed"}
+              onChange={(e) =>
+                selection &&
+                updateNode(selection.id, {
+                  responsive: { ...(selection.responsive || {}), mode: e.target.value },
+                })
+              }
+            >
+              <option value="fixed">Fixed</option>
+              <option value="responsive">Responsive</option>
+              <option value="fluid">Fluid</option>
+              <option value="adaptive">Adaptive</option>
+            </select>
+          ) : (
+            <select
+              className={inputClass}
+              value={constraints.horizontal || "left"}
+              onChange={(e) =>
+                selection && updateNode(selection.id, { constraints: { ...(constraints || {}), horizontal: e.target.value } })
+              }
+            >
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+              <option value="left-right">Left & Right</option>
+              <option value="scale">Scale</option>
+            </select>
+          )}
         </div>
+        {layout.enabled ? (
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <select
+              className={inputClass}
+              value={layout.direction || "vertical"}
+              onChange={(e) =>
+                selection &&
+                updateNode(selection.id, {
+                  layout: { ...(selection.layout || {}), direction: e.target.value },
+                })
+              }
+            >
+              <option value="horizontal">Horizontal</option>
+              <option value="vertical">Vertical</option>
+            </select>
+            <select
+              className={inputClass}
+              value={layout.directionByBreakpoint?.[currentBreakpointId] || layout.direction || "vertical"}
+              onChange={(e) =>
+                selection &&
+                updateNode(selection.id, {
+                  layout: {
+                    ...(selection.layout || {}),
+                    directionByBreakpoint: {
+                      ...(selection.layout?.directionByBreakpoint || {}),
+                      [currentBreakpointId]: e.target.value,
+                    },
+                  },
+                })
+              }
+            >
+              <option value="horizontal">Direction @ {currentBreakpointId}: Horizontal</option>
+              <option value="vertical">Direction @ {currentBreakpointId}: Vertical</option>
+            </select>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={layout.wrap || false}
+                onChange={(e) =>
+                  selection &&
+                  updateNode(selection.id, { layout: { ...(selection.layout || {}), wrap: e.target.checked } })
+                }
+              />
+              <span className="text-neutral-700">Wrap children</span>
+            </label>
+            <div>
+              <div className={labelClass}>Gap (px, %, or token:md)</div>
+              <input
+                className={inputClass}
+                placeholder="8"
+                defaultValue={layout.spacing}
+                onBlur={(e) =>
+                  selection &&
+                  updateNode(selection.id, {
+                    layout: { ...(selection.layout || {}), spacing: e.target.value || 0 },
+                  })
+                }
+              />
+            </div>
+          </div>
+        ) : null}
         <div className="grid grid-cols-2 gap-2">
           <select
             className={inputClass}
@@ -175,6 +310,7 @@ export default function UIUXProperties() {
             <option value="top">Top</option>
             <option value="center">Center</option>
             <option value="bottom">Bottom</option>
+            <option value="top-bottom">Top & Bottom</option>
             <option value="scale">Scale</option>
           </select>
           <div />
@@ -558,6 +694,170 @@ export default function UIUXProperties() {
       {isComponentInstance && selection && (
         <Section title="Component" defaultOpen={false}>
           <ComponentInstancePanel node={selection} />
+        </Section>
+      )}
+
+      {selection && (
+        <Section title="Interactions" defaultOpen={false}>
+          <div className="space-y-2">
+            {(selection.interactions || []).map((interaction, idx) => (
+              <div key={`${interaction.trigger}-${idx}`} className="rounded-md border border-neutral-200 bg-white px-3 py-2 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    className={inputClass}
+                    value={interaction.trigger}
+                    onChange={(e) =>
+                      updateNode(selection.id, {
+                        interactions: (selection.interactions || []).map((i, ii) =>
+                          ii === idx ? { ...i, trigger: e.target.value } : i,
+                        ),
+                      })
+                    }
+                  >
+                    {triggerList.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className={inputClass}
+                    value={interaction.actions?.[0]?.type || "navigate"}
+                    onChange={(e) =>
+                      updateNode(selection.id, {
+                        interactions: (selection.interactions || []).map((i, ii) =>
+                          ii === idx
+                            ? {
+                                ...i,
+                                actions: [{ ...(i.actions?.[0] || {}), type: e.target.value }],
+                              }
+                            : i,
+                        ),
+                      })
+                    }
+                  >
+                    <option value="navigate">Navigate</option>
+                    <option value="openOverlay">Open Overlay</option>
+                    <option value="closeOverlay">Close Overlay</option>
+                    <option value="setVariable">Set Variable</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  {interaction.actions?.[0]?.type === "navigate" && (
+                    <select
+                      className={inputClass}
+                      value={interaction.actions?.[0]?.target || ""}
+                      onChange={(e) =>
+                        updateNode(selection.id, {
+                          interactions: (selection.interactions || []).map((i, ii) =>
+                            ii === idx
+                              ? {
+                                  ...i,
+                                  actions: [{ ...(i.actions?.[0] || {}), target: e.target.value }],
+                                }
+                              : i,
+                          ),
+                        })
+                      }
+                    >
+                      <option value="">Select frame</option>
+                      {frames.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name || f.id}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {interaction.actions?.[0]?.type === "openOverlay" && (
+                    <select
+                      className={inputClass}
+                      value={interaction.actions?.[0]?.target || ""}
+                      onChange={(e) =>
+                        updateNode(selection.id, {
+                          interactions: (selection.interactions || []).map((i, ii) =>
+                            ii === idx
+                              ? {
+                                  ...i,
+                                  actions: [{ ...(i.actions?.[0] || {}), target: e.target.value }],
+                                }
+                              : i,
+                          ),
+                        })
+                      }
+                    >
+                      <option value="">Select overlay</option>
+                      {frames.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name || f.id}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {interaction.actions?.[0]?.type === "setVariable" && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        className={inputClass}
+                        placeholder="Variable key"
+                        defaultValue={interaction.actions?.[0]?.key || ""}
+                        onBlur={(e) =>
+                          updateNode(selection.id, {
+                            interactions: (selection.interactions || []).map((i, ii) =>
+                              ii === idx
+                                ? {
+                                    ...i,
+                                    actions: [{ ...(i.actions?.[0] || {}), key: e.target.value }],
+                                  }
+                                : i,
+                            ),
+                          })
+                        }
+                      />
+                      <input
+                        className={inputClass}
+                        placeholder="Value"
+                        defaultValue={interaction.actions?.[0]?.value || ""}
+                        onBlur={(e) =>
+                          updateNode(selection.id, {
+                            interactions: (selection.interactions || []).map((i, ii) =>
+                              ii === idx
+                                ? {
+                                    ...i,
+                                    actions: [{ ...(i.actions?.[0] || {}), value: e.target.value }],
+                                  }
+                                : i,
+                            ),
+                          })
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+                <button
+                  className={miniButton}
+                  onClick={() =>
+                    updateNode(selection.id, {
+                      interactions: (selection.interactions || []).filter((_, ii) => ii !== idx),
+                    })
+                  }
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              className={miniButton}
+              onClick={() =>
+                updateNode(selection.id, {
+                  interactions: [
+                    ...(selection.interactions || []),
+                    { trigger: "onClick", actions: [{ type: "navigate", target: frames[0]?.id || "" }] },
+                  ],
+                })
+              }
+            >
+              + Add Interaction
+            </button>
+          </div>
         </Section>
       )}
 

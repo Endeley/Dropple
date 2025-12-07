@@ -20,8 +20,25 @@ export default defineSchema({
     authorId: v.optional(v.string()),
     userId: v.string(),
     thumbnail: v.optional(v.string()),
+    thumbnailUrl: v.optional(v.string()),
+    templateJsonUrl: v.optional(v.string()),
     isPublished: v.boolean(),
     version: v.number(),
+    versions: v.optional(
+      v.array(
+        v.object({
+          version: v.number(),
+          templateJsonUrl: v.optional(v.string()),
+          thumbnailUrl: v.optional(v.string()),
+          createdAt: v.number(),
+        }),
+      ),
+    ),
+    publishedAt: v.optional(v.number()),
+    license: v.optional(v.string()), // free | pro | marketplace
+    price: v.optional(v.number()),
+    creatorName: v.optional(v.string()),
+    creatorAvatar: v.optional(v.string()),
     templateData: v.optional(v.any()),
     width: v.number(),
     height: v.number(),
@@ -45,15 +62,44 @@ export default defineSchema({
         animations: v.optional(v.array(v.any())),
       }),
     ),
-    price: v.optional(v.number()),
     purchases: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
+    insertCount: v.optional(v.number()),
+    viewCount: v.optional(v.number()),
+    favoriteCount: v.optional(v.number()),
+    searchClicks: v.optional(v.number()),
+    score: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_mode", ["mode"])
     .index("by_published", ["isPublished"])
     .index("by_category", ["category"]),
+  templateCollections: defineTable({
+    name: v.string(),
+    thumbnailUrl: v.optional(v.string()),
+    templateIds: v.array(v.string()),
+    curated: v.optional(v.boolean()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }),
+  templatePacks: defineTable({
+    name: v.string(),
+    thumbnailUrl: v.optional(v.string()),
+    templateIds: v.array(v.string()),
+    license: v.optional(v.string()),
+    price: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }),
+  templateEvents: defineTable({
+    templateId: v.string(),
+    type: v.string(), // view | insert | favorite | search_select | preview | publish
+    userId: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_template", ["templateId"])
+    .index("by_user", ["userId"]),
   assets: defineTable({
     userId: v.string(),
     projectId: v.optional(v.id("projects")),

@@ -380,5 +380,5 @@ export function useTimelinePlayer() {
       physicsStateRef.current = {};
       stopAllAudio(playingAudioRef);
     };
-  }, [playing, duration, setTime, layers, registry, zoom, currentTime]);
+  }, [playing, duration, setTime, layers, registry, zoom, currentTime, sceneNodes]);
 }

@@ -10,15 +10,37 @@ export async function GET(_request, { params }) {
   }
 
   try {
-    const template = await convexClient.query(api.templates.getTemplate, {
+    const stored = await convexClient.query(api.templates.getTemplate, {
       id,
     });
 
-    if (!template) {
+    if (!stored) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
 
-    return Response.json({ template });
+    let templateData = stored.templateData;
+    if (!templateData && stored.templateJsonUrl) {
+      try {
+        const res = await fetch(stored.templateJsonUrl);
+        templateData = await res.json();
+      } catch (err) {
+        console.error("Failed to fetch template JSON from storage", err);
+      }
+    }
+
+    const merged = {
+      ...(templateData || {}),
+      id: stored._id,
+      name: stored.name,
+      category: stored.category,
+      tags: stored.tags,
+      description: stored.description,
+      thumbnail: stored.thumbnailUrl || stored.thumbnail,
+      width: stored.width || templateData?.frame?.width,
+      height: stored.height || templateData?.frame?.height,
+    };
+
+    return Response.json({ template: merged });
   } catch (err) {
     console.error("Failed to fetch template", err);
     return Response.json({ error: "Server error" }, { status: 500 });

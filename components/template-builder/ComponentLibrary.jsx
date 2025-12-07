@@ -1,23 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 
 export default function ComponentLibrary() {
   const [components, setComponents] = useState([]);
   const { setComponents: setComponentsInStore } = useTemplateBuilderStore();
 
-  useEffect(() => {
-    fetchComponents();
-  }, []);
-
-  async function fetchComponents() {
+  const fetchComponents = useCallback(async () => {
     const res = await fetch("/api/components/list", { method: "GET" });
     const data = await res.json();
     const list = data.components || [];
     setComponents(list);
     setComponentsInStore(list);
-  }
+  }, [setComponentsInStore]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const res = await fetch("/api/components/list", { method: "GET" });
+      const data = await res.json();
+      const list = data.components || [];
+      if (mounted) {
+        setComponents(list);
+        setComponentsInStore(list);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [setComponentsInStore]);
 
   const insertInstance = (component, variantId = null) => {
     useTemplateBuilderStore.getState().addComponentInstance(component, variantId);

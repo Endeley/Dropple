@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -52,7 +53,7 @@ function AssetItem({ asset }) {
       onDragStart={handleDragStart}
       className="border rounded overflow-hidden cursor-pointer bg-white shadow-sm"
     >
-      <img src={asset.url} className="w-full h-20 object-cover" />
+      <img src={asset.url} alt={asset.name || "asset"} className="w-full h-20 object-cover" />
       <div className="p-1 text-xs truncate">{asset.name}</div>
     </div>
   );

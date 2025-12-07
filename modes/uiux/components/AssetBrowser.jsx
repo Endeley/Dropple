@@ -5,13 +5,20 @@ import { useNodeTreeStore } from "@/zustand/nodeTreeStore";
 import { useSelectionStore } from "@/zustand/selectionStore";
 import { useCanvasState } from "@/lib/canvas-core/canvasState";
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import { logTemplateEvent, toggleFavorite } from "@/utils/logTemplateEvent.js";
 import { useComponentStore } from "@/zustand/componentStore";
+import { useAssetStore } from "@/zustand/assetStore";
+import TemplateDetailModal from "./TemplateDetailModal.jsx";
+import TemplateAIAdvancedModal from "./TemplateAIAdvancedModal.jsx";
 
 const tabs = [
   { id: "templates", label: "Templates" },
+  { id: "my-templates", label: "My Templates" },
   { id: "assets", label: "Assets" },
   { id: "icons", label: "Icons" },
   { id: "components", label: "Components" },
+  { id: "cloud", label: "Cloud Assets" },
 ];
 
 const Tag = ({ label }) => (
@@ -28,6 +35,8 @@ export default function AssetBrowser() {
   const setSearch = useAssetBrowserStore((s) => s.setSearch);
   const category = useAssetBrowserStore((s) => s.category);
   const setCategory = useAssetBrowserStore((s) => s.setCategory);
+  const sort = useAssetBrowserStore((s) => s.sort);
+  const setSort = useAssetBrowserStore((s) => s.setSort);
   const close = useAssetBrowserStore((s) => s.closeBrowser);
 
   const addNode = useNodeTreeStore((s) => s.addNode);
@@ -36,11 +45,26 @@ export default function AssetBrowser() {
   const pan = useCanvasState((s) => s.pan);
   const zoom = useCanvasState((s) => s.zoom);
   const components = useComponentStore((s) => s.components);
+  const assets = useAssetStore((s) => s.assets);
   const setDraggingComponent = useComponentStore((s) => s.setDraggingComponent);
   const clearDraggingComponent = useComponentStore((s) => s.clearDraggingComponent);
 
   const [templates, setTemplates] = useState([]);
+  const [myTemplates, setMyTemplates] = useState([]);
+  const [recommended, setRecommended] = useState([]);
+  const [trending, setTrending] = useState([]);
+  const [popular, setPopular] = useState([]);
+  const [recent, setRecent] = useState([]);
+  const [collections, setCollections] = useState([]);
+  const [packs, setPacks] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [related, setRelated] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [layoutFilter, setLayoutFilter] = useState("All");
+  const [styleFilter, setStyleFilter] = useState("All");
+  const [colorFilter, setColorFilter] = useState("All");
+  const [aiTargetTemplate, setAiTargetTemplate] = useState(null);
 
   useEffect(() => {
     if (!open || tab !== "templates") return;
@@ -50,6 +74,7 @@ export default function AssetBrowser() {
       try {
         const params = new URLSearchParams();
         if (category && category !== "All") params.set("category", category);
+        if (sort) params.set("sort", sort);
         if (search) params.set("q", search);
         const res = await fetch(`/api/templates/marketplace?${params.toString()}`, {
           signal: controller.signal,
@@ -64,10 +89,109 @@ export default function AssetBrowser() {
     };
     load();
     return () => controller.abort();
-  }, [open, tab, category, search]);
+  }, [open, tab, category, search, sort]);
+
+  useEffect(() => {
+    if (!open || tab !== "templates") return;
+    const controller = new AbortController();
+    const load = async () => {
+      try {
+        const res = await fetch("/api/templates/recommended", { signal: controller.signal });
+        const data = await res.json();
+        setRecommended(data.templates || []);
+      } catch (err) {
+        if (err.name !== "AbortError") console.error("Failed to load recommended", err);
+      }
+    };
+    load();
+    return () => controller.abort();
+  }, [open, tab]);
+
+  useEffect(() => {
+    const loadDetailData = async () => {
+      if (!selectedTemplate?.id || selectedTemplate.type !== "template") {
+        setStats(null);
+        setRelated([]);
+        return;
+      }
+      try {
+        const [sRes, recRes] = await Promise.all([
+          fetch(`/api/templates/stats?id=${selectedTemplate.id}`),
+          fetch("/api/templates/recommended"),
+        ]);
+        const sData = await sRes.json();
+        setStats(sData.stats || null);
+        const recData = await recRes.json();
+        const rel = (recData.templates || []).filter((t) => t.id !== selectedTemplate.id).slice(0, 4);
+        setRelated(rel);
+      } catch (err) {
+        console.error("Failed to load detail metadata", err);
+      }
+    };
+    loadDetailData();
+  }, [selectedTemplate]);
+
+  useEffect(() => {
+    if (!open || tab !== "templates") return;
+    const controller = new AbortController();
+    const load = async () => {
+      try {
+        const [tRes, pRes, rRes, colRes, pkRes] = await Promise.all([
+          fetch("/api/templates/trending", { signal: controller.signal }),
+          fetch("/api/templates/popular", { signal: controller.signal }),
+          fetch("/api/templates/recent", { signal: controller.signal }),
+          fetch("/api/templates/collections", { signal: controller.signal }),
+          fetch("/api/templates/packs", { signal: controller.signal }),
+        ]);
+        const tData = await tRes.json();
+        const pData = await pRes.json();
+        const rData = await rRes.json();
+        const colData = await colRes.json();
+        const pkData = await pkRes.json();
+        setTrending(tData.templates || []);
+        setPopular(pData.templates || []);
+        setRecent(rData.templates || []);
+        setCollections(colData.collections || []);
+        setPacks(pkData.packs || []);
+      } catch (err) {
+        if (err.name !== "AbortError") console.error("Failed to load sections", err);
+      }
+    };
+    load();
+    return () => controller.abort();
+  }, [open, tab]);
+
+  useEffect(() => {
+    if (!open || tab !== "my-templates") return;
+    const controller = new AbortController();
+    const load = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/templates/list", { signal: controller.signal });
+        const data = await res.json();
+        setMyTemplates(data.templates || []);
+      } catch (err) {
+        if (err.name !== "AbortError") console.error("Failed to load my templates", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+    return () => controller.abort();
+  }, [open, tab]);
 
   const catalogForTab = useMemo(() => {
     if (tab === "templates") return templates;
+    if (tab === "my-templates") return (myTemplates || []).map((t) => ({
+      id: t._id,
+      type: "template",
+      name: t.name,
+      category: t.category || "General",
+      creator: t.authorId || t.userId || "",
+      width: t.width,
+      height: t.height,
+      previewUrl: t.thumbnail || null,
+    }));
     if (tab === "components") {
       return Object.values(components || {}).map((c) => ({
         id: c.id,
@@ -79,24 +203,63 @@ export default function AssetBrowser() {
         previewUrl: null,
       }));
     }
+    if (tab === "cloud") {
+      return Object.values(assets || {}).map((a) => ({
+        id: a.id,
+        type: a.type || "asset",
+        name: a.name || a.id,
+        category: a.type === "component" ? "Component" : "Asset",
+        width: a.size?.width || 400,
+        height: a.size?.height || 300,
+        previewUrl: a.variants?.thumbnail || a.url,
+      }));
+    }
     return ASSET_CATALOG.filter((item) => {
       const matchTab =
         (tab === "assets" && item.type === "asset") ||
         (tab === "icons" && item.type === "icon") ||
-        (tab === "components" && item.type === "component");
+        (tab === "components" && item.type === "component") ||
+        (tab === "cloud" && item.type === "asset");
       return matchTab;
     });
-  }, [tab, templates, components]);
+  }, [tab, templates, components, assets, myTemplates]);
 
-  const categories = ["All", ...new Set(catalogForTab.map((i) => i.category || "Uncategorized"))];
+  const defaultCategories = [
+    "All",
+    "Website",
+    "Mobile",
+    "Hero Sections",
+    "Dashboard",
+    "E-commerce",
+    "Portfolio",
+    "Marketing",
+    "Wireframes",
+    "Presentations",
+    "Branding",
+    "Social Media",
+  ];
+  const categories = [...new Set([...defaultCategories, ...catalogForTab.map((i) => i.category || "Uncategorized")])];
+  const layoutOptions = ["All", "Hero", "Dashboard", "Card", "Footer", "Pricing", "Nav", "Form", "Gallery"];
+  const styleOptions = ["All", "Minimal", "Dark", "Gradient", "Playful", "Glass", "Brutalist"];
+  const colorOptions = ["All", "Light", "Dark", "Colorful", "Pastel", "Neon"];
+
+  const tagMatches = (value, tags = []) => {
+    if (!value || value === "All") return true;
+    const lower = value.toLowerCase();
+    return tags.some((t) => t?.toLowerCase().includes(lower));
+  };
 
   const filtered = catalogForTab.filter((item) => {
+    const tags = item.tags || [];
     const matchSearch = item.name?.toLowerCase().includes(search.toLowerCase());
     const matchCategory = category === "All" || item.category === category || (!item.category && category === "Uncategorized");
-    return matchSearch && matchCategory;
+    const matchLayout = tagMatches(layoutFilter, tags);
+    const matchStyle = tagMatches(styleFilter, tags);
+    const matchColor = tagMatches(colorFilter, tags);
+    return matchSearch && matchCategory && matchLayout && matchStyle && matchColor;
   });
 
-  const insertItem = (item) => {
+  const insertItem = async (item) => {
     const id = crypto.randomUUID();
     const viewport = {
       width: typeof window !== "undefined" ? window.innerWidth : 1200,
@@ -127,13 +290,32 @@ export default function AssetBrowser() {
     };
 
     if (item.type === "template") {
-      addNode({ ...baseNode, type: "frame" });
+      const hasPremium = false; // TODO: replace with real subscription check
+      const allowMarketplace = false;
+      if (item.license === "pro" && !hasPremium) {
+        alert("This template is Pro. Upgrade to use it.");
+        return;
+      }
+      if (item.license === "marketplace" && !allowMarketplace) {
+        alert("This template is Marketplace-locked.");
+        return;
+      }
+      try {
+        const res = await fetch(`/api/templates/${item.id}`);
+        const template = await res.json();
+        if (item.type === "template") logTemplateEvent(item.id, "insert");
+        hydrateTemplate(template, baseNode);
+      } catch (err) {
+        console.error("Failed to insert template", err);
+      }
     } else if (item.type === "asset" || item.type === "icon") {
       addNode({
         ...baseNode,
         type: "image",
         src: item.previewUrl || item.preview,
       });
+      setSelectedManual([id]);
+      close();
     } else if (item.type === "component") {
       addNode({
         ...baseNode,
@@ -143,12 +325,183 @@ export default function AssetBrowser() {
         propOverrides: {},
         nodeOverrides: {},
       });
+      setSelectedManual([id]);
+      close();
     } else {
       addNode({ ...baseNode, type: "frame" });
+      setSelectedManual([id]);
+      close();
     }
-    setSelectedManual([id]);
+  };
+
+  const hydrateTemplate = (template, baseFrame) => {
+    if (!template) return;
+    const nodes = template.nodes || [];
+    const idMap = {};
+    nodes.forEach((n) => {
+      idMap[n.id] = crypto.randomUUID();
+    });
+
+    const cloned = {};
+    nodes.forEach((n) => {
+      const children = (n.children || []).map((cid) => idMap[cid]);
+      const props = n.props || {};
+      const mapped = {
+        id: idMap[n.id],
+        type: n.type || "frame",
+        name: n.name || template.name || "Template",
+        children,
+        parent: null,
+        ...props,
+      };
+      cloned[mapped.id] = mapped;
+    });
+
+    // Set parents based on children
+    Object.values(cloned).forEach((node) => {
+      (node.children || []).forEach((cid) => {
+        if (cloned[cid]) cloned[cid].parent = node.id;
+      });
+    });
+
+    // Find top-level nodes (no parent)
+    const topLevelIds = Object.values(cloned)
+      .filter((n) => !n.parent)
+      .map((n) => n.id);
+
+    // Create root frame if needed
+    const rootFrameId = baseFrame.id;
+    const frameWidth = template.frame?.width || baseFrame.width;
+    const frameHeight = template.frame?.height || baseFrame.height;
+    const rootFrame = {
+      ...baseFrame,
+      type: "frame",
+      width: frameWidth,
+      height: frameHeight,
+      children: topLevelIds,
+      background: template.frame?.background || "#ffffff",
+      parent: null,
+    };
+
+    // Attach top-level nodes to root frame
+    topLevelIds.forEach((tid) => {
+      if (cloned[tid]) cloned[tid].parent = rootFrameId;
+    });
+
+    const mapToInsert = { ...cloned, [rootFrameId]: rootFrame };
+
+    // Center the frame on canvas
+    mapToInsert[rootFrameId] = {
+      ...mapToInsert[rootFrameId],
+      x: baseFrame.x - frameWidth / 2,
+      y: baseFrame.y - frameHeight / 2,
+    };
+
+    useNodeTreeStore.getState().insertSubtree(mapToInsert, [rootFrameId]);
+    setSelectedManual([rootFrameId]);
     close();
   };
+
+  const templateCard = (item) => (
+    <div
+      key={item.id}
+      className="rounded-xl border border-neutral-200 bg-white shadow-sm overflow-hidden flex flex-col group cursor-pointer"
+      onClick={() => setSelectedTemplate(item)}
+      draggable={item.type === "component"}
+      onDragStart={(e) => {
+        if (item.type === "component") {
+          e.dataTransfer.setData("application/x-component-id", item.id);
+          setDraggingComponent(item.id);
+        }
+      }}
+      onDragEnd={() => clearDraggingComponent()}
+    >
+      <div className="relative h-40 w-full bg-neutral-100">
+        {item.previewUrl ? (
+          <Image src={item.previewUrl} alt={item.name} fill className="object-cover" sizes="320px" />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-neutral-100 to-neutral-200" />
+        )}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition" />
+        <div className="absolute inset-x-3 bottom-3 flex gap-2 opacity-0 group-hover:opacity-100 transition">
+          <button
+            className="flex-1 px-2 py-1 rounded-md bg-white text-xs font-semibold shadow"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (item.type === "template") logTemplateEvent(item.id, "preview");
+              insertItem(item);
+            }}
+          >
+            Insert
+          </button>
+          <button
+            className="px-2 py-1 rounded-md bg-white/90 text-xs font-semibold shadow"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (item.type === "template") logTemplateEvent(item.id, "view");
+              setSelectedTemplate(item);
+            }}
+          >
+            Preview
+          </button>
+        </div>
+      </div>
+      <div className="p-3 space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm font-semibold text-neutral-900 truncate">{item.name}</div>
+          <Tag label={item.category || "General"} />
+        </div>
+          <div className="text-xs text-neutral-500 flex items-center justify-between">
+            <span>{item.width && item.height ? `${Math.round(item.width)}×${Math.round(item.height)}` : "Template"}</span>
+            {item.creator ? <span className="text-[11px] text-neutral-500 truncate max-w-[120px]">by {item.creator}</span> : null}
+          </div>
+        {item.license && item.license !== "free" ? (
+          <div className="text-[11px] text-amber-600 font-semibold">
+            🔒 {item.license === "pro" ? "Pro" : "Marketplace"} {item.price ? `· $${item.price}` : ""}
+          </div>
+        ) : null}
+        {(item.insertCount || item.viewCount || item.favoriteCount) ? (
+          <div className="text-[11px] text-neutral-500 flex items-center gap-3">
+            {item.insertCount ? <span>⬇ {item.insertCount}</span> : null}
+            {item.viewCount ? <span>👁 {item.viewCount}</span> : null}
+            {item.favoriteCount ? <span>❤ {item.favoriteCount}</span> : null}
+            {item.type === "template" ? (
+              <button
+                className="text-[11px] text-violet-600 font-semibold"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFavorite(item.id);
+                  logTemplateEvent(item.id, "favorite");
+                }}
+              >
+                ❤ Favorite
+              </button>
+            ) : null}
+          </div>
+        ) : item.type === "template" ? (
+          <button
+            className="text-[11px] text-violet-600 font-semibold"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFavorite(item.id);
+              logTemplateEvent(item.id, "favorite");
+            }}
+          >
+            ❤ Favorite
+          </button>
+        ) : null}
+        {item.tags?.length ? (
+          <div className="flex flex-wrap gap-1">
+            {item.tags.slice(0, 3).map((t) => (
+              <span key={t} className="text-[10px] px-2 py-[2px] rounded-full bg-neutral-100 text-neutral-600">
+                #{t}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
 
   if (!open) return null;
 
@@ -202,6 +555,71 @@ export default function AssetBrowser() {
                 </button>
               ))}
             </div>
+            {tab === "templates" ? (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] uppercase tracking-[0.08em] text-neutral-500 font-semibold">Sort</span>
+                <select
+                  className="border border-neutral-200 rounded-md px-2 py-1 text-xs text-neutral-700 bg-white"
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value)}
+                >
+                  <option value="recent">Recent</option>
+                  <option value="trending">Trending</option>
+                </select>
+              </div>
+            ) : null}
+            {tab === "templates" ? (
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 overflow-x-auto">
+                  <span className="text-[11px] uppercase tracking-[0.08em] text-neutral-500 font-semibold">Layout</span>
+                  {layoutOptions.map((opt) => (
+                    <button
+                      key={opt}
+                      onClick={() => setLayoutFilter(opt)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition border ${
+                        layoutFilter === opt
+                          ? "bg-violet-500/10 border-violet-500 text-violet-700"
+                          : "bg-white border-neutral-200 text-neutral-700 hover:border-violet-200 hover:bg-violet-50"
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto">
+                  <span className="text-[11px] uppercase tracking-[0.08em] text-neutral-500 font-semibold">Style</span>
+                  {styleOptions.map((opt) => (
+                    <button
+                      key={opt}
+                      onClick={() => setStyleFilter(opt)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition border ${
+                        styleFilter === opt
+                          ? "bg-violet-500/10 border-violet-500 text-violet-700"
+                          : "bg-white border-neutral-200 text-neutral-700 hover:border-violet-200 hover:bg-violet-50"
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto">
+                  <span className="text-[11px] uppercase tracking-[0.08em] text-neutral-500 font-semibold">Color</span>
+                  {colorOptions.map((opt) => (
+                    <button
+                      key={opt}
+                      onClick={() => setColorFilter(opt)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition border ${
+                        colorFilter === opt
+                          ? "bg-violet-500/10 border-violet-500 text-violet-700"
+                          : "bg-white border-neutral-200 text-neutral-700 hover:border-violet-200 hover:bg-violet-50"
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -223,54 +641,80 @@ export default function AssetBrowser() {
               No results. Try a different search or tab.
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4">
-              {filtered.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-xl border border-neutral-200 bg-white shadow-sm overflow-hidden flex flex-col"
-                  draggable={item.type === "component"}
-                  onDragStart={(e) => {
-                    if (item.type === "component") {
-                      e.dataTransfer.setData("application/x-component-id", item.id);
-                      setDraggingComponent(item.id);
-                    }
-                  }}
-                  onDragEnd={() => clearDraggingComponent()}
-                >
-                  <div
-                    className="h-40 w-full"
-                    style={{
-                      backgroundImage: item.previewUrl ? `url(${item.previewUrl})` : item.preview,
-                      backgroundSize: "cover",
-                      backgroundPosition: "center",
-                    }}
-                  />
-                  <div className="p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-semibold text-neutral-900">{item.name}</div>
-                        <div className="text-xs text-neutral-500">{item.category}</div>
-                      </div>
-                      <Tag label={item.type} />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="flex-1 px-3 py-2 rounded-md bg-violet-500 text-white text-sm font-semibold shadow-sm hover:bg-violet-600 transition"
-                        onClick={() => insertItem(item)}
-                      >
-                        Insert
-                      </button>
-                      <button className="px-3 py-2 rounded-md border border-neutral-200 bg-white text-sm text-neutral-700 hover:border-violet-200 hover:bg-violet-50 transition">
-                        Preview
-                      </button>
-                    </div>
+            <div className="space-y-4">
+              {recommended.length ? (
+                <div className="mb-2">
+                  <div className="text-sm font-semibold text-neutral-800 mb-2">Recommended for you</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {recommended.slice(0, 4).map((item) => templateCard(item))}
                   </div>
                 </div>
-              ))}
+              ) : null}
+              {trending.length ? (
+                <div className="mb-2">
+                  <div className="text-sm font-semibold text-neutral-800 mb-2">Trending</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {trending.slice(0, 4).map((item) => templateCard(item))}
+                  </div>
+                </div>
+              ) : null}
+              {popular.length ? (
+                <div className="mb-2">
+                  <div className="text-sm font-semibold text-neutral-800 mb-2">Popular</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {popular.slice(0, 4).map((item) => templateCard(item))}
+                  </div>
+                </div>
+              ) : null}
+              {recent.length ? (
+                <div className="mb-2">
+                  <div className="text-sm font-semibold text-neutral-800 mb-2">Recent</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {recent.slice(0, 4).map((item) => templateCard(item))}
+                  </div>
+                </div>
+              ) : null}
+              <div className="grid grid-cols-2 gap-4">
+                {filtered.map((item) => templateCard(item))}
+              </div>
             </div>
           )}
         </div>
       </div>
+
+      {selectedTemplate ? (
+        <TemplateDetailModal
+          template={selectedTemplate}
+          stats={stats}
+          related={related}
+          onClose={() => setSelectedTemplate(null)}
+          onInsert={() => {
+            if (selectedTemplate.type === "template") logTemplateEvent(selectedTemplate.id, "insert");
+            insertItem(selectedTemplate);
+            setSelectedTemplate(null);
+          }}
+          onFavorite={() => {
+            logTemplateEvent(selectedTemplate.id, "favorite");
+            toggleFavorite(selectedTemplate.id);
+          }}
+          onRemix={() => {
+            logTemplateEvent(selectedTemplate.id, "remix");
+            setAiTargetTemplate(selectedTemplate);
+          }}
+          onDetail={() => {
+            logTemplateEvent(selectedTemplate.id, "view");
+            window.open(`/templates/${selectedTemplate.id}`, "_blank");
+          }}
+          onSelectRelated={(item) => setSelectedTemplate(item)}
+        />
+      ) : null}
+      {aiTargetTemplate ? (
+        <TemplateAIAdvancedModal
+          template={aiTargetTemplate}
+          onClose={() => setAiTargetTemplate(null)}
+          onDone={() => setAiTargetTemplate(null)}
+        />
+      ) : null}
     </div>
   );
 }

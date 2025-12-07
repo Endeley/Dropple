@@ -57,7 +57,12 @@ Do NOT output anything except valid JSON.
 
     return Response.json({ blueprint });
   } catch (err) {
+    const status = err?.status || err?.code === "insufficient_quota" ? 429 : 500;
+    const msg =
+      err?.code === "insufficient_quota"
+        ? "AI quota exceeded. Please check your plan/billing."
+        : "Generation failed";
     console.error("Template AI generation failed", err);
-    return Response.json({ error: "Generation failed" }, { status: 500 });
+    return Response.json({ error: msg }, { status });
   }
 }

@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 
 export default function TemplatePreviewCard({ template = {} }) {
   const category = template.category || template.mode || "UI/UX";
@@ -14,11 +15,15 @@ export default function TemplatePreviewCard({ template = {} }) {
     <div className="w-full border rounded-lg overflow-hidden bg-white shadow hover:shadow-md transition">
       <div className="w-full h-40 bg-gray-100 overflow-hidden">
         {template.thumbnail ? (
-          <img
-            src={template.thumbnail}
-            alt="Template preview"
-            className="w-full h-full object-cover"
-          />
+          <div className="relative w-full h-full">
+            <Image
+              src={template.thumbnail}
+              alt={template.name || "Template preview"}
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 50vw"
+            />
+          </div>
         ) : (
           <div className="w-full h-full bg-gray-200" />
         )}

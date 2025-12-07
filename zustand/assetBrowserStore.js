@@ -50,9 +50,11 @@ export const useAssetBrowserStore = create((set) => ({
   tab: "templates",
   search: "",
   category: "All",
+  sort: "recent",
   openBrowser: (tab = "templates") => set({ open: true, tab }),
   closeBrowser: () => set({ open: false }),
   setTab: (tab) => set({ tab }),
   setSearch: (search) => set({ search }),
   setCategory: (category) => set({ category }),
+  setSort: (sort) => set({ sort }),
 }));

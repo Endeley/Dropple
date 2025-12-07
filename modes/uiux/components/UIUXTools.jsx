@@ -1,12 +1,13 @@
 "use client";
 
 import { useToolStore } from "@/zustand/toolStore";
-import { useRef, useMemo } from "react";
+import { useRef, useMemo, useEffect } from "react";
 import { useNodeTreeStore } from "@/zustand/nodeTreeStore";
 import { useSelectionStore } from "@/zustand/selectionStore";
 import { useAssetBrowserStore } from "@/zustand/assetBrowserStore";
 import { useComponentStore } from "@/zustand/componentStore";
 import { useUndoStore } from "@/zustand/undoStore";
+import { usePageStore } from "@/zustand/pageStore";
 
 export default function UIUXTools() {
   const { tool, setTool } = useToolStore();
@@ -23,6 +24,10 @@ export default function UIUXTools() {
   const addComponent = useComponentStore((s) => s.addComponent);
   const components = useComponentStore((s) => s.components);
   const pushHistory = useUndoStore((s) => s.push);
+  const pages = usePageStore((s) => s.pages);
+  const currentPageId = usePageStore((s) => s.currentPageId);
+  const addPage = usePageStore((s) => s.addPage);
+  const setCurrentPage = usePageStore((s) => s.setCurrentPage);
 
   const buttonClass = (id) =>
     `w-full px-3 py-2 text-left rounded-md text-sm font-medium transition border ${
@@ -54,7 +59,9 @@ export default function UIUXTools() {
       rotation: 0,
       children: [],
       parent: null,
+      pageId: currentPageId,
     });
+    usePageStore.getState().attachFrameToPage(currentPageId, id);
     setSelectedManual([id]);
     setTool("select");
   };
@@ -158,6 +165,30 @@ export default function UIUXTools() {
   return (
     <div className="p-4 space-y-4">
       <div className="text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">UI/UX Tools</div>
+
+      <div className="space-y-2">
+        <div className={sectionLabel}>Pages</div>
+        <div className="rounded-lg border border-neutral-200 bg-white shadow-sm divide-y divide-neutral-100">
+          {pages.map((page) => (
+            <div
+              key={page.id}
+              className={`flex items-center justify-between px-3 py-2 cursor-pointer ${currentPageId === page.id ? "bg-violet-50 border-l-2 border-l-violet-500" : "hover:bg-neutral-50"}`}
+              onClick={() => setCurrentPage(page.id)}
+            >
+              <div className="flex flex-col">
+                <span className="text-sm font-semibold text-neutral-800 truncate">{page.name}</span>
+                <span className="text-[11px] text-neutral-500">{page.path || "/"}</span>
+              </div>
+            </div>
+          ))}
+          <button
+            className="w-full px-3 py-2 text-left text-xs font-semibold text-violet-700 hover:bg-violet-50"
+            onClick={() => addPage()}
+          >
+            + Add Page
+          </button>
+        </div>
+      </div>
 
       {/* Core Tools */}
       <div className="space-y-2">

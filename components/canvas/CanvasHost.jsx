@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CanvasGrid from "./CanvasGrid";
 import CanvasRulers from "./CanvasRulers";
 import CanvasOverlays from "./CanvasOverlays";
@@ -106,7 +106,7 @@ export default function CanvasHost({
     };
   };
 
-  const startResize = (e, handle) => {
+  const startResize = useCallback((e, handle) => {
     if (!selectedBounds) return;
     e.stopPropagation();
     resizeRef.current = {
@@ -117,7 +117,7 @@ export default function CanvasHost({
       nodeId: selectedIds[0],
       initialNode: nodes[selectedIds[0]],
     };
-  };
+  }, [selectedBounds, selectedIds, nodes]);
 
   const onMouseDown = (e) => {
     if (e.target?.dataset?.handle === "rotate") {
@@ -532,6 +532,8 @@ export default function CanvasHost({
         ? "cursor-grab"
         : "cursor-default";
 
+  const renderedChildren = useMemo(() => children, [children]);
+
   return (
     <div
       ref={containerRef}
@@ -565,7 +567,7 @@ export default function CanvasHost({
           transformOrigin: "0 0",
         }}
       >
-        {typeof children === "function" ? children({ startResize }) : children}
+        {renderedChildren}
       </div>
 
       <CanvasOverlays

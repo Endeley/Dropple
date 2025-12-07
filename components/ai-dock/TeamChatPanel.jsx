@@ -1,13 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { useAgentStore } from "@/store/useAgentStore";
 import { formatTimestamp } from "@/utils/formatTimestamp";
 
 export default function TeamChatPanel() {
   const messages = useAgentStore((s) => s.messages);
-  const teamMessages = messages.filter(
-    (m) => m.type === "request" || m.type === "response",
-  );
+  const teamMessages = messages.filter((m) => m.type === "request" || m.type === "response");
+  const [now] = useState(() => Date.now());
 
   if (teamMessages.length === 0) return null;
 
@@ -25,7 +25,7 @@ export default function TeamChatPanel() {
           </p>
           <p className="text-sm">{m.question || m.answer}</p>
           <p className="text-[10px] text-gray-400 mt-1">
-            {formatTimestamp(m.timestamp || m._creationTime || Date.now())}
+            {formatTimestamp(m.timestamp || m._creationTime || now.current)}
           </p>
         </div>
       ))}

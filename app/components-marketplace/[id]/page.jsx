@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export default function ComponentDetailPage({ params }) {
   const router = useRouter();
@@ -112,11 +113,15 @@ export default function ComponentDetailPage({ params }) {
 
         <div className="bg-white rounded-lg shadow overflow-hidden">
           {component.previewImage ? (
-            <img
-              src={component.previewImage}
-              alt={component.name}
-              className="w-full max-h-[720px] object-contain bg-gray-100"
-            />
+            <div className="relative w-full h-[720px] bg-gray-100">
+              <Image
+                src={component.previewImage}
+                alt={component.name || "Component preview"}
+                fill
+                className="object-contain"
+                sizes="(max-width: 1024px) 100vw, 80vw"
+              />
+            </div>
           ) : (
             <div className="w-full h-96 bg-gray-100 flex items-center justify-center text-gray-500">
               No preview available

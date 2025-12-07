@@ -14,7 +14,7 @@ export default function TimelinePanel({ layer }) {
   const [selectedTrack, setSelectedTrack] = useState(null);
   const containerRef = useRef(null);
 
-  const animations = layer.animations || [];
+  const animations = useMemo(() => layer.animations || [], [layer.animations]);
   const anim = useMemo(
     () => animations.find((a) => a.id === activeAnimId) || animations[0],
     [activeAnimId, animations],

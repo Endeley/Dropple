@@ -10,11 +10,10 @@ function LayerItem({ id, depth = 0 }) {
   const toggleLock = useNodeTreeStore((state) => state.toggleLock);
   const { selectedIds, setSelected } = useSelectionStore();
 
+  const handleSelect = useCallback(() => setSelected([id]), [id, setSelected]);
   const node = nodes[id];
   const isSelected = selectedIds?.includes(id);
   if (!node) return null;
-
-  const handleSelect = useCallback(() => setSelected([id]), [id, setSelected]);
 
   return (
     <div className="w-full">

@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useMemo, useRef, useState, useEffect } from "react";
@@ -148,7 +149,7 @@ export default function CanvasRenderer({ node }) {
       <img
         onMouseDown={onMouseDown}
         src={node.src}
-        alt=""
+        alt={node.name || "image"}
         style={{ ...style, ...animatedStyle, objectFit: node.fit || "cover" }}
       />
     );

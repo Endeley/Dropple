@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useAgentStore } from "@/store/useAgentStore";
 import { formatTimestamp } from "@/utils/formatTimestamp";
 
@@ -7,6 +8,7 @@ export default function AgentChatFeed() {
   const messages = useAgentStore((s) => s.messages);
   const selectedAgent = useAgentStore((s) => s.selectedAgent);
   const typing = useAgentStore((s) => s.typing);
+  const [now] = useState(() => Date.now());
 
   const filtered = selectedAgent
     ? messages.filter((m) => m.agent === selectedAgent || m.agent === "System")
@@ -22,7 +24,7 @@ export default function AgentChatFeed() {
           <p className="text-xs text-gray-500">{m.agent}</p>
           <p className="text-sm mt-1">{m.content}</p>
           <p className="text-[10px] text-gray-400 mt-1">
-            {formatTimestamp(m.timestamp || m._creationTime || Date.now())}
+            {formatTimestamp(m.timestamp || m._creationTime || now)}
           </p>
           {typing[m.agent] ? (
             <p className="text-[10px] text-purple-500 mt-1">typing…</p>

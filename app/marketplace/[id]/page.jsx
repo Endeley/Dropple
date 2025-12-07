@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -115,7 +116,7 @@ export default function TemplateDetailPage({ params }) {
           {template.thumbnail ? (
             <img
               src={template.thumbnail}
-              alt={template.name}
+              alt={template.name || "Template preview"}
               className="w-full max-h-[720px] object-contain bg-gray-100"
             />
           ) : (
