@@ -1415,6 +1415,76 @@ export const useTemplateBuilderStore = create((set, get) => {
       },
     })),
 
+  fixAllMotionAndLayout: () =>
+    set((state) => {
+      const pageIndex = state.pages.findIndex((p) => p.id === state.activePageId);
+      if (pageIndex === -1) return state;
+      const page = { ...state.pages[pageIndex], layers: [...(state.pages[pageIndex].layers || [])] };
+      const refined = refineMotion({ layers: page.layers }).template.layers || page.layers;
+
+      const normalizeLayout = (layers) =>
+        layers.map((l) => {
+          if (!l.autoLayout?.enabled) return l;
+          const gap = l.autoLayout.gap || 0;
+          const padding = l.autoLayout.padding || 0;
+          return {
+            ...l,
+            autoLayout: {
+              ...l.autoLayout,
+              gap: Math.max(8, Math.min(24, gap)),
+              padding: Math.max(12, Math.min(32, padding)),
+            },
+          };
+        });
+
+      const normalizedLayouts = normalizeLayout(refined);
+
+      const pages = [...state.pages];
+      pages[pageIndex] = { ...page, layers: normalizedLayouts };
+
+      return {
+        pages,
+        currentTemplate: {
+          ...state.currentTemplate,
+          layers: normalizedLayouts,
+          pageTransitions: {
+            ...(state.currentTemplate.pageTransitions || {}),
+            default: state.currentTemplate.pageTransitions?.default || { type: "slide", direction: "right", duration: 0.6, ease: "easeOut" },
+          },
+        },
+      };
+    }),
+
+  loadTemplateFromObject: (tpl) =>
+    set((state) => {
+      if (!tpl) return state;
+      const newId = tpl.id || tpl._id || crypto.randomUUID();
+      const layers = tpl.layers || tpl.nodes || [];
+      const page = {
+        id: "page_1",
+        name: tpl.name || "Page 1",
+        artboards: [],
+        layers,
+      };
+      return {
+        currentTemplate: {
+          ...state.currentTemplate,
+          id: newId,
+          name: tpl.name || "AI Template",
+          description: tpl.description || "",
+          mode: tpl.mode || "uiux",
+          width: tpl.width || state.currentTemplate.width || 1440,
+          height: tpl.height || state.currentTemplate.height || 1024,
+          layers,
+          tags: tpl.tags || [],
+          thumbnail: tpl.thumbnail || "",
+          pageTransitions: tpl.pageTransitions || state.currentTemplate.pageTransitions || {},
+        },
+        pages: [page],
+        activePageId: page.id,
+      };
+    }),
+
   addFrameLayer: () => {
     const id = "frame_" + crypto.randomUUID();
     get().addLayer({
