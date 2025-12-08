@@ -14,6 +14,7 @@ import PrototypePanel from "./inspector/PrototypePanel";
 import ResponsivePanel from "./inspector/ResponsivePanel";
 import TimelinePanel from "./TimelinePanel";
 import MotionPanel from "./inspector/MotionPanel";
+import SlotsPanel from "./inspector/SlotsPanel";
 
 export default function InspectorPanel() {
   const {
@@ -25,6 +26,7 @@ export default function InspectorPanel() {
     components,
     enterComponentEdit,
     setExportModalOpen,
+    detachInstanceToLayers,
   } = useTemplateBuilderStore();
 
   let layer = currentTemplate.layers.find((l) => l.id === selectedLayerId);
@@ -67,18 +69,27 @@ export default function InspectorPanel() {
       </div>
 
       {layer.type === "component-instance" && (
-        <button
-          className="px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+        <>
+          <SlotsPanel layer={layer} component={componentForInstance} />
+          <button
+            className="px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
           onClick={() =>
             enterComponentEdit(layer.componentId, layer.variantId, {
               name: componentForInstance?.name || "Component",
               nodes: componentForInstance?.nodes || layer.componentNodes || layer.nodes || [],
               variants: componentForInstance?.variants || layer.componentVariants || [],
             })
-          }
-        >
-          Edit Component
-        </button>
+            }
+          >
+            Edit Component
+          </button>
+          <button
+            className="px-3 py-2 bg-slate-100 text-slate-700 rounded hover:bg-slate-200"
+            onClick={() => detachInstanceToLayers(layer.id)}
+          >
+            Detach to Layers
+          </button>
+        </>
       )}
 
       <PositionPanel layer={layer} />

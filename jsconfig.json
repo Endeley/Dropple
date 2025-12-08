@@ -3,5 +3,15 @@
     "paths": {
       "@/*": ["./*"]
     }
-  }
+  },
+  "include": [
+    "**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    ".turbo",
+    ".vercel",
+    "**/Library/**"
+  ]
 }

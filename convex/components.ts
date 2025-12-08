@@ -4,6 +4,7 @@ import { v } from "convex/values";
 export const createComponent = mutation({
   args: {
     name: v.string(),
+    projectId: v.optional(v.string()),
     authorId: v.optional(v.string()),
     category: v.string(),
     tags: v.array(v.string()),
@@ -19,6 +20,7 @@ export const createComponent = mutation({
     return await db.insert("components", {
       userId,
       authorId: data.authorId ?? userId,
+      projectId: data.projectId,
       ...data,
       variants: data.variants ?? [],
       createdAt: Date.now(),
@@ -66,6 +68,53 @@ export const getUserComponents = query({
       .query("components")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
+  },
+});
+
+export const saveComponent = mutation({
+  args: {
+    component: v.any(),
+    projectId: v.optional(v.string()),
+  },
+  handler: async ({ db, auth }, { component, projectId }) => {
+    const identity = await auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const userId = identity.subject;
+
+    const now = Date.now();
+    const existing = projectId
+      ? await db
+          .query("components")
+          .withIndex("by_project", (q) => q.eq("projectId", projectId))
+          .filter((q) => q.eq(q.field("name"), component.name || component._id || "component"))
+          .first()
+      : null;
+
+    if (existing?._id) {
+      await db.patch(existing._id, {
+        nodes: component.nodes || [],
+        variants: component.variants || [],
+        tags: component.metadata?.tags || existing.tags || [],
+        category: component.metadata?.category || existing.category || "component",
+        updatedAt: now,
+      });
+      return existing._id;
+    }
+
+    return await db.insert("components", {
+      userId,
+      projectId,
+      name: component.name || component._id || "component",
+      description: component.metadata?.description,
+      category: component.metadata?.category || "component",
+      tags: component.metadata?.tags || [],
+      nodes: component.nodes || [],
+      variants: component.variants || [],
+      tokens: component.tokens || {},
+      previewImage: component.metadata?.previewImage,
+      createdAt: now,
+      updatedAt: now,
+    });
   },
 });
 

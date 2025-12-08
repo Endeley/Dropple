@@ -1,6 +1,8 @@
 "use client";
 
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
+import { useState } from "react";
+import ComponentInsertModal from "./ComponentInsertModal";
 
 export default function TemplateToolbar() {
   const {
@@ -11,7 +13,10 @@ export default function TemplateToolbar() {
     addImageLayer,
     addFrameLayer,
     addArtboard,
+    components,
+    createInstanceFromComponent,
   } = useTemplateBuilderStore();
+  const [insertOpen, setInsertOpen] = useState(false);
 
   function handleToolClick(tool) {
     setActiveTool(tool);
@@ -20,6 +25,11 @@ export default function TemplateToolbar() {
     if (tool === "shape") addRectangleLayer();
     if (tool === "image") addImageLayer();
     if (tool === "frame") addFrameLayer();
+    if (tool === "component") {
+      if (components?.length) {
+        setInsertOpen(true);
+      }
+    }
   }
 
   const btn = (label, tool) => (
@@ -49,6 +59,7 @@ export default function TemplateToolbar() {
       >
         + Artboard
       </button>
+      <ComponentInsertModal open={insertOpen} onClose={() => setInsertOpen(false)} />
     </div>
   );
 }

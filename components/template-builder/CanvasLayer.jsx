@@ -39,6 +39,7 @@ export default function CanvasLayer({
     activeThemeId,
     activeBreakpoint,
   } = useTemplateBuilderStore();
+  const instanceRegistry = useTemplateBuilderStore((s) => s.instanceRegistry || {});
 
   const ref = useRef(null);
   const register = useComponentRegistry((state) => state.register);
@@ -123,7 +124,22 @@ export default function CanvasLayer({
   const visibility = responsiveOverride.visibility || "inherit";
 
   const controls = useAnimation();
-  const { motionProps, motionTriggers, motionStates, scrollDef, outboundVariant } = buildMotionProps(layer, controls, parentVariant);
+  const instanceMeta =
+    layer.componentInstanceId && instanceRegistry[layer.componentInstanceId]
+      ? instanceRegistry[layer.componentInstanceId]
+      : null;
+  const override = instanceMeta?.overrides?.[layer.id] || {};
+  const useMasterMotion = instanceMeta?.useMasterMotion !== false;
+  const resolvedAnimations = useMasterMotion
+    ? override.animations ?? layer.animations
+    : override.animations ?? [];
+  const mergedLayer = { ...layer, ...override, animations: resolvedAnimations };
+
+  const { motionProps, motionTriggers, motionStates, scrollDef, outboundVariant } = buildMotionProps(
+    mergedLayer,
+    controls,
+    parentVariant,
+  );
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
   const scrollStyle = buildScrollStyle(scrollDef, scrollYProgress);
   const selectedAnim =
@@ -156,6 +172,11 @@ export default function CanvasLayer({
 
   function handleMouseDown(e) {
     if (editingTextId === layer.id) return;
+    // Prevent direct edits on component-instance roots unless detached
+    if (layer.type === "component-instance" && instanceRegistry[layer.id]?.detached === false) {
+      e.stopPropagation();
+      return;
+    }
     e.stopPropagation();
 
     if (e.shiftKey) {
@@ -331,23 +352,39 @@ export default function CanvasLayer({
 
   const renderComponentChildren = () => {
     const nodesBase = layer.componentNodes || layer.nodes || [];
+    const instance = instanceRegistry[layer.id];
+    const effectiveVariant = instance?.variant || layer.variantId;
     let nodesToRender = nodesBase;
-    if (layer.variantId && layer.componentVariants) {
-      const variant = layer.componentVariants.find((v) => v.id === layer.variantId);
+    if (effectiveVariant && layer.componentVariants) {
+      const variant = layer.componentVariants.find((v) => v.id === effectiveVariant);
       if (variant) {
         nodesToRender = variant.nodes || nodesBase;
       }
     }
-    return nodesToRender.map((child) => (
-      <CanvasLayer
-        key={`${child.id}_${layer.id}`}
-        layer={child}
-        isInstanceChild
-        offset={{ x: renderX, y: renderY }}
-        isComponentMaster={isComponentMaster}
-        parentVariant={outboundVariant || parentVariant}
-      />
-    ));
+    const applyOverrides = (node) => {
+      const overrides = instance?.overrides?.[node.id] || {};
+      const slotVal = node.slotId && instance?.slotData?.[node.slotId];
+      const merged = { ...node, ...overrides };
+      if (slotVal !== undefined) {
+        if (merged.type === "text") merged.content = slotVal;
+        if (merged.type === "icon") merged.url = slotVal;
+        if (merged.type === "image") merged.url = slotVal;
+      }
+      return merged;
+    };
+    return nodesToRender.map((child) => {
+      const overridden = applyOverrides(child);
+      return (
+        <CanvasLayer
+          key={`${child.id}_${layer.id}`}
+          layer={overridden}
+          isInstanceChild
+          offset={{ x: renderX, y: renderY }}
+          isComponentMaster={isComponentMaster}
+          parentVariant={outboundVariant || parentVariant}
+        />
+      );
+    });
   };
 
   useEffect(() => {
@@ -507,6 +544,11 @@ export default function CanvasLayer({
     cursor: layer.locked ? "not-allowed" : "move",
   };
 
+  const attachedInstance =
+    layer.componentInstanceId &&
+    instanceRegistry[layer.componentInstanceId] &&
+    !instanceRegistry[layer.componentInstanceId].detached;
+
   return (
     <MotionWrapper motionProps={motionProps}
       style={{ ...style, ...scrollStyle }}
@@ -519,6 +561,11 @@ export default function CanvasLayer({
       onClick={interactionHandlers.onClick}
       ref={ref}
     >
+      {attachedInstance && !isComponentMaster && (
+        <div className="absolute -top-2 -left-2 bg-purple-600 text-white text-[10px] px-2 py-0.5 rounded shadow">
+          Instance
+        </div>
+      )}
       {layer.type === "text" && (
         <div
           contentEditable={editingTextId === layer.id}
@@ -529,10 +576,23 @@ export default function CanvasLayer({
           }}
           onBlur={(e) => {
             stopEditingText();
+            if (layer.slotId && !isComponentMaster) {
+              // update slot data on instance if applicable
+              const parentInstanceId = layer.parentId || layer.componentInstanceId || null;
+              if (parentInstanceId && instanceRegistry[parentInstanceId]) {
+                updateInstanceSlots(parentInstanceId, { [layer.slotId]: e.target.innerText });
+              }
+            }
             updateLayer(layer.id, { content: e.target.innerText });
           }}
           onInput={(e) => {
             updateLayer(layer.id, { content: e.target.innerText });
+            if (layer.slotId && !isComponentMaster) {
+              const parentInstanceId = layer.parentId || layer.componentInstanceId || null;
+              if (parentInstanceId && instanceRegistry[parentInstanceId]) {
+                updateInstanceSlots(parentInstanceId, { [layer.slotId]: e.target.innerText });
+              }
+            }
           }}
           style={{
             fontSize: styleProps?.fontSize || 18,

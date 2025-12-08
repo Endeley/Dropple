@@ -1,9 +1,10 @@
 "use client";
 
 import { create } from "zustand";
-import { deepClone } from "@/lib/deepClone";
+import { deepClone as cloneDeep } from "@/lib/deepClone";
 import { motionThemeMap } from "@/lib/motionThemes";
 import { applyMotionThemeToLayers } from "@/lib/applyMotionTheme";
+import { componentToNodes } from "@/lib/componentToNodes";
 
 const defaultAutoLayout = {
   enabled: false,
@@ -128,7 +129,7 @@ export const useTemplateBuilderStore = create((set, get) => {
       const layer = map.get(layerId);
       if (!layer) return;
       visited.add(layerId);
-      collected.push(deepClone(layer));
+      collected.push(cloneDeep(layer));
       (layer.children || []).forEach(dfs);
     };
 
@@ -150,7 +151,7 @@ export const useTemplateBuilderStore = create((set, get) => {
 
     const rootNewIds = [];
     const remapped = clipboard.layers.map((layer) => {
-      const clone = deepClone(layer);
+      const clone = cloneDeep(layer);
       const originalId = clone.id;
       clone.id = idMap.get(originalId);
       if (clipboard.rootIds.includes(originalId)) {
@@ -278,11 +279,11 @@ export const useTemplateBuilderStore = create((set, get) => {
       layerMap.set(parent.id, parent);
     });
 
-    const layers = Array.from(layerMap.values());
-    const selection =
-      shouldSelect && rootNewIds.length
-        ? { selectedLayerId: rootNewIds[0], selectedLayers: rootNewIds }
-        : {};
+  const layers = Array.from(layerMap.values());
+  const selection =
+    shouldSelect && rootNewIds.length
+      ? { selectedLayerId: rootNewIds[0], selectedLayers: rootNewIds }
+      : {};
 
     set({
       currentTemplate: {
@@ -294,6 +295,47 @@ export const useTemplateBuilderStore = create((set, get) => {
     setActivePageLayers(layers);
 
     state.triggerAutoSave();
+  };
+
+  const pushHistory = (label = "change") => {
+    const snap = snapshotState(get());
+    set((state) => {
+      const next = state.historyStack.slice(0, state.historyPointer + 1);
+      next.push({ label, snap });
+      return { historyStack: next, historyPointer: next.length - 1 };
+    });
+  };
+
+  const restoreSnapshot = (snap) => {
+    set((state) => ({
+      ...state,
+      pages: cloneDeep(snap.pages),
+      activePageId: snap.activePageId,
+      currentTemplate: cloneDeep(snap.currentTemplate),
+      components: cloneDeep(snap.components),
+      instanceRegistry: cloneDeep(snap.instanceRegistry),
+      selectedLayers: cloneDeep(snap.selectedLayers),
+      selectedLayerId: snap.selectedLayerId,
+    }));
+  };
+
+  const persistInstance = async (instanceId, frameOverride = null) => {
+    const projectId = get().currentTemplate.id;
+    if (!projectId) return;
+    const inst = get().instanceRegistry?.[instanceId];
+    if (!inst) return;
+    const payload = {
+      ...inst,
+      frame: frameOverride || inst.frame || null,
+    };
+    try {
+      await fetch("/api/components/instances/save", {
+        method: "POST",
+        body: JSON.stringify({ projectId, instance: payload }),
+      });
+    } catch (_err) {
+      // best-effort; ignore
+    }
   };
 
   return {
@@ -311,6 +353,8 @@ export const useTemplateBuilderStore = create((set, get) => {
     layers: [],
     tags: [],
   },
+  historyStack: [],
+  historyPointer: -1,
   components: [],
   styles: [],
   pages: [
@@ -690,7 +734,7 @@ export const useTemplateBuilderStore = create((set, get) => {
 
     set({
       clipboardStyles: {
-        props: deepClone(styleProps),
+        props: cloneDeep(styleProps),
         styleId: layer.styleId || null,
       },
     });
@@ -705,7 +749,7 @@ export const useTemplateBuilderStore = create((set, get) => {
         updates.styleId = state.clipboardStyles.styleId;
       }
       if (state.clipboardStyles.props) {
-        updates.props = deepClone(state.clipboardStyles.props);
+        updates.props = cloneDeep(state.clipboardStyles.props);
       }
       state.updateLayer(id, updates);
     });
@@ -1141,6 +1185,7 @@ export const useTemplateBuilderStore = create((set, get) => {
   },
 
   addComponentInstance: (component, variantId = null) => {
+    pushHistory("insert component");
     const id = "instance_" + crypto.randomUUID();
     const initialVariantId = variantId ?? component.initialVariant ?? null;
     const initialNodes =
@@ -1153,6 +1198,7 @@ export const useTemplateBuilderStore = create((set, get) => {
       id,
       type: "component-instance",
       componentId: component._id,
+      componentInstanceId: id,
       componentNodes: component.nodes,
       componentVariants: component.variants || [],
       nodes: initialNodes,
@@ -1163,8 +1209,28 @@ export const useTemplateBuilderStore = create((set, get) => {
       height: 200,
       overrides: {},
       interactions: [],
+      locked: true,
     }, parent?.id);
     set({ selectedLayerId: id });
+    get().registerInstance(id, {
+      instanceId: id,
+      componentId: component._id,
+      overrides: {},
+      slotData: {},
+      variant: initialVariantId || component.variants?.[0]?.id || "default",
+      useMasterMotion: true,
+      detached: false,
+    });
+    const projectId = get().currentTemplate.id;
+    if (projectId) {
+      persistInstance(id, {
+        x: parent?.x ?? 200,
+        y: parent?.y ?? 200,
+        width: 300,
+        height: 200,
+        parentId: parent?.id || null,
+      });
+    }
     get().triggerAutoSave();
   },
 
@@ -1485,6 +1551,384 @@ export const useTemplateBuilderStore = create((set, get) => {
       };
     }),
 
+  hydrateProjectFromConvex: async (projectId) => {
+    if (!projectId) return;
+    try {
+      const compsResp = await fetch(`/api/components/list?projectId=${projectId}`);
+      const compsJson = await compsResp.json();
+      const instResp = await fetch(`/api/components/instances/list?projectId=${projectId}`);
+      const instJson = await instResp.json();
+      if (Array.isArray(compsJson.components)) {
+        set((state) => ({
+          components: compsJson.components,
+        }));
+      }
+      if (Array.isArray(instJson.instances)) {
+        const reg = {};
+        instJson.instances.forEach((inst) => {
+          reg[inst.instanceId] = {
+            instanceId: inst.instanceId,
+            componentId: inst.componentId,
+            overrides: inst.overrides || {},
+            slotData: inst.slotData || {},
+            variant: inst.variant || "default",
+            useMasterMotion: inst.useMasterMotion ?? true,
+            frame: inst.frame || null,
+            detached: false,
+          };
+        });
+        set({ instanceRegistry: reg });
+      }
+    } catch (err) {
+      console.error("hydrate project failed", err);
+    }
+  },
+
+  insertComponentDefinition: (def, variantId = null, tokenMap = null) => {
+    const activeTokens = get().tokens || {};
+    const resolvedTokenMap = tokenMap || activeTokens;
+    const comp = componentToNodes(def, resolvedTokenMap);
+    const existing = get().components || [];
+    const nextComponents = existing.find((c) => c._id === comp._id) ? existing : [...existing, comp];
+    get().setComponents(nextComponents);
+    get().addComponentInstance(comp, variantId || comp.variants?.[0]?.id || null);
+    // Persist master best-effort
+    const projectId = get().currentTemplate.id;
+    fetch("/api/components/save", {
+      method: "POST",
+      body: JSON.stringify({ component: comp, projectId }),
+    }).catch(() => {});
+  },
+
+  insertComponent: (request) => {
+    // request: { componentId?, componentSchema?, position?, parentFrameId?, variantId? }
+    const state = get();
+    const { componentId, componentSchema, position, parentFrameId, variantId } = request || {};
+    let targetComponent = componentId
+      ? state.components.find((c) => c._id === componentId)
+      : null;
+
+    if (!targetComponent && componentSchema) {
+      // create master locally
+      state.insertComponentDefinition(componentSchema, variantId);
+      return;
+    }
+
+    if (!targetComponent) return;
+
+    const id = "instance_" + crypto.randomUUID();
+    const initialVariantId = variantId ?? targetComponent.initialVariant ?? targetComponent.variants?.[0]?.id ?? null;
+    const initialNodes =
+      initialVariantId && targetComponent.variants?.length
+        ? targetComponent.variants.find((v) => v.id === initialVariantId)?.nodes || targetComponent.nodes
+        : targetComponent.nodes;
+
+    const viewportCenter = { x: 400, y: 300 }; // fallback
+    const baseLayers = getActivePage().layers || [];
+    const parentFrame = parentFrameId
+      ? baseLayers.find((l) => l.id === parentFrameId)
+      : baseLayers.find((l) => l.id === state.selectedLayerId && l.type === "frame");
+
+    const rootFrame = initialNodes?.find((n) => !n.parentId);
+    const defaultPos = position || { x: viewportCenter.x, y: viewportCenter.y };
+
+    const placedRoot = rootFrame
+      ? {
+          ...rootFrame,
+          x: parentFrame && parentFrame.autoLayout?.enabled ? 0 : defaultPos.x,
+          y: parentFrame && parentFrame.autoLayout?.enabled ? 0 : defaultPos.y,
+          parentId: parentFrame ? parentFrame.id : rootFrame.parentId,
+        }
+      : null;
+
+    const placedNodes = initialNodes.map((n) => {
+      if (!placedRoot || n.id !== placedRoot.id) return n;
+      return placedRoot;
+    });
+
+    const instancePayload = {
+      instanceId: id,
+      componentId: targetComponent._id,
+      overrides: {},
+      slotData: {},
+      variant: initialVariantId || "default",
+      useMasterMotion: true,
+      frame: placedRoot
+        ? { x: placedRoot.x || 0, y: placedRoot.y || 0, width: placedRoot.width || 300, height: placedRoot.height || 200, parentId: placedRoot.parentId }
+        : null,
+    };
+
+    get().registerInstance(id, instancePayload);
+    // create instance layer
+    get().addLayer(
+      {
+        id,
+        type: "component-instance",
+        componentId: targetComponent._id,
+        componentInstanceId: id,
+        componentNodes: targetComponent.nodes,
+        componentVariants: targetComponent.variants || [],
+        nodes: placedNodes,
+        variantId: initialVariantId,
+        x: placedRoot?.x ?? defaultPos.x,
+        y: placedRoot?.y ?? defaultPos.y,
+        width: placedRoot?.width ?? 300,
+        height: placedRoot?.height ?? 200,
+        overrides: {},
+        interactions: [],
+        locked: true,
+        parentId: placedRoot?.parentId,
+      },
+      parentFrame?.id,
+    );
+
+    // persist instance best-effort
+    const projectId = state.currentTemplate.id;
+    if (projectId) {
+      fetch("/api/components/instances/save", {
+        method: "POST",
+        body: JSON.stringify({ projectId, instance: instancePayload }),
+      }).catch(() => {});
+    }
+  },
+
+  createInstanceFromComponent: (componentId, variantId = null) => {
+    get().insertComponent({ componentId, variantId });
+  },
+
+  // Instance registry (client-side). For persistence, sync to backend when needed.
+  instanceRegistry: {},
+
+  registerInstance: (instanceId, payload) =>
+    set((state) => ({
+      instanceRegistry: {
+        ...(state.instanceRegistry || {}),
+        [instanceId]: payload,
+      },
+    })),
+
+  updateInstanceOverrides: (instanceId, overrides) => {
+    pushHistory("override instance");
+    set((state) => {
+      const reg = { ...(state.instanceRegistry || {}) };
+      if (!reg[instanceId]) return state;
+      reg[instanceId] = {
+        ...reg[instanceId],
+        overrides: { ...(reg[instanceId].overrides || {}), ...overrides },
+      };
+      persistInstance(instanceId);
+      return { instanceRegistry: reg };
+    });
+  },
+
+  updateInstanceSlots: (instanceId, slotData) => {
+    pushHistory("slot update");
+    set((state) => {
+      const reg = { ...(state.instanceRegistry || {}) };
+      if (!reg[instanceId]) return state;
+      reg[instanceId] = {
+        ...reg[instanceId],
+        slotData: { ...(reg[instanceId].slotData || {}), ...slotData },
+      };
+      persistInstance(instanceId);
+      return { instanceRegistry: reg };
+    });
+  },
+
+  updateInstanceVariant: (instanceId, variant) => {
+    pushHistory("instance variant");
+    set((state) => {
+      const reg = { ...(state.instanceRegistry || {}) };
+      if (!reg[instanceId]) return state;
+      reg[instanceId] = { ...reg[instanceId], variant };
+      persistInstance(instanceId);
+      return { instanceRegistry: reg };
+    });
+  },
+
+  setInstanceUseMasterMotion: (instanceId, flag) => {
+    pushHistory("toggle master motion");
+    set((state) => {
+      const reg = { ...(state.instanceRegistry || {}) };
+      if (!reg[instanceId]) return state;
+      reg[instanceId] = { ...reg[instanceId], useMasterMotion: flag };
+      persistInstance(instanceId);
+      return { instanceRegistry: reg };
+    });
+  },
+
+  detachInstance: (instanceId) => {
+    pushHistory("detach instance");
+    set((state) => {
+      const reg = { ...(state.instanceRegistry || {}) };
+      if (!reg[instanceId]) return state;
+      reg[instanceId] = { ...reg[instanceId], detached: true };
+      const pageIndex = state.pages.findIndex((p) => p.id === state.activePageId);
+      if (pageIndex === -1) return { instanceRegistry: reg };
+      const pages = [...state.pages];
+      const page = { ...pages[pageIndex], layers: [...(pages[pageIndex].layers || [])] };
+      const idx = page.layers.findIndex((l) => l.id === instanceId);
+      if (idx !== -1) {
+        page.layers[idx] = { ...page.layers[idx], locked: false };
+        pages[pageIndex] = page;
+        return { instanceRegistry: reg, pages, currentTemplate: { ...state.currentTemplate, layers: page.layers } };
+      }
+      return { instanceRegistry: reg };
+    });
+  },
+
+  detachInstanceToLayers: (instanceId) => {
+    pushHistory("detach to layers");
+    set((state) => {
+      const reg = { ...(state.instanceRegistry || {}) };
+      const instance = reg[instanceId];
+      if (!instance) return state;
+      const pageIndex = state.pages.findIndex((p) => p.id === state.activePageId);
+      if (pageIndex === -1) return state;
+      const pages = [...state.pages];
+      const page = { ...pages[pageIndex], layers: [...(pages[pageIndex].layers || [])] };
+      const layerIdx = page.layers.findIndex((l) => l.id === instanceId);
+      if (layerIdx === -1) return state;
+      const root = page.layers[layerIdx];
+      const comp = state.components.find((c) => c._id === root.componentId);
+      if (!comp) return state;
+      // replace the instance with raw child layers (deep clone)
+      const baseNodes = root.nodes || comp.nodes || [];
+      const cloned = baseNodes.map((n) => ({ ...cloneDeep(n), parentId: root.parentId }));
+      // remove the instance layer
+      const newLayers = page.layers.filter((l) => l.id !== instanceId).concat(cloned);
+      pages[pageIndex] = { ...page, layers: newLayers };
+      delete reg[instanceId];
+      return {
+        pages,
+        currentTemplate: { ...state.currentTemplate, layers: newLayers },
+        instanceRegistry: reg,
+      };
+    });
+  },
+
+  applyMasterUpdate: (componentId, changes = {}) => {
+    pushHistory("apply master update");
+    set((state) => {
+      const reg = { ...(state.instanceRegistry || {}) };
+      const affectedInstances = Object.values(reg).filter(
+        (inst) => inst.componentId === componentId && !inst.detached,
+      );
+      if (!affectedInstances.length) return state;
+      const pages = [...state.pages];
+      pages.forEach((page, pIdx) => {
+        const layers = [...(page.layers || [])].map((l) => {
+          if (l.type !== "component-instance" || l.componentId !== componentId) return l;
+          const inst = reg[l.id];
+          if (!inst || inst.detached) return l;
+          // merge changes into overrides only if not already overridden
+          const overrides = { ...(inst.overrides || {}) };
+          Object.entries(changes).forEach(([nodeId, nodeChanges]) => {
+            const currentOverride = overrides[nodeId] || {};
+            const nextOverride = { ...currentOverride };
+            Object.entries(nodeChanges || {}).forEach(([propKey, propVal]) => {
+              if (currentOverride[propKey] === undefined) {
+                nextOverride[propKey] = propVal;
+              }
+            });
+            overrides[nodeId] = nextOverride;
+          });
+          reg[l.id] = { ...inst, overrides };
+          return l;
+        });
+        pages[pIdx] = { ...page, layers };
+      });
+      return {
+        instanceRegistry: reg,
+        pages,
+        currentTemplate: pages.find((p) => p.id === state.activePageId) || state.currentTemplate,
+      };
+    });
+  },
+
+  resetInstanceOverrides: (instanceId) => {
+    pushHistory("reset overrides");
+    set((state) => {
+      const reg = { ...(state.instanceRegistry || {}) };
+      if (!reg[instanceId]) return state;
+      reg[instanceId] = { ...reg[instanceId], overrides: {}, slotData: {} };
+      return { instanceRegistry: reg };
+    });
+  },
+
+  updateMasterFromInstance: (instanceId) => {
+    pushHistory("push to master");
+    set((state) => {
+      const reg = { ...(state.instanceRegistry || {}) };
+      const inst = reg[instanceId];
+      if (!inst) return state;
+      const compIdx = state.components.findIndex((c) => c._id === inst.componentId);
+      if (compIdx === -1) return state;
+      const components = [...state.components];
+      const comp = cloneDeep(components[compIdx]);
+      Object.entries(inst.overrides || {}).forEach(([nodeId, nodeChanges]) => {
+        const target = comp.nodes.find((n) => n.id === nodeId);
+        if (target) {
+          Object.entries(nodeChanges || {}).forEach(([k, v]) => {
+            target[k] = v;
+          });
+        }
+      });
+      components[compIdx] = comp;
+      return { components };
+    });
+  },
+
+  refreshInstancesFromMaster: (componentId) => {
+    pushHistory("refresh instances");
+    set((state) => {
+      const comp = state.components.find((c) => c._id === componentId);
+      if (!comp) return state;
+      const pages = [...state.pages];
+      pages.forEach((page, pIdx) => {
+        const layers = [...(page.layers || [])].map((l) => {
+          if (l.type !== "component-instance" || l.componentId !== componentId) return l;
+          const variantNodes =
+            l.variantId && comp.variants?.length
+              ? comp.variants.find((v) => v.id === l.variantId)?.nodes || comp.nodes
+              : comp.nodes;
+          return {
+            ...l,
+            componentNodes: comp.nodes,
+            componentVariants: comp.variants || [],
+            nodes: variantNodes,
+          };
+        });
+        pages[pIdx] = { ...page, layers };
+      });
+      return {
+        pages,
+        currentTemplate: pages.find((p) => p.id === state.activePageId) || state.currentTemplate,
+      };
+    });
+  },
+
+  setInstanceVariant: (instanceId, variantId) => {
+    pushHistory("instance variant");
+    set((state) => {
+      const reg = { ...(state.instanceRegistry || {}) };
+      if (!reg[instanceId]) return state;
+      reg[instanceId] = { ...reg[instanceId], variant: variantId };
+      const pageIndex = state.pages.findIndex((p) => p.id === state.activePageId);
+      if (pageIndex === -1) return { instanceRegistry: reg };
+      const pages = [...state.pages];
+      const page = { ...pages[pageIndex], layers: [...(pages[pageIndex].layers || [])] };
+      const layerIdx = page.layers.findIndex((l) => l.id === instanceId);
+      if (layerIdx !== -1) {
+        page.layers[layerIdx] = { ...page.layers[layerIdx], variantId: variantId };
+        pages[pageIndex] = page;
+        persistInstance(instanceId);
+        return { instanceRegistry: reg, pages, currentTemplate: { ...state.currentTemplate, layers: page.layers } };
+      }
+      return { instanceRegistry: reg };
+    });
+  },
+
   addFrameLayer: () => {
     const id = "frame_" + crypto.randomUUID();
     get().addLayer({
@@ -1510,6 +1954,8 @@ export const useTemplateBuilderStore = create((set, get) => {
   deleteLayer: (layerId) => {
     const page = getActivePage();
     if (!page) return;
+    const instProtected = (state.instanceRegistry || {})[layerId];
+    if (instProtected && !instProtected.detached) return;
     const filtered = page.layers.filter((l) => l.id !== layerId);
     setActivePageLayers(filtered);
 
@@ -1596,6 +2042,19 @@ export const useTemplateBuilderStore = create((set, get) => {
     const pageLayers = getActivePage().layers || [];
     const updated = pageLayers.map((layer) => {
       if (layer.id !== layerId) return layer;
+      const inst = state.instanceRegistry?.[layer.componentInstanceId];
+      const protectedInstance = inst && !inst.detached;
+
+      if (protectedInstance) {
+        // Block edits on attached instances (including children) except for basic transforms/variant
+        const safeKeys = new Set(["x", "y", "width", "height", "variantId"]);
+        const filtered = { ...layer };
+        Object.entries(updatedData || {}).forEach(([k, v]) => {
+          if (safeKeys.has(k)) filtered[k] = v;
+        });
+        return filtered;
+      }
+
       const prevWidth = layer.width;
       const prevHeight = layer.height;
       const next = { ...layer, ...updatedData };
@@ -1687,6 +2146,22 @@ export const useTemplateBuilderStore = create((set, get) => {
     layers.splice(targetIndex, 0, moved);
     setActivePageLayers(layers);
     get().triggerAutoSave();
+  },
+
+  undoHistory: () => {
+    const { historyStack, historyPointer } = get();
+    if (historyPointer < 0) return;
+    const entry = historyStack[historyPointer];
+    restoreSnapshot(entry.snap);
+    set({ historyPointer: historyPointer - 1 });
+  },
+
+  redoHistory: () => {
+    const { historyStack, historyPointer } = get();
+    if (historyPointer >= historyStack.length - 1) return;
+    const entry = historyStack[historyPointer + 1];
+    restoreSnapshot(entry.snap);
+    set({ historyPointer: historyPointer + 1 });
   },
 
   /* --------------------------------------------------------

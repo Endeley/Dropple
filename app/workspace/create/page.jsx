@@ -149,7 +149,8 @@ export default function WorkspaceCreatePage() {
       }
     }
     setEditingMode(false);
-  }, [addImageLayer, components, currentTemplate, setComponents, setEditingMode, searchParams, loadTemplateFromDB]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   return (
     <div className="w-full min-h-screen flex flex-col bg-slate-50 text-gray-900">

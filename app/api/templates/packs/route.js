@@ -9,6 +9,7 @@ export async function GET() {
     return Response.json({ packs });
   } catch (err) {
     console.error("Failed to load packs", err);
-    return Response.json({ error: "Failed to load packs" }, { status: 500 });
+    // Graceful fallback so the UI can still render without Convex running/deployed
+    return Response.json({ packs: [], error: "packs list unavailable" }, { status: 200 });
   }
 }

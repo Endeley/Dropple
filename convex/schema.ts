@@ -17,8 +17,19 @@ export default defineSchema({
     description: v.optional(v.string()),
     category: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
+    styles: v.optional(v.array(v.string())),
+    formats: v.optional(v.array(v.string())),
     authorId: v.optional(v.string()),
     userId: v.string(),
+    animation: v.optional(
+      v.object({
+        hasMotion: v.boolean(),
+        motionTheme: v.optional(v.string()),
+        timelineCount: v.number(),
+        scrollAnimations: v.boolean(),
+      }),
+    ),
+    pageTransitions: v.optional(v.any()),
     thumbnail: v.optional(v.string()),
     thumbnailUrl: v.optional(v.string()),
     templateJsonUrl: v.optional(v.string()),
@@ -188,6 +199,7 @@ export default defineSchema({
   components: defineTable({
     userId: v.string(),
     authorId: v.optional(v.string()),
+    projectId: v.optional(v.string()),
     name: v.string(),
     description: v.optional(v.string()),
     category: v.string(),
@@ -197,6 +209,7 @@ export default defineSchema({
     nodes: v.array(v.any()),
     props: v.optional(v.any()),
     variants: v.optional(v.any()),
+    tokens: v.optional(v.any()),
     isPremium: v.optional(v.boolean()),
     price: v.optional(v.number()),
     downloads: v.optional(v.number()),
@@ -205,7 +218,28 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_user", ["userId"])
-    .index("by_category", ["category"]),
+    .index("by_category", ["category"])
+    .index("by_project", ["projectId"]),
+  componentInstances: defineTable({
+    projectId: v.string(),
+    componentId: v.string(),
+    instanceId: v.string(),
+    overrides: v.optional(v.any()),
+    slotData: v.optional(v.any()),
+    variant: v.optional(v.string()),
+    useMasterMotion: v.optional(v.boolean()),
+    frame: v.optional(
+      v.object({
+        x: v.number(),
+        y: v.number(),
+        width: v.number(),
+        height: v.number(),
+        parentId: v.optional(v.string()),
+      }),
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_project", ["projectId"]),
   styles: defineTable({
     userId: v.string(),
     type: v.string(), // "color" | "text" | "effect"
@@ -564,4 +598,41 @@ export default defineSchema({
   })
     .index("by_scene", ["sceneId"])
     .index("by_project", ["projectId"]),
+
+  categories: defineTable({
+    id: v.string(),
+    label: v.string(),
+    parentId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_parent", ["parentId"]),
+
+  tags: defineTable({
+    id: v.string(),
+    group: v.string(), // styles | moods | industries | formats
+    label: v.string(),
+  }).index("by_group", ["group"]),
+
+  motionPacks: defineTable({
+    name: v.string(),
+    description: v.string(),
+    version: v.string(),
+    authorId: v.string(),
+    contents: v.object({
+      themes: v.array(v.any()),
+      presets: v.array(v.any()),
+      motionComponents: v.array(v.any()),
+      pageTransitions: v.array(v.any()),
+      timelines: v.array(v.any()),
+      scrollProfiles: v.array(v.any()),
+    }),
+    category: v.string(),
+    tags: v.array(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    downloads: v.number(),
+    rating: v.optional(v.number()),
+    previewUrl: v.optional(v.string()),
+    thumbnailUrl: v.optional(v.string()),
+  }).index("by_category", ["category"]),
 });
