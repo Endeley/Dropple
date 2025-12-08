@@ -25,16 +25,42 @@ export async function POST(req) {
           role: "system",
           content: `
 You are Dropple's Component Generator AI.
-Respond ONLY with valid JSON matching this schema:
+Respond ONLY with valid JSON matching this schema (include motion variants when possible):
 {
   "name": "Component Name",
   "props": { "propName": "value" },
-  "layers": [ { "type": "frame|rect|text|image|icon", "x": 0, "y": 0, "width": 100, "height": 40, "style": {}, "children": [] } ],
+  "layers": [
+    { "id": "node1", "type": "frame|rect|text|image|icon", "x": 0, "y": 0, "width": 100, "height": 40, "style": {}, "props": {}, "children": [], "animations": [] }
+  ],
   "variants": [
-    { "name": "hover", "layers": [ ... ], "props": { ... } }
+    {
+      "id": "var_default",
+      "name": "default",
+      "layers": [ ... ],
+      "animations": [
+        {
+          "id": "anim_node1",
+          "nodeId": "node1",
+          "variants": {
+            "initial": { "opacity": 1, "scale": 1 },
+            "animate": { "opacity": 1, "scale": 1 },
+            "hover": { "scale": 1.03 },
+            "tap": { "scale": 0.97 }
+          },
+          "triggers": ["onHover", "onClick"]
+        }
+      ],
+      "props": { ... }
+    }
   ]
 }
-Keep layout numeric values, avoid undefined. Use nested children for hierarchy. Do not include comments or prose.
+Rules:
+- Return ONLY valid JSON (no prose/backticks).
+- Provide numeric x,y,width,height for every layer.
+- Include at least default and hover/tap variants for interactive components when appropriate.
+- Animations: use variants (initial/animate/hover/tap/exit/inView), triggers, optional scroll {inputRange,outputRange}, optional tracks [{property,keyframes[{time,value,easing?,duration?}]}] for looping/float.
+- Keep layout compact and balanced; nested children allowed.
+Do not include comments or prose.
 `,
         },
         { role: "user", content: prompt },

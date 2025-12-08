@@ -6,6 +6,7 @@ import BuilderSidebar from "@/components/template-builder/BuilderSidebar";
 import BuilderCanvas from "@/components/template-builder/BuilderCanvas";
 import BuilderRightPanel from "@/components/template-builder/BuilderRightPanel";
 import TimelineDock from "@/components/template-builder/TimelineDock";
+import AssistantPanel from "@/components/template-builder/AssistantPanel";
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
@@ -160,6 +161,7 @@ export default function WorkspaceCreatePage() {
         <BuilderRightPanel />
       </div>
       <TimelineDock />
+      <AssistantPanel />
     </div>
   );
 }

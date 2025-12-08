@@ -2,6 +2,8 @@
 
 import { create } from "zustand";
 import { deepClone } from "@/lib/deepClone";
+import { motionThemeMap } from "@/lib/motionThemes";
+import { applyMotionThemeToLayers } from "@/lib/applyMotionTheme";
 
 const defaultAutoLayout = {
   enabled: false,
@@ -529,6 +531,23 @@ export const useTemplateBuilderStore = create((set, get) => {
       activePageId: id,
       currentTemplate: { ...state.currentTemplate, layers: newPage.layers },
     }));
+  },
+
+  createPageWithTransition: (name = "New Page", transition = { type: "slide", direction: "right", duration: 0.6, ease: "easeOut" }) => {
+    const id = "page_" + crypto.randomUUID();
+    const newPage = { id, name, artboards: [], layers: [] };
+    set((state) => {
+      const pages = [...state.pages, newPage];
+      const pageTransitions = {
+        ...(state.currentTemplate.pageTransitions || {}),
+        default: transition,
+      };
+      return {
+        pages,
+        activePageId: id,
+        currentTemplate: { ...state.currentTemplate, layers: newPage.layers, pageTransitions },
+      };
+    });
   },
 
   renamePage: (id, name) =>
@@ -1123,6 +1142,11 @@ export const useTemplateBuilderStore = create((set, get) => {
 
   addComponentInstance: (component, variantId = null) => {
     const id = "instance_" + crypto.randomUUID();
+    const initialVariantId = variantId ?? component.initialVariant ?? null;
+    const initialNodes =
+      initialVariantId && component.variants?.length
+        ? component.variants.find((v) => v.id === initialVariantId)?.nodes || component.nodes
+        : component.nodes;
     const parent = getActivePage()
       ?.layers.find((l) => l.id === get().selectedLayerId && l.type === "frame");
     get().addLayer({
@@ -1131,8 +1155,8 @@ export const useTemplateBuilderStore = create((set, get) => {
       componentId: component._id,
       componentNodes: component.nodes,
       componentVariants: component.variants || [],
-      nodes: component.nodes,
-      variantId,
+      nodes: initialNodes,
+      variantId: initialVariantId,
       x: 200,
       y: 200,
       width: 300,
@@ -1284,6 +1308,112 @@ export const useTemplateBuilderStore = create((set, get) => {
     setActivePageLayers([...layers]);
     get().triggerAutoSave();
   },
+
+  applyMotionPresetToLayer: (layerId, preset) => {
+    if (!preset) return;
+    const page = getActivePage();
+    const layers = page?.layers || [];
+    const idx = layers.findIndex((l) => l.id === layerId);
+    if (idx === -1) return;
+    const layer = { ...layers[idx] };
+    const anim = {
+      id: preset.id || "anim_" + crypto.randomUUID(),
+      name: preset.name,
+      variants: preset.variants || preset.states || {},
+      triggers: preset.triggers || [],
+      scroll: preset.scroll,
+      tracks: preset.tracks || [],
+      playTimelineOnLoad: preset.playTimelineOnLoad,
+      timelineLoop: preset.timelineLoop,
+      timelineLoopCount: preset.timelineLoopCount,
+    };
+    const animations = [...(layer.animations || [])];
+    animations.unshift(anim);
+    layer.animations = animations;
+    layers[idx] = layer;
+    setActivePageLayers([...layers]);
+  },
+
+  applyMotionTheme: (themeId, scope = "selection") =>
+    set((state) => {
+      const theme = motionThemeMap[themeId] || null;
+      if (!theme) return state;
+      const pages = [...state.pages];
+      const selected = new Set(state.selectedLayers || []);
+
+      const updateLayers = (layers) => {
+        if (scope === "selection" && selected.size) {
+          return applyMotionThemeToLayers(layers, theme, Array.from(selected));
+        }
+        return applyMotionThemeToLayers(layers, theme, null);
+      };
+
+      const updatedPages = pages.map((p) => {
+        const shouldApply =
+          scope === "all" ||
+          (scope === "page" && p.id === state.activePageId) ||
+          (scope === "selection" && selected.size);
+        if (!shouldApply) return p;
+        return { ...p, layers: updateLayers(p.layers || []) };
+      });
+
+      const activePage = updatedPages.find((p) => p.id === state.activePageId) || updatedPages[0];
+      return {
+        pages: updatedPages,
+        currentTemplate: { ...state.currentTemplate, layers: activePage?.layers || state.currentTemplate.layers },
+      };
+    }),
+
+  refineMotionSelection: () =>
+    set((state) => {
+      const pageIndex = state.pages.findIndex((p) => p.id === state.activePageId);
+      if (pageIndex === -1) return state;
+      const selected = new Set(state.selectedLayers || []);
+      const page = { ...state.pages[pageIndex], layers: [...(state.pages[pageIndex].layers || [])] };
+      const targetLayers = selected.size ? page.layers.filter((l) => selected.has(l.id)) : page.layers;
+      const result = refineMotion({ layers: targetLayers });
+      if (!result?.template?.layers) return state;
+      const refined = page.layers.map((l) => selected.size && !selected.has(l.id) ? l : (result.template.layers.find((r) => r.id === l.id) || l));
+      const pages = [...state.pages];
+      pages[pageIndex] = { ...page, layers: refined };
+      return {
+        pages,
+        currentTemplate: { ...state.currentTemplate, layers: refined },
+      };
+    }),
+
+  adjustAutoLayoutSpacing: (delta = 4) =>
+    set((state) => {
+      const pageIndex = state.pages.findIndex((p) => p.id === state.activePageId);
+      if (pageIndex === -1) return state;
+      const selected = new Set(state.selectedLayers || []);
+      if (!selected.size) return state;
+      const page = { ...state.pages[pageIndex], layers: [...(state.pages[pageIndex].layers || [])] };
+      const updated = page.layers.map((l) => {
+        if (!selected.has(l.id)) return l;
+        if (!l.autoLayout?.enabled) return l;
+        const gap = (l.autoLayout.gap || 0) + delta;
+        const padding = (l.autoLayout.padding || 0) + Math.round(delta / 2);
+        return {
+          ...l,
+          autoLayout: { ...l.autoLayout, gap: Math.max(0, gap), padding: Math.max(0, padding) },
+        };
+      });
+      const pages = [...state.pages];
+      pages[pageIndex] = { ...page, layers: updated };
+      return { pages, currentTemplate: { ...state.currentTemplate, layers: updated } };
+    }),
+
+  setDefaultPageTransition: (type = "slide", direction = "right", duration = 0.6, ease = "easeOut") =>
+    set((state) => ({
+      currentTemplate: {
+        ...state.currentTemplate,
+        pageTransitions: {
+          ...(state.currentTemplate.pageTransitions || {}),
+          default: { type, direction, duration, ease },
+        },
+      },
+    })),
 
   addFrameLayer: () => {
     const id = "frame_" + crypto.randomUUID();

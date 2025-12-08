@@ -1,10 +1,36 @@
 "use client";
 
+import { useState } from "react";
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 
 export default function TypographyPanel({ layer }) {
   const { updateLayer } = useTemplateBuilderStore();
   const props = layer.props || {};
+  const [loadingCopy, setLoadingCopy] = useState(false);
+
+  const rewriteCopy = async () => {
+    if (layer.type !== "text") return;
+    setLoadingCopy(true);
+    try {
+      const res = await fetch("/api/assistant/copy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brandVoice: "professional",
+          context: layer.content || props.text || "CTA text",
+        }),
+      });
+      const data = await res.json();
+      if (data?.copy) {
+        const option = String(data.copy).split("---")[0].trim();
+        updateLayer(layer.id, { content: option });
+      }
+    } catch (err) {
+      console.error("Rewrite copy failed", err);
+    } finally {
+      setLoadingCopy(false);
+    }
+  };
 
   return (
     <div className="space-y-3 border-b pb-4">
@@ -56,6 +82,17 @@ export default function TypographyPanel({ layer }) {
           }
         />
       </label>
+
+      {layer.type === "text" ? (
+        <button
+          type="button"
+          onClick={rewriteCopy}
+          className="px-3 py-1.5 rounded border border-neutral-200 text-xs text-slate-700 hover:bg-slate-50"
+          disabled={loadingCopy}
+        >
+          {loadingCopy ? "Rewriting..." : "Rewrite with AI"}
+        </button>
+      ) : null}
     </div>
   );
 }

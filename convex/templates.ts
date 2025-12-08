@@ -184,6 +184,28 @@ export const getMarketplaceTemplates = query({
   },
 });
 
+export const getRecommendedTemplates = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async ({ db }, { limit }) => {
+    const max = limit && limit > 0 ? limit : 16;
+    // Simple heuristic fallback until personalization is wired:
+    // prioritize published templates with higher score/engagement, then recent.
+    const published = await db
+      .query("templates")
+      .withIndex("by_published", (q) => q.eq("isPublished", true))
+      .collect();
+    const sorted = [...published].sort((a, b) => {
+      const scoreA = (a.score || 0) + (a.insertCount || 0) * 0.5 + (a.favoriteCount || 0) * 1.5 + (a.viewCount || 0) * 0.1;
+      const scoreB = (b.score || 0) + (b.insertCount || 0) * 0.5 + (b.favoriteCount || 0) * 1.5 + (b.viewCount || 0) * 0.1;
+      if (scoreA === scoreB) {
+        return (b.updatedAt || 0) - (a.updatedAt || 0);
+      }
+      return scoreB - scoreA;
+    });
+    return sorted.slice(0, max);
+  },
+});
+
 export const getTrendingTemplates = query({
   args: { days: v.optional(v.number()) },
   handler: async ({ db }, { days }) => {
@@ -229,28 +251,6 @@ export const getRecentTemplates = query({
       .withIndex("by_published", (q) => q.eq("isPublished", true))
       .order("desc")
       .collect();
-  },
-});
-
-export const getRecommendedTemplates = query({
-  args: { userId: v.optional(v.string()) },
-  handler: async ({ db, auth }, { userId }) => {
-    const identity = await auth.getUserIdentity();
-    const uid = userId || identity?.subject;
-    const templates = await db.query("templates").withIndex("by_published", (q) => q.eq("isPublished", true)).collect();
-    if (!uid) return templates.slice(0, 12);
-    const events = await db
-      .query("templateEvents")
-      .withIndex("by_user", (q) => q.eq("userId", uid))
-      .collect();
-    const usedCategories = new Set(
-      events
-        .map((e) => templates.find((t) => t._id === e.templateId)?.category)
-        .filter(Boolean) as string[],
-    );
-    const filtered = templates.filter((t) => !usedCategories.size || (t.category && usedCategories.has(t.category)));
-    if (filtered.length) return filtered.slice(0, 12);
-    return templates.slice(0, 12);
   },
 });
 

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { motion } from "motion/react";
 
 const TEMPLATE_PLACEHOLDER =
   "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80";
@@ -17,52 +18,52 @@ const Section = ({ title, items }) => {
       </div>
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {items.map((t) => (
-          <Link
+          <motion.div
             key={t.id}
-            href={`/workspace/create?templateId=${encodeURIComponent(t.id)}`}
-            className="rounded-xl border border-neutral-200 bg-white shadow-sm overflow-hidden group hover:shadow-md transition"
+            whileHover={{ y: -6, scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            transition={{ type: "spring", stiffness: 260, damping: 22 }}
+            className="rounded-xl border border-neutral-200 bg-white shadow-sm overflow-hidden group"
           >
-            <div className="relative h-44 bg-neutral-100">
-              {t.previewUrl || t.thumbnail || t.thumbnailUrl ? (
-                <Image
-                  src={t.previewUrl || t.thumbnail || t.thumbnailUrl || TEMPLATE_PLACEHOLDER}
-                  alt={t.name}
-                  fill
-                  className="object-cover"
-                  sizes="320px"
-                />
-              ) : (
-                <Image src={TEMPLATE_PLACEHOLDER} alt={t.name} fill className="object-cover" sizes="320px" />
-              )}
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition" />
-              <div className="absolute top-2 left-2 text-[11px] px-2 py-[2px] rounded-full bg-white/90 text-neutral-700 border border-neutral-200">
-                {t.category || "General"}
-              </div>
-              {t.license && t.license !== "free" ? (
-                <div className="absolute top-2 right-2 text-[11px] px-2 py-[2px] rounded-full bg-amber-100 text-amber-700 border border-amber-200">
-                  {t.license === "pro" ? "Pro" : "Marketplace"}
+            <Link href={`/workspace/create?templateId=${encodeURIComponent(t.id)}`} className="block">
+              <div className="relative h-44 bg-neutral-100">
+                {t.previewUrl || t.thumbnail || t.thumbnailUrl ? (
+                  <Image
+                    src={t.previewUrl || t.thumbnail || t.thumbnailUrl || TEMPLATE_PLACEHOLDER}
+                    alt={t.name}
+                    fill
+                    className="object-cover"
+                    sizes="320px"
+                  />
+                ) : (
+                  <Image src={TEMPLATE_PLACEHOLDER} alt={t.name} fill className="object-cover" sizes="320px" />
+                )}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition" />
+                <div className="absolute top-2 left-2 text-[11px] px-2 py-[2px] rounded-full bg-white/90 text-neutral-700 border border-neutral-200">
+                  {t.category || "General"}
                 </div>
-              ) : null}
-            </div>
-            <div className="p-3 space-y-1">
-              <div className="text-sm font-semibold text-neutral-900 truncate">{t.name}</div>
-              <div className="text-xs text-neutral-500 flex items-center justify-between">
-                <span>
-                  {t.width && t.height ? `${Math.round(t.width)}×${Math.round(t.height)}` : "Template"}
-                </span>
-                {t.creator ? (
-                  <span className="truncate max-w-[120px] text-right">by {t.creator}</span>
+                {t.license && t.license !== "free" ? (
+                  <div className="absolute top-2 right-2 text-[11px] px-2 py-[2px] rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                    {t.license === "pro" ? "Pro" : "Marketplace"}
+                  </div>
                 ) : null}
               </div>
-              {(t.insertCount || t.viewCount || t.favoriteCount) ? (
-                <div className="text-[11px] text-neutral-500 flex items-center gap-3">
-                  {t.insertCount ? <span>⬇ {t.insertCount}</span> : null}
-                  {t.viewCount ? <span>👁 {t.viewCount}</span> : null}
-                  {t.favoriteCount ? <span>❤ {t.favoriteCount}</span> : null}
+              <div className="p-3 space-y-1">
+                <div className="text-sm font-semibold text-neutral-900 truncate">{t.name}</div>
+                <div className="text-xs text-neutral-500 flex items-center justify-between">
+                  <span>{t.width && t.height ? `${Math.round(t.width)}×${Math.round(t.height)}` : "Template"}</span>
+                  {t.creator ? <span className="truncate max-w-[120px] text-right">by {t.creator}</span> : null}
                 </div>
-              ) : null}
-            </div>
-          </Link>
+                {(t.insertCount || t.viewCount || t.favoriteCount) ? (
+                  <div className="text-[11px] text-neutral-500 flex items-center gap-3">
+                    {t.insertCount ? <span>⬇ {t.insertCount}</span> : null}
+                    {t.viewCount ? <span>👁 {t.viewCount}</span> : null}
+                    {t.favoriteCount ? <span>❤ {t.favoriteCount}</span> : null}
+                  </div>
+                ) : null}
+              </div>
+            </Link>
+          </motion.div>
         ))}
       </div>
     </div>

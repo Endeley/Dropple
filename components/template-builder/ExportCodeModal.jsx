@@ -2,6 +2,8 @@
 
 import { useMemo } from "react";
 import { exportLayerToJSX } from "@/lib/exportToCode";
+import { exportMotionComponent } from "@/lib/exportMotionToCode";
+import { buildStarterPack, validateMotionPack } from "@/lib/motionPack";
 import { exportThemeToCSS } from "@/lib/exportThemeToCSS";
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 
@@ -38,7 +40,10 @@ export default function ExportCodeModal() {
 
   const code = useMemo(() => {
     if (!layer) return "";
-    return exportLayerToJSX(layer, contextLayers, 0, { components });
+    const hasMotion = layer.animations?.length || contextLayers.some((l) => l.animations?.length);
+    return hasMotion
+      ? exportMotionComponent(layer, contextLayers)
+      : exportLayerToJSX(layer, contextLayers, 0, { components });
   }, [components, contextLayers, layer]);
 
   const activeTheme = useMemo(() => {
@@ -47,6 +52,12 @@ export default function ExportCodeModal() {
   }, [activeThemeId, themes]);
 
   const themeCss = useMemo(() => exportThemeToCSS(activeTheme), [activeTheme]);
+
+  const motionPackJson = useMemo(() => {
+    const pack = buildStarterPack();
+    const validation = validateMotionPack(pack);
+    return validation.valid ? JSON.stringify(pack, null, 2) : JSON.stringify({ error: validation.errors }, null, 2);
+  }, []);
 
   if (!exportModalOpen || !layer) return null;
 
@@ -77,6 +88,24 @@ export default function ExportCodeModal() {
     } catch (err) {
       console.error("Failed to copy theme CSS", err);
     }
+  };
+
+  const copyMotionPack = async () => {
+    try {
+      await navigator.clipboard.writeText(motionPackJson);
+    } catch (err) {
+      console.error("Failed to copy motion pack", err);
+    }
+  };
+
+  const downloadMotionPack = () => {
+    const blob = new Blob([motionPackJson], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${layer.name || "MotionPack"}.dropple-motionpack.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const downloadTheme = () => {
@@ -125,6 +154,15 @@ export default function ExportCodeModal() {
           </div>
         )}
 
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold">Motion Pack (starter)</h3>
+          <textarea
+            className="w-full h-40 border border-slate-200 rounded-md p-3 font-mono text-sm bg-slate-50 text-slate-900"
+            readOnly
+            value={motionPackJson}
+          />
+        </div>
+
         <div className="flex justify-end gap-3">
           <button
             onClick={copy}
@@ -154,6 +192,18 @@ export default function ExportCodeModal() {
               </button>
             </>
           )}
+          <button
+            onClick={copyMotionPack}
+            className="px-4 py-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 shadow-sm"
+          >
+            Copy Motion Pack
+          </button>
+          <button
+            onClick={downloadMotionPack}
+            className="px-4 py-2 rounded-md bg-fuchsia-600 text-white hover:bg-fuchsia-700 shadow-sm"
+          >
+            Download Motion Pack
+          </button>
         </div>
       </div>
     </div>

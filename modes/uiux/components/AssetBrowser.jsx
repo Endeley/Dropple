@@ -453,6 +453,7 @@ export default function AssetBrowser() {
   const hydrateTemplate = (template, baseFrame) => {
     if (!template) return;
     const nodes = template.nodes || [];
+    const animations = template.animations || [];
     const idMap = {};
     nodes.forEach((n) => {
       idMap[n.id] = crypto.randomUUID();
@@ -484,6 +485,14 @@ export default function AssetBrowser() {
     const topLevelIds = Object.values(cloned)
       .filter((n) => !n.parent)
       .map((n) => n.id);
+
+    // Attach animations to remapped nodes
+    animations.forEach((anim) => {
+      const targetId = anim.nodeId && idMap[anim.nodeId] ? idMap[anim.nodeId] : anim.nodeId;
+      if (!targetId || !cloned[targetId]) return;
+      const normalized = { ...anim, nodeId: targetId, id: anim.id || `anim_${crypto.randomUUID()}` };
+      cloned[targetId].animations = [...(cloned[targetId].animations || []), normalized];
+    });
 
     // Create root frame if needed
     const rootFrameId = baseFrame.id;

@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { motion, useAnimation, useScroll, useTransform } from "motion/react";
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 import { useComponentRegistry } from "@/zustand/useComponentRegistry";
 import { useSceneGraph } from "@/zustand/useSceneGraph";
@@ -13,6 +14,7 @@ export default function CanvasLayer({
   isInstanceChild = false,
   offset: parentOffset = { x: 0, y: 0 },
   isComponentMaster = false,
+  parentVariant = null,
 }) {
   const {
     selectedLayerId,
@@ -119,6 +121,38 @@ export default function CanvasLayer({
   const width = responsiveOverride.width ?? layer.width;
   const height = responsiveOverride.height ?? layer.height;
   const visibility = responsiveOverride.visibility || "inherit";
+
+  const controls = useAnimation();
+  const { motionProps, motionTriggers, motionStates, scrollDef, outboundVariant } = buildMotionProps(layer, controls, parentVariant);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
+  const scrollStyle = buildScrollStyle(scrollDef, scrollYProgress);
+  const selectedAnim =
+    (layer?.animations || []).find((a) => a.id === (layer.motionAnimationId || layer.animations?.[0]?.id)) ||
+    layer?.animations?.[0];
+  const timelineTracks = useMemo(() => selectedAnim?.tracks || [], [selectedAnim?.tracks]);
+  const timelineLoop = selectedAnim?.timelineLoop || false;
+  const timelineLoopCount = selectedAnim?.timelineLoopCount ?? 0;
+
+  useEffect(() => {
+    if (!selectedAnim?.playTimelineOnLoad) return;
+    if (!timelineTracks?.length) return;
+    const seq = buildTimelineSequence(timelineTracks);
+    if (!seq.length) return;
+    let cancelled = false;
+    (async () => {
+      let remaining = timelineLoop ? (timelineLoopCount || -1) : 1;
+      while (!cancelled && remaining !== 0) {
+        for (const step of seq) {
+          if (cancelled) break;
+          await controls.start(step);
+        }
+        if (remaining > 0) remaining -= 1;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [timelineTracks, timelineLoop, timelineLoopCount, controls, selectedAnim?.playTimelineOnLoad]);
 
   function handleMouseDown(e) {
     if (editingTextId === layer.id) return;
@@ -246,14 +280,28 @@ export default function CanvasLayer({
     setActiveGuides([]);
   }
 
+  const triggerMap = layer.motionTriggerMap || {};
+
+  const runMotion = (stateKey) => {
+    if (!motionStates || !controls) return;
+    const next =
+      motionStates[stateKey] ||
+      motionStates[stateKey === "hover" ? "hovered" : stateKey === "tap" ? "pressed" : stateKey] ||
+      motionStates.animate;
+    if (next) controls.start(stateKey);
+  };
+
   const interactionHandlers = {
     onMouseEnter: () => {
       triggerEvent(layer.id, "onHover");
       triggerBehavior(layer.id, "hover");
+      const target = triggerMap.onHover || "hovered";
+      if (motionTriggers?.includes("onHover")) runMotion(target);
     },
     onMouseLeave: () => {
       triggerEvent(layer.id, "onUnhover");
       triggerBehavior(layer.id, "hoverLeave");
+      if (motionTriggers?.includes("onHover")) runMotion("initial");
     },
     onMouseDown: (e) => {
       handleMouseDown(e);
@@ -264,10 +312,13 @@ export default function CanvasLayer({
       handleMouseUp();
       triggerEvent(layer.id, "onRelease");
       triggerBehavior(layer.id, "release");
+      if (motionTriggers?.includes("onClick")) runMotion("animate");
     },
     onClick: () => {
       triggerEvent(layer.id, "onClick");
       triggerBehavior(layer.id, "tap");
+      const target = triggerMap.onClick || "pressed";
+      if (motionTriggers?.includes("onClick")) runMotion(target);
     },
     onMouseMove: (e) => {
       handleMouseMove(e);
@@ -294,6 +345,7 @@ export default function CanvasLayer({
         isInstanceChild
         offset={{ x: renderX, y: renderY }}
         isComponentMaster={isComponentMaster}
+        parentVariant={outboundVariant || parentVariant}
       />
     ));
   };
@@ -456,8 +508,8 @@ export default function CanvasLayer({
   };
 
   return (
-    <div
-      style={style}
+    <MotionWrapper motionProps={motionProps}
+      style={{ ...style, ...scrollStyle }}
       className="select-none"
       onMouseDown={interactionHandlers.onMouseDown}
       onMouseMove={interactionHandlers.onMouseMove}
@@ -520,6 +572,7 @@ export default function CanvasLayer({
                 layer={child}
                 offset={{ x: renderX, y: renderY }}
                 isComponentMaster={isComponentMaster}
+                parentVariant={outboundVariant || parentVariant}
               />
             );
           })}
@@ -531,6 +584,160 @@ export default function CanvasLayer({
           {renderComponentChildren()}
         </div>
       )}
-    </div>
+    </MotionWrapper>
   );
+}
+
+function MotionWrapper({ motionProps, children, ...rest }) {
+  if (!motionProps) return <div {...rest}>{children}</div>;
+  return (
+    <motion.div {...motionProps} {...rest}>
+      {children}
+    </motion.div>
+  );
+}
+
+function buildMotionProps(layer, controls, parentVariant = null) {
+  const selectedAnimId = layer.motionAnimationId || layer?.animations?.[0]?.id;
+  const anim =
+    (layer?.animations || []).find((a) => a.id === selectedAnimId) || layer?.animations?.[0];
+  if (!anim?.variants && !anim?.states && !(anim?.tracks?.length)) {
+    return { motionProps: null, motionTriggers: null, motionStates: null, scrollDef: null, outboundVariant: null };
+  }
+  const states = anim.variants || anim.states || {};
+  const triggers = anim.triggers || [];
+  const currentState = layer.motionState;
+  const playTimelineOnLoad = anim.playTimelineOnLoad;
+  const tracks = anim.tracks || [];
+
+  const splitState = (state) => {
+    if (!state) return [undefined, undefined];
+    const { transition: transObj, duration, delay, ease, easing, type, ...rest } = state;
+    const transition = { ...(transObj || {}) };
+    if (duration !== undefined) transition.duration = duration;
+    if (delay !== undefined) transition.delay = delay;
+    if (type) transition.type = type;
+    if (ease || easing) transition.ease = ease || easing;
+    return [rest, Object.keys(transition).length ? transition : undefined];
+  };
+
+  const [initial, initialTransition] = splitState(states.initial);
+  const [animate, animateTransition] = splitState(states.animate);
+  const [hover, hoverTransition] = splitState(states.hover);
+  const [tap, tapTransition] = splitState(states.tap);
+  const [exit, exitTransition] = splitState(states.exit);
+  const [inView, inViewTransition] = splitState(states.inView);
+
+  const useScroll = anim.scroll || triggers.includes("scroll") || triggers.includes("onScroll") || Boolean(inView);
+  const needsControls = triggers.includes("onClick") || triggers.includes("onHover") || currentState;
+
+  const motionProps = {
+    initial: states.initial ? "initial" : initial,
+    animate: needsControls
+      ? currentState || controls
+      : states.animate
+        ? "animate"
+        : animate,
+    exit: states.exit ? "exit" : exit,
+    transition: animateTransition || initialTransition,
+    whileHover: states.hover ? "hover" : states.hovered ? "hovered" : hover,
+    whileTap: states.tap ? "tap" : states.pressed ? "pressed" : tap,
+    variants: Object.keys(states).length ? states : undefined,
+  };
+
+  if (hoverTransition) motionProps.whileHover = { ...hover, transition: hoverTransition };
+  if (tapTransition) motionProps.whileTap = { ...tap, transition: tapTransition };
+  if (exitTransition) motionProps.exit = { ...exit, transition: exitTransition };
+
+  // Parent -> child mapping
+  if (parentVariant && layer.variantMapping && typeof motionProps.animate === "string") {
+    const mapped = layer.variantMapping[parentVariant];
+    if (mapped) {
+      motionProps.animate = mapped;
+    }
+  }
+
+  if (useScroll || inView) {
+    motionProps.whileInView = inView || animate || initial;
+    motionProps.viewport = { once: false, amount: 0.2 };
+    if (inViewTransition) motionProps.transition = inViewTransition;
+  }
+
+  if (playTimelineOnLoad && tracks.length) {
+    motionProps.initial = undefined;
+    motionProps.animate = controls;
+    motionProps.variants = undefined;
+    motionProps.transition = undefined;
+  }
+
+  const outboundVariant =
+    layer.motionPropagate || layer.propagateVariants || layer.propagate
+      ? (typeof motionProps.animate === "string" ? motionProps.animate : currentState || "animate")
+      : null;
+
+  return {
+    motionProps,
+    motionTriggers: triggers,
+    motionStates: states,
+    scrollDef: anim.scroll || null,
+    timeline: playTimelineOnLoad ? tracks : null,
+    outboundVariant,
+  };
+}
+
+function buildScrollStyle(scrollDef, scrollYProgress) {
+  if (!scrollDef || !scrollYProgress) return {};
+  const input = Array.isArray(scrollDef.inputRange) ? scrollDef.inputRange : [0, 1];
+  const output = scrollDef.outputRange || {};
+  const style = {};
+  Object.entries(output).forEach(([prop, values]) => {
+    if (Array.isArray(values)) {
+      style[prop] = useTransform(scrollYProgress, input, values);
+    }
+  });
+  return style;
+}
+
+function buildTimelineSequence(tracks = []) {
+  const sequence = [];
+  const grouped = {};
+  tracks.forEach((track) => {
+    const prop = track.property || "";
+    (track.keyframes || []).forEach((kf) => {
+      const t = kf.t ?? kf.time ?? 0;
+      if (!grouped[t]) grouped[t] = { props: {}, meta: {} };
+      const val =
+        kf.value !== undefined ? kf.value : { x: kf.x, y: kf.y, opacity: kf.opacity };
+      grouped[t].props[prop] = val;
+      grouped[t].meta[prop] = {
+        ease: kf.easing || kf.ease,
+        duration: kf.duration,
+      };
+      if (kf.rotateX !== undefined) grouped[t].props.rotateX = kf.rotateX;
+      if (kf.rotateY !== undefined) grouped[t].props.rotateY = kf.rotateY;
+      if (kf.rotateZ !== undefined) grouped[t].props.rotateZ = kf.rotateZ;
+    });
+  });
+  const times = Object.keys(grouped)
+    .map((t) => Number(t))
+    .sort((a, b) => a - b);
+  times.forEach((t, idx) => {
+    const entry = grouped[t];
+    const nextT = times[idx + 1];
+    const baseDurationMs = nextT !== undefined ? Math.max(1, nextT - t) : 300;
+    const transition = {};
+    Object.entries(entry.meta || {}).forEach(([prop, meta]) => {
+      const durMs = meta.duration !== undefined ? meta.duration : baseDurationMs;
+      const ease = meta.ease;
+      transition[prop] = {
+        duration: Math.max(0.01, durMs / 1000),
+        ...(ease ? { ease } : {}),
+      };
+    });
+    if (!Object.keys(transition).length) {
+      transition.duration = Math.max(0.01, baseDurationMs / 1000);
+    }
+    sequence.push({ ...entry.props, transition });
+  });
+  return sequence;
 }

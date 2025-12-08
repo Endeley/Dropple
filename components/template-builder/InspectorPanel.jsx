@@ -13,6 +13,7 @@ import StylePicker from "./inspector/styles/StylePicker";
 import PrototypePanel from "./inspector/PrototypePanel";
 import ResponsivePanel from "./inspector/ResponsivePanel";
 import TimelinePanel from "./TimelinePanel";
+import MotionPanel from "./inspector/MotionPanel";
 
 export default function InspectorPanel() {
   const {
@@ -84,6 +85,7 @@ export default function InspectorPanel() {
       <SizePanel layer={layer} />
       <ConstraintsPanel layer={layer} />
       <StylePicker layer={layer} />
+      <MotionPanel layer={layer} />
       <ResponsivePanel layer={layer} />
       <PrototypePanel layer={layer} />
       {layer.animations?.length ? <TimelinePanel layer={layer} /> : null}
