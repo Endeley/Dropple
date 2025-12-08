@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 const TEMPLATE_PLACEHOLDER =
@@ -16,7 +17,11 @@ const Section = ({ title, items }) => {
       </div>
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {items.map((t) => (
-          <div key={t.id} className="rounded-xl border border-neutral-200 bg-white shadow-sm overflow-hidden group">
+          <Link
+            key={t.id}
+            href={`/workspace/create?templateId=${encodeURIComponent(t.id)}`}
+            className="rounded-xl border border-neutral-200 bg-white shadow-sm overflow-hidden group hover:shadow-md transition"
+          >
             <div className="relative h-44 bg-neutral-100">
               {t.previewUrl || t.thumbnail || t.thumbnailUrl ? (
                 <Image
@@ -57,7 +62,7 @@ const Section = ({ title, items }) => {
                 </div>
               ) : null}
             </div>
-          </div>
+          </Link>
         ))}
       </div>
     </div>

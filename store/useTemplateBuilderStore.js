@@ -950,11 +950,18 @@ export const useTemplateBuilderStore = create((set, get) => {
         body: JSON.stringify({ id: templateId }),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data = {};
+      try {
+        data = JSON.parse(text || "{}");
+      } catch (err) {
+        console.error("Error parsing template JSON", err, text);
+        return;
+      }
       const tpl = data.template;
 
       if (!tpl) {
-        console.error("Template not found:", templateId);
+        console.error("Template not found or empty response:", templateId);
         return;
       }
 
@@ -1165,6 +1172,44 @@ export const useTemplateBuilderStore = create((set, get) => {
       const pages = [...state.pages];
       const artboards = [...(pages[pageIndex].artboards || []), id];
       pages[pageIndex] = { ...pages[pageIndex], artboards };
+      return { pages };
+    });
+  },
+
+  addDeviceArtboard: (device = "desktop") => {
+    const presets = {
+      base: { width: 390, height: 844, name: "Mobile" },
+      mobile: { width: 390, height: 844, name: "Mobile" },
+      tablet: { width: 768, height: 1024, name: "Tablet" },
+      desktop: { width: 1440, height: 900, name: "Desktop" },
+      large: { width: 1600, height: 1000, name: "Large" },
+    };
+    const { width, height, name } = presets[device] || presets.desktop;
+    const page = getActivePage();
+    const artboards = (page?.layers || []).filter((l) => l.type === "artboard");
+    const offsetX = 20 + artboards.length * 60;
+    const offsetY = 20 + (artboards.length % 2) * 60;
+    const id = `${device}_artboard_${crypto.randomUUID()}`;
+    const artboard = {
+      id,
+      type: "artboard",
+      name: name || "Artboard",
+      x: offsetX,
+      y: offsetY,
+      width,
+      height,
+      props: { fill: "#f8fafc" },
+      children: [],
+      isArtboard: true,
+      interactions: [],
+    };
+    get().addLayer(artboard);
+    set((state) => {
+      const pageIndex = state.pages.findIndex((p) => p.id === state.activePageId);
+      if (pageIndex === -1) return state;
+      const pages = [...state.pages];
+      const nextArtboards = [...(pages[pageIndex].artboards || []), id];
+      pages[pageIndex] = { ...pages[pageIndex], artboards: nextArtboards };
       return { pages };
     });
   },

@@ -47,7 +47,7 @@ export async function POST(request) {
           localOnly: true,
         });
       }
-      return Response.json({ error: "Save failed", success: false }, { status: 500 });
+      return Response.json({ error: err?.message || "Save failed", success: false }, { status: 500 });
     }
   }
 
@@ -88,7 +88,7 @@ export async function POST(request) {
           localOnly: true,
         });
       }
-      return Response.json({ error: "Create failed", success: false }, { status: 500 });
+      return Response.json({ error: err?.message || "Create failed", success: false }, { status: 500 });
     }
   }
 
@@ -108,6 +108,6 @@ export async function POST(request) {
         localId: templateId || makeLocalId(),
       });
     }
-    return Response.json({ error: "Update failed", success: false }, { status: 500 });
+    return Response.json({ error: err?.message || "Update failed", success: false }, { status: 500 });
   }
 }

@@ -77,12 +77,20 @@ export default function BuilderCanvas() {
             <PageSwitcher />
           </div>
         </div>
+        {/*
+          Use a large virtual workspace to allow panning/scrolling beyond template bounds.
+          We keep template dimensions but ensure the canvas is expansive.
+        */}
+        {(() => {
+          const workspaceWidth = Math.max(currentTemplate.width, 5000);
+          const workspaceHeight = Math.max(currentTemplate.height, 4000);
+          return (
         <div
           id="dropple-canvas"
           className="relative rounded-md border border-slate-200 shadow-lg"
           style={{
-            width: currentTemplate.width,
-            height: currentTemplate.height,
+            width: workspaceWidth,
+            height: workspaceHeight,
             backgroundImage:
               "linear-gradient(90deg, rgba(148,163,184,0.12) 1px, transparent 1px), linear-gradient(180deg, rgba(148,163,184,0.12) 1px, transparent 1px)",
             backgroundSize: "24px 24px",
@@ -98,6 +106,8 @@ export default function BuilderCanvas() {
           <SmartGuides />
           <PrototypeConnections layers={currentTemplate.layers} />
         </div>
+          );
+        })()}
         <MarqueeSelect containerRef={containerRef} layers={currentTemplate.layers} />
       </div>
     </>

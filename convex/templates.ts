@@ -41,20 +41,33 @@ export const saveTemplate = mutation({
     const now = Date.now();
     const makePublished = args.visibility === "public";
 
-    let thumbnailUrl: string | undefined = args.thumbnailUrl || undefined;
+    let thumbnailUrl: string | undefined = args.thumbnailUrl || args.thumbnail || undefined;
     let templateJsonUrl: string | undefined = undefined;
 
-    if (args.thumbnailBytes) {
-      const buf = new Uint8Array(args.thumbnailBytes);
-      const storageId = await (storage as any).store(buf);
-      if (storageId) thumbnailUrl = ((await storage.getUrl(storageId)) as string | null) || undefined;
-    }
+    // Store blobs if storage is available; otherwise skip
+    if (storage && typeof (storage as any).store === "function") {
+      try {
+        if (args.thumbnailBytes) {
+          const buf = new Uint8Array(args.thumbnailBytes);
+          const blob = new Blob([buf], { type: "image/png" });
+          const storageId = await (storage as any).store(blob);
+          if (storageId) thumbnailUrl = ((await storage.getUrl(storageId)) as string | null) || undefined;
+        }
+      } catch (err) {
+        console.warn("thumbnail store failed, skipping", err);
+      }
 
-    if (args.templateJsonString) {
-      const encoder = new TextEncoder();
-      const bytes = encoder.encode(args.templateJsonString);
-      const storageId = await (storage as any).store(bytes);
-      if (storageId) templateJsonUrl = ((await storage.getUrl(storageId)) as string | null) || undefined;
+      try {
+        if (args.templateJsonString) {
+          const encoder = new TextEncoder();
+          const bytes = encoder.encode(args.templateJsonString);
+          const blob = new Blob([bytes], { type: "application/json" });
+          const storageId = await (storage as any).store(blob);
+          if (storageId) templateJsonUrl = ((await storage.getUrl(storageId)) as string | null) || undefined;
+        }
+      } catch (err) {
+        console.warn("template JSON store failed, skipping", err);
+      }
     }
 
     if (args.id) {

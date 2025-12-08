@@ -1,12 +1,17 @@
 import clsx from 'clsx';
 import { ModeSection } from '../components/modes/ModeSection';
 import { modes, primaryAccent } from './modes';
-
+import { UserButton } from '@stackframe/stack';
 export default function Home() {
     return (
         <main className='h-screen overflow-y-auto bg-[#06060a] text-white snap-y snap-mandatory scroll-smooth'>
+            <div className='mt-8 px-10 relative'>
+                <UserButton showUserInfo={true} className='absolute top-4 right-4 mt-10' />
+            </div>
+
             <section className='relative isolate flex min-h-screen snap-start items-center overflow-hidden px-6 py-16 md:px-12'>
                 <div className='absolute inset-0 bg-linear-to-br from-violet-700/25 via-fuchsia-500/15 to-transparent blur-3xl' />
+
                 <div className='relative mx-auto flex max-w-5xl flex-col gap-8 text-center'>
                     <div className='inline-flex items-center self-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-white/80 backdrop-blur'>Dropple Creative OS</div>
                     <div className='space-y-6'>

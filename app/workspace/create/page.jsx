@@ -8,11 +8,19 @@ import BuilderRightPanel from "@/components/template-builder/BuilderRightPanel";
 import TimelineDock from "@/components/template-builder/TimelineDock";
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 import { useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 
 export default function WorkspaceCreatePage() {
   const { currentTemplate, setEditingMode, setComponents, components, addImageLayer } = useTemplateBuilderStore();
+  const searchParams = useSearchParams();
+  const loadTemplateFromDB = useTemplateBuilderStore((s) => s.loadTemplateFromDB);
 
   useEffect(() => {
+    const templateIdParam = searchParams?.get("templateId");
+    if (templateIdParam) {
+      loadTemplateFromDB(templateIdParam);
+    }
+
     const storedAI = typeof window !== "undefined" ? localStorage.getItem("AI_TEMPLATE") : null;
     const stored = typeof window !== "undefined" ? localStorage.getItem("LOADED_TEMPLATE") : null;
     const storedComponent = typeof window !== "undefined" ? localStorage.getItem("ADD_COMPONENT") : null;
@@ -140,7 +148,7 @@ export default function WorkspaceCreatePage() {
       }
     }
     setEditingMode(false);
-  }, [addImageLayer, components, currentTemplate, setComponents, setEditingMode]);
+  }, [addImageLayer, components, currentTemplate, setComponents, setEditingMode, searchParams, loadTemplateFromDB]);
 
   return (
     <div className="w-full min-h-screen flex flex-col bg-slate-50 text-gray-900">
