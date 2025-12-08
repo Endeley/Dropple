@@ -54,6 +54,16 @@ export const getAssets = query({
   },
 });
 
+export const getUserAssets = query({
+  args: {},
+  handler: async ({ db, auth }) => {
+    const identity = await auth.getUserIdentity();
+    const userId = identity?.tokenIdentifier;
+    if (!userId) return [];
+    return await db.query("assets").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
+  },
+});
+
 export const deleteAsset = mutation({
   args: { id: v.id("assets") },
   handler: async (ctx, args) => {

@@ -37,8 +37,7 @@ export const saveTemplate = mutation({
   },
   handler: async ({ db, auth, storage }, args) => {
     const identity = await auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-    const userId = identity.subject;
+    const userId = identity?.subject ?? "system";
     const now = Date.now();
     const makePublished = args.visibility === "public";
 
@@ -239,5 +238,17 @@ export const getRecommendedTemplates = query({
     const filtered = templates.filter((t) => !usedCategories.size || (t.category && usedCategories.has(t.category)));
     if (filtered.length) return filtered.slice(0, 12);
     return templates.slice(0, 12);
+  },
+});
+
+export const updateTemplate = mutation({
+  args: { id: v.id("templates"), data: v.any() },
+  handler: async ({ db, auth }, { id, data }) => {
+    const identity = await auth.getUserIdentity();
+    const userId = identity?.subject ?? "system";
+    const existing = await db.get(id);
+    if (!existing) throw new Error("Template not found");
+    await db.patch(id, { ...data, userId, updatedAt: Date.now() });
+    return id;
   },
 });

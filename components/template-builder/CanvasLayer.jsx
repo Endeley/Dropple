@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 import { useComponentRegistry } from "@/zustand/useComponentRegistry";
 import { useSceneGraph } from "@/zustand/useSceneGraph";
@@ -35,25 +35,18 @@ export default function CanvasLayer({
     styles,
     themes,
     activeThemeId,
+    activeBreakpoint,
   } = useTemplateBuilderStore();
 
   const ref = useRef(null);
-  const { register, unregister } = useComponentRegistry((state) => ({
-    register: state.register,
-    unregister: state.unregister,
-  }));
-  const { upsertNode, removeNode } = useSceneGraph((state) => ({
-    upsertNode: state.upsertNode,
-    removeNode: state.removeNode,
-  }));
-  const { triggerEvent, loadMachine } = useStateMachine((state) => ({
-    triggerEvent: state.triggerEvent,
-    loadMachine: state.loadMachine,
-  }));
-  const { trigger: triggerBehavior, loadBehaviors } = useBehaviorsStore((state) => ({
-    trigger: state.trigger,
-    loadBehaviors: state.loadBehaviors,
-  }));
+  const register = useComponentRegistry((state) => state.register);
+  const unregister = useComponentRegistry((state) => state.unregister);
+  const upsertNode = useSceneGraph((state) => state.upsertNode);
+  const removeNode = useSceneGraph((state) => state.removeNode);
+  const triggerEvent = useStateMachine((state) => state.triggerEvent);
+  const loadMachine = useStateMachine((state) => state.loadMachine);
+  const triggerBehavior = useBehaviorsStore((state) => state.trigger);
+  const loadBehaviors = useBehaviorsStore((state) => state.loadBehaviors);
   const [dragging, setDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const renderX = (parentOffset?.x || 0) + layer.x;
@@ -117,6 +110,15 @@ export default function CanvasLayer({
   };
 
   // Do not early return before hooks; hide via visibility later if needed.
+
+  const responsiveOverride = useMemo(
+    () => layer.responsive?.[activeBreakpoint] || {},
+    [layer.responsive, activeBreakpoint],
+  );
+  const directionOverride = responsiveOverride.autoLayout?.direction;
+  const width = responsiveOverride.width ?? layer.width;
+  const height = responsiveOverride.height ?? layer.height;
+  const visibility = responsiveOverride.visibility || "inherit";
 
   function handleMouseDown(e) {
     if (editingTextId === layer.id) return;
@@ -421,12 +423,14 @@ export default function CanvasLayer({
     }
   }
 
-  const responsiveOverride = layer.responsive?.[activeBreakpoint] || {};
-  const width = responsiveOverride.width ?? layer.width;
-  const height = responsiveOverride.height ?? layer.height;
-  const directionOverride = responsiveOverride.autoLayout?.direction;
-  const visibility = responsiveOverride.visibility || "inherit";
   if (visibility === "hidden") return null;
+
+  const isArtboard = layer.type === "artboard";
+  const backgroundFill = isArtboard ? "#f8fafc" : styleProps?.fill;
+  const artboardBorder = isArtboard ? "2px dashed #3b82f6" : undefined;
+  const artboardShadow = isArtboard
+    ? "0 0 0 1px rgba(59,130,246,0.35) inset, 0 15px 60px -25px rgba(15,23,42,0.35)"
+    : styleProps?.shadow;
 
   const style = {
     position: "absolute",
@@ -438,11 +442,13 @@ export default function CanvasLayer({
     borderRadius: styleProps?.borderRadius || 0,
     overflow: "hidden",
     color: styleProps?.color,
-    background: styleProps?.fill,
-    boxShadow: styleProps?.shadow,
-    border: styleProps?.borderWidth
-      ? `${styleProps.borderWidth}px solid ${styleProps.borderColor || "#000"}`
-      : undefined,
+    background: backgroundFill,
+    boxShadow: artboardShadow,
+    border: artboardBorder
+      ? artboardBorder
+      : styleProps?.borderWidth
+        ? `${styleProps.borderWidth}px solid ${styleProps.borderColor || "#000"}`
+        : undefined,
     borderRadius: styleProps?.radius ?? styleProps?.borderRadius ?? 0,
     pointerEvents: editingTextId === layer.id ? "auto" : "initial",
     outline: isSelected ? "1px dashed #3b82f6" : "none",

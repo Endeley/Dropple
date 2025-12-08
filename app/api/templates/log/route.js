@@ -8,6 +8,9 @@ export async function POST(req) {
     const body = await req.json();
     const { templateId, type } = body || {};
     if (!templateId || !type) return Response.json({ error: "Missing templateId or type" }, { status: 400 });
+    if (templateId.startsWith("tpl-")) {
+      return Response.json({ success: true });
+    }
     await convexClient.mutation(api.templateEvents.logTemplateEvent, { templateId, type });
     return Response.json({ success: true });
   } catch (err) {

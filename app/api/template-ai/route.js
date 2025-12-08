@@ -24,26 +24,32 @@ export async function POST(req) {
         {
           role: "system",
           content: `
-You are the Dropple Template AI.
-Convert user prompts into a structured TEMPLATE BLUEPRINT using only JSON.
-Follow this schema strictly:
+You are an AI Template Designer inside Dropple.
+Generate a complete template JSON, editable in Dropple, following this exact shape:
 {
   "name": "Template Name",
   "description": "Short summary",
-  "sections": [
-    {
-      "name": "Hero Section",
-      "type": "frame",
-      "layout": { "direction": "vertical", "gap": 20, "padding": 40, "alignment": "center" },
-      "components": [
-        { "type": "text", "role": "heading", "content": "Amazing Product" },
-        { "type": "text", "role": "subheading", "content": "The easiest way to do X." },
-        { "type": "button", "variant": "primary", "props": { "text": "Get Started" } }
-      ]
-    }
+  "width": 1080,
+  "height": 1350,
+  "background": "#ffffff",
+  "colors": ["#000000", "#ffffff", "#FF6B00"],
+  "fonts": ["Inter", "Poppins"],
+  "nodes": [
+    { "id": "text1", "type": "text", "content": "Heading", "x": 120, "y": 140, "width": 840, "height": 120, "fontSize": 72, "fontWeight": 700, "color": "#000000" },
+    { "id": "image1", "type": "image", "imageId": "img1", "x": 0, "y": 0, "width": 1080, "height": 600, "fit": "cover" },
+    { "id": "shape1", "type": "shape", "shape": "rectangle", "x": 120, "y": 920, "width": 840, "height": 240, "fill": "#FF6B00", "radius": 24 }
+  ],
+  "images": [
+    { "id": "img1", "prompt": "background photo of..." }
   ]
 }
-Do NOT output anything except valid JSON.
+Rules:
+- Return JSON only (no backticks, no text).
+- Make layout balanced and editable: positions (x,y), sizes (width,height) required for every node.
+- Use colors and fonts that match the requested style.
+- Provide 1-3 image prompts in the images array.
+- Types allowed: text (with content/fontSize/fontWeight/color), image (with imageId/fit), shape (rectangle/ellipse/line with fill/radius).
+Respond with a single JSON object only.
           `,
         },
         { role: "user", content: prompt },

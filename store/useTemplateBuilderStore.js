@@ -1138,15 +1138,22 @@ export const useTemplateBuilderStore = create((set, get) => {
   },
 
   addArtboard: () => {
+    const canvasWidth = get().currentTemplate?.width || 1440;
+    const canvasHeight = get().currentTemplate?.height || 1024;
+    const artboardWidth = Math.min(1200, Math.max(320, canvasWidth - 80));
+    const artboardHeight = Math.min(900, Math.max(240, canvasHeight - 80));
+    const centeredX = Math.max(20, Math.round((canvasWidth - artboardWidth) / 2));
+    const centeredY = Math.max(20, Math.round((canvasHeight - artboardHeight) / 2));
     const id = "artboard_" + crypto.randomUUID();
     const artboard = {
       id,
       type: "artboard",
       name: "Artboard",
-      x: 100,
-      y: 100,
-      width: 1440,
-      height: 1024,
+      x: centeredX,
+      y: centeredY,
+      width: artboardWidth,
+      height: artboardHeight,
+      props: { fill: "#f8fafc" },
       children: [],
       isArtboard: true,
       interactions: [],

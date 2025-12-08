@@ -3,6 +3,9 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 
+const TEMPLATE_PLACEHOLDER =
+  "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80";
+
 const Section = ({ title, items }) => {
   if (!items?.length) return null;
   return (
@@ -15,10 +18,16 @@ const Section = ({ title, items }) => {
         {items.map((t) => (
           <div key={t.id} className="rounded-xl border border-neutral-200 bg-white shadow-sm overflow-hidden group">
             <div className="relative h-44 bg-neutral-100">
-              {t.previewUrl ? (
-                <Image src={t.previewUrl} alt={t.name} fill className="object-cover" sizes="320px" />
+              {t.previewUrl || t.thumbnail || t.thumbnailUrl ? (
+                <Image
+                  src={t.previewUrl || t.thumbnail || t.thumbnailUrl || TEMPLATE_PLACEHOLDER}
+                  alt={t.name}
+                  fill
+                  className="object-cover"
+                  sizes="320px"
+                />
               ) : (
-                <div className="w-full h-full bg-gradient-to-br from-neutral-100 to-neutral-200" />
+                <Image src={TEMPLATE_PLACEHOLDER} alt={t.name} fill className="object-cover" sizes="320px" />
               )}
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition" />
               <div className="absolute top-2 left-2 text-[11px] px-2 py-[2px] rounded-full bg-white/90 text-neutral-700 border border-neutral-200">

@@ -4,9 +4,13 @@ import { api } from "@/convex/_generated/api";
 import { convexClient } from "@/lib/convex/client";
 
 export async function GET(_request, { params }) {
-  const { id } = params;
+  const resolved = params instanceof Promise ? await params : params;
+  const { id } = resolved || {};
   if (!id) {
     return Response.json({ error: "Missing template id" }, { status: 400 });
+  }
+  if (id.startsWith("tpl-")) {
+    return Response.json({ error: "Not found" }, { status: 404 });
   }
 
   try {

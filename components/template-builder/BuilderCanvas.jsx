@@ -31,8 +31,6 @@ export default function BuilderCanvas() {
 
   return (
     <>
-      <DevicePreviewBar />
-      <PageSwitcher />
       <div
         ref={containerRef}
         className="flex-1 bg-slate-100 flex items-center justify-center overflow-auto relative"
@@ -73,10 +71,23 @@ export default function BuilderCanvas() {
       >
         <KeyboardShortcuts />
         <ExportCodeModal />
+        <div className="absolute left-4 bottom-4 z-10">
+          <DevicePreviewBar />
+          <div className="mt-2">
+            <PageSwitcher />
+          </div>
+        </div>
         <div
           id="dropple-canvas"
-          className="relative bg-white border border-slate-200 shadow-lg rounded-md"
-          style={{ width: currentTemplate.width, height: currentTemplate.height }}
+          className="relative rounded-md border border-slate-200 shadow-lg"
+          style={{
+            width: currentTemplate.width,
+            height: currentTemplate.height,
+            backgroundImage:
+              "linear-gradient(90deg, rgba(148,163,184,0.12) 1px, transparent 1px), linear-gradient(180deg, rgba(148,163,184,0.12) 1px, transparent 1px)",
+            backgroundSize: "24px 24px",
+            backgroundColor: "#f8fafc",
+          }}
         >
           <MultiplayerCursors />
           {currentTemplate.layers

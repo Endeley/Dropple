@@ -12,6 +12,68 @@ import { useAssetStore } from "@/zustand/assetStore";
 import TemplateDetailModal from "./TemplateDetailModal.jsx";
 import TemplateAIAdvancedModal from "./TemplateAIAdvancedModal.jsx";
 
+const FALLBACK_TEMPLATES = [
+  {
+    id: "tpl-hero-minimal",
+    type: "template",
+    name: "Minimal Hero",
+    category: "Website",
+    tags: ["hero", "minimal", "light"],
+    width: 1440,
+    height: 900,
+    previewUrl: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80",
+    isLocal: true,
+    insertCount: 0,
+    viewCount: 0,
+    favoriteCount: 0,
+  },
+  {
+    id: "tpl-dashboard",
+    type: "template",
+    name: "Dashboard Overview",
+    category: "Dashboard",
+    tags: ["dashboard", "dark", "data"],
+    width: 1440,
+    height: 1024,
+    previewUrl: "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80",
+    isLocal: true,
+    insertCount: 0,
+    viewCount: 0,
+    favoriteCount: 0,
+  },
+  {
+    id: "tpl-mobile-app",
+    type: "template",
+    name: "Mobile App UI",
+    category: "Mobile",
+    tags: ["mobile", "app", "light"],
+    width: 390,
+    height: 844,
+    previewUrl: "https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=900&q=80",
+    isLocal: true,
+    insertCount: 0,
+    viewCount: 0,
+    favoriteCount: 0,
+  },
+  {
+    id: "tpl-portfolio",
+    type: "template",
+    name: "Portfolio Grid",
+    category: "Portfolio",
+    tags: ["portfolio", "grid", "gallery"],
+    width: 1440,
+    height: 900,
+    previewUrl: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80",
+    isLocal: true,
+    insertCount: 0,
+    viewCount: 0,
+    favoriteCount: 0,
+  },
+];
+
+const TEMPLATE_PLACEHOLDER =
+  "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80";
+
 const tabs = [
   { id: "templates", label: "Templates" },
   { id: "my-templates", label: "My Templates" },
@@ -80,7 +142,8 @@ export default function AssetBrowser() {
           signal: controller.signal,
         });
         const data = await res.json();
-        setTemplates(data.templates || []);
+        const incoming = data.templates || [];
+        setTemplates(incoming.length ? incoming : FALLBACK_TEMPLATES);
       } catch (err) {
         if (err.name !== "AbortError") console.error("Failed to load templates", err);
       } finally {
@@ -98,7 +161,8 @@ export default function AssetBrowser() {
       try {
         const res = await fetch("/api/templates/recommended", { signal: controller.signal });
         const data = await res.json();
-        setRecommended(data.templates || []);
+        const list = data.templates || [];
+        setRecommended(list.length ? list : FALLBACK_TEMPLATES.slice(0, 2));
       } catch (err) {
         if (err.name !== "AbortError") console.error("Failed to load recommended", err);
       }
@@ -108,8 +172,33 @@ export default function AssetBrowser() {
   }, [open, tab]);
 
   useEffect(() => {
+    if (!open || tab !== "templates") return;
+    const controller = new AbortController();
+    const load = async () => {
+      try {
+        const [tRes, pRes, rRes] = await Promise.all([
+          fetch("/api/templates/trending", { signal: controller.signal }),
+          fetch("/api/templates/popular", { signal: controller.signal }),
+          fetch("/api/templates/recent", { signal: controller.signal }),
+        ]);
+        const [tData, pData, rData] = await Promise.all([tRes.json(), pRes.json(), rRes.json()]);
+        const t = tData.templates || [];
+        const p = pData.templates || [];
+        const r = rData.templates || [];
+        setTrending(t.length ? t : FALLBACK_TEMPLATES.slice(0, 2));
+        setPopular(p.length ? p : FALLBACK_TEMPLATES.slice(0, 2));
+        setRecent(r.length ? r : FALLBACK_TEMPLATES.slice(0, 2));
+      } catch (err) {
+        if (err.name !== "AbortError") console.error("Failed to load template lists", err);
+      }
+    };
+    load();
+    return () => controller.abort();
+  }, [open, tab]);
+
+  useEffect(() => {
     const loadDetailData = async () => {
-      if (!selectedTemplate?.id || selectedTemplate.type !== "template") {
+      if (!selectedTemplate?.id || selectedTemplate.type !== "template" || selectedTemplate.isLocal) {
         setStats(null);
         setRelated([]);
         return;
@@ -183,14 +272,14 @@ export default function AssetBrowser() {
   const catalogForTab = useMemo(() => {
     if (tab === "templates") return templates;
     if (tab === "my-templates") return (myTemplates || []).map((t) => ({
-      id: t._id,
+      id: t.id || t._id,
       type: "template",
       name: t.name,
       category: t.category || "General",
       creator: t.authorId || t.userId || "",
       width: t.width,
       height: t.height,
-      previewUrl: t.thumbnail || null,
+      previewUrl: t.previewUrl || t.thumbnailUrl || t.thumbnail || TEMPLATE_PLACEHOLDER,
     }));
     if (tab === "components") {
       return Object.values(components || {}).map((c) => ({
@@ -258,6 +347,21 @@ export default function AssetBrowser() {
     const matchColor = tagMatches(colorFilter, tags);
     return matchSearch && matchCategory && matchLayout && matchStyle && matchColor;
   });
+  const hasActiveFilters =
+    (search && search.trim().length > 0) ||
+    category !== "All" ||
+    layoutFilter !== "All" ||
+    styleFilter !== "All" ||
+    colorFilter !== "All";
+
+  const clearFilters = () => {
+    setSearch("");
+    setCategory("All");
+    setLayoutFilter("All");
+    setStyleFilter("All");
+    setColorFilter("All");
+    setSort("recent");
+  };
 
   const insertItem = async (item) => {
     const id = crypto.randomUUID();
@@ -288,6 +392,18 @@ export default function AssetBrowser() {
       children: [],
       parent: null,
     };
+
+    if (item.type === "template" && item.isLocal) {
+      // Local fallback template: insert a simple frame
+      addNode({
+        ...baseNode,
+        type: "frame",
+        background: "#ffffff",
+      });
+      setSelectedManual([id]);
+      close();
+      return;
+    }
 
     if (item.type === "template") {
       const hasPremium = false; // TODO: replace with real subscription check
@@ -417,10 +533,16 @@ export default function AssetBrowser() {
       onDragEnd={() => clearDraggingComponent()}
     >
       <div className="relative h-40 w-full bg-neutral-100">
-        {item.previewUrl ? (
-          <Image src={item.previewUrl} alt={item.name} fill className="object-cover" sizes="320px" />
+        {item.previewUrl || item.thumbnail || item.thumbnailUrl ? (
+          <Image
+            src={item.previewUrl || item.thumbnail || item.thumbnailUrl || TEMPLATE_PLACEHOLDER}
+            alt={item.name}
+            fill
+            className="object-cover"
+            sizes="320px"
+          />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-neutral-100 to-neutral-200" />
+          <Image src={TEMPLATE_PLACEHOLDER} alt={item.name} fill className="object-cover" sizes="320px" />
         )}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition" />
         <div className="absolute inset-x-3 bottom-3 flex gap-2 opacity-0 group-hover:opacity-100 transition">
@@ -428,7 +550,7 @@ export default function AssetBrowser() {
             className="flex-1 px-2 py-1 rounded-md bg-white text-xs font-semibold shadow"
             onClick={(e) => {
               e.stopPropagation();
-              if (item.type === "template") logTemplateEvent(item.id, "preview");
+              if (item.type === "template" && !item.isLocal) logTemplateEvent(item.id, "preview");
               insertItem(item);
             }}
           >
@@ -438,7 +560,7 @@ export default function AssetBrowser() {
             className="px-2 py-1 rounded-md bg-white/90 text-xs font-semibold shadow"
             onClick={(e) => {
               e.stopPropagation();
-              if (item.type === "template") logTemplateEvent(item.id, "view");
+              if (item.type === "template" && !item.isLocal) logTemplateEvent(item.id, "view");
               setSelectedTemplate(item);
             }}
           >
@@ -570,6 +692,17 @@ export default function AssetBrowser() {
             ) : null}
             {tab === "templates" ? (
               <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <button
+                    className="px-3 py-1.5 rounded-md border border-neutral-200 text-xs text-neutral-700 hover:bg-neutral-100"
+                    onClick={clearFilters}
+                  >
+                    Clear filters
+                  </button>
+                  {hasActiveFilters ? (
+                    <span className="text-[11px] text-neutral-500">Filters active</span>
+                  ) : null}
+                </div>
                 <div className="flex items-center gap-2 overflow-x-auto">
                   <span className="text-[11px] uppercase tracking-[0.08em] text-neutral-500 font-semibold">Layout</span>
                   {layoutOptions.map((opt) => (
@@ -637,8 +770,16 @@ export default function AssetBrowser() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="h-48 rounded-xl border border-dashed border-neutral-200 bg-neutral-50 flex items-center justify-center text-neutral-500 text-sm">
-              No results. Try a different search or tab.
+            <div className="h-48 rounded-xl border border-dashed border-neutral-200 bg-neutral-50 flex flex-col items-center justify-center text-neutral-500 text-sm gap-2">
+              <span>No results. Try a different search or tab.</span>
+              {hasActiveFilters ? (
+                <button
+                  className="px-3 py-1.5 rounded-md border border-neutral-200 text-xs text-neutral-700 hover:bg-neutral-100"
+                  onClick={clearFilters}
+                >
+                  Clear filters
+                </button>
+              ) : null}
             </div>
           ) : (
             <div className="space-y-4">
@@ -689,21 +830,30 @@ export default function AssetBrowser() {
           related={related}
           onClose={() => setSelectedTemplate(null)}
           onInsert={() => {
-            if (selectedTemplate.type === "template") logTemplateEvent(selectedTemplate.id, "insert");
+            if (selectedTemplate.type === "template" && !selectedTemplate.isLocal)
+              logTemplateEvent(selectedTemplate.id, "insert");
             insertItem(selectedTemplate);
             setSelectedTemplate(null);
           }}
           onFavorite={() => {
-            logTemplateEvent(selectedTemplate.id, "favorite");
-            toggleFavorite(selectedTemplate.id);
+            if (!selectedTemplate.isLocal) {
+              logTemplateEvent(selectedTemplate.id, "favorite");
+              toggleFavorite(selectedTemplate.id);
+            }
           }}
           onRemix={() => {
-            logTemplateEvent(selectedTemplate.id, "remix");
-            setAiTargetTemplate(selectedTemplate);
+            if (!selectedTemplate.isLocal) {
+              logTemplateEvent(selectedTemplate.id, "remix");
+              setAiTargetTemplate(selectedTemplate);
+            } else {
+              alert("AI Remix is available for published templates.");
+            }
           }}
           onDetail={() => {
-            logTemplateEvent(selectedTemplate.id, "view");
-            window.open(`/templates/${selectedTemplate.id}`, "_blank");
+            if (!selectedTemplate.isLocal) {
+              logTemplateEvent(selectedTemplate.id, "view");
+              window.open(`/templates/${selectedTemplate.id}`, "_blank");
+            }
           }}
           onSelectRelated={(item) => setSelectedTemplate(item)}
         />

@@ -2,6 +2,9 @@
 
 import Image from "next/image";
 
+const TEMPLATE_PLACEHOLDER =
+  "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80";
+
 export default function TemplateDetailModal({
   template,
   stats,
@@ -14,6 +17,8 @@ export default function TemplateDetailModal({
   onSelectRelated,
 }) {
   if (!template) return null;
+
+  const disableActions = template.isLocal;
 
   const hasVersions = template?.versions?.length > 1;
 
@@ -42,10 +47,16 @@ export default function TemplateDetailModal({
         </div>
 
         <div className="w-full aspect-[16/10] bg-neutral-50 rounded-lg overflow-hidden border border-neutral-200 relative mb-3">
-          {template.previewUrl ? (
-            <Image src={template.previewUrl} alt={template.name} fill className="object-contain" sizes="400px" />
+          {template.previewUrl || template.thumbnail || template.thumbnailUrl ? (
+            <Image
+              src={template.previewUrl || template.thumbnail || template.thumbnailUrl || TEMPLATE_PLACEHOLDER}
+              alt={template.name}
+              fill
+              className="object-contain"
+              sizes="400px"
+            />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-neutral-100 to-neutral-200" />
+            <Image src={TEMPLATE_PLACEHOLDER} alt={template.name} fill className="object-cover" sizes="400px" />
           )}
         </div>
 
@@ -140,6 +151,7 @@ export default function TemplateDetailModal({
           <button
             className="px-3 py-2 rounded-md border border-neutral-200 text-sm text-neutral-700 hover:bg-neutral-100"
             onClick={onFavorite}
+            disabled={disableActions}
           >
             Save
           </button>
@@ -149,12 +161,14 @@ export default function TemplateDetailModal({
           <button
             className="flex-1 px-3 py-2 rounded-md bg-neutral-900 text-white text-sm font-semibold hover:bg-neutral-800 transition"
             onClick={onRemix}
+            disabled={disableActions}
           >
             AI Remix
           </button>
           <button
             className="px-3 py-2 rounded-md border border-neutral-200 text-sm text-neutral-700 hover:bg-neutral-100"
             onClick={onDetail}
+            disabled={disableActions}
           >
             Detail
           </button>

@@ -10,10 +10,15 @@ export async function POST(request) {
     return Response.json({ error: "missing data" }, { status: 400 });
   }
 
-  await convexClient.mutation(api.templates.updateTemplate, {
-    id,
-    data: { thumbnail },
-  });
+  try {
+    await convexClient.mutation(api.templates.updateTemplate, {
+      id,
+      data: { thumbnail },
+    });
+  } catch (err) {
+    console.error("Convex updateTemplate failed", err);
+    return Response.json({ error: "Update failed", success: false }, { status: 400 });
+  }
 
   return Response.json({ success: true });
 }

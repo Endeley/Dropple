@@ -3,7 +3,11 @@ import { v } from "convex/values";
 
 export const createStyle = mutation(async ({ db, auth }, { name, type, value }) => {
   const identity = await auth.getUserIdentity();
-  const userId = identity.tokenIdentifier;
+  const userId = identity?.tokenIdentifier;
+
+  if (!userId) {
+    throw new Error("Not authenticated");
+  }
 
   return await db.insert("styles", {
     userId,
@@ -16,7 +20,11 @@ export const createStyle = mutation(async ({ db, auth }, { name, type, value }) 
 
 export const getStyles = query(async ({ db, auth }) => {
   const identity = await auth.getUserIdentity();
-  const userId = identity.tokenIdentifier;
+  const userId = identity?.tokenIdentifier;
+
+  if (!userId) {
+    return [];
+  }
 
   return await db
     .query("styles")

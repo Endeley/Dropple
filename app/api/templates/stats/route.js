@@ -7,6 +7,10 @@ export async function GET(req) {
   const url = new URL(req.url);
   const id = url.searchParams.get("id");
   if (!id) return Response.json({ error: "Missing id" }, { status: 400 });
+  // Local/fallback templates don't exist in Convex
+  if (id.startsWith("tpl-")) {
+    return Response.json({ stats: { views: 0, inserts: 0, favorites: 0 } });
+  }
   try {
     const stats = await convexClient.query(api.templateStats.getTemplateStats, { id });
     return Response.json({ stats });

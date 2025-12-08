@@ -2,6 +2,7 @@
 
 import { api } from "@/convex/_generated/api";
 import { convexClient } from "@/lib/convex/client";
+import { mapTemplateDoc } from "../_mapTemplate";
 
 export async function GET(request) {
   const url = new URL(request.url);
@@ -38,28 +39,7 @@ export async function GET(request) {
     return (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
   });
 
-  const mapped = sorted.map((tpl) => ({
-    id: tpl._id,
-    name: tpl.name,
-    category: tpl.category || "General",
-    tags: tpl.tags || [],
-    description: tpl.description || "",
-    previewUrl: tpl.thumbnailUrl || tpl.thumbnail || null,
-    width: tpl.width,
-    height: tpl.height,
-    creator: tpl.creatorName || tpl.authorId || tpl.userId || "",
-    creatorAvatar: tpl.creatorAvatar || "",
-    insertCount: tpl.insertCount || 0,
-    viewCount: tpl.viewCount || 0,
-    favoriteCount: tpl.favoriteCount || 0,
-    score: tpl.score || 0,
-    updatedAt: tpl.updatedAt,
-    license: tpl.license || "free",
-    price: tpl.price || 0,
-    versions: tpl.versions || [],
-    publishedAt: tpl.publishedAt,
-    type: "template",
-  }));
+  const mapped = sorted.map((tpl) => mapTemplateDoc(tpl)).filter(Boolean);
 
   return Response.json({ templates: mapped });
 }
