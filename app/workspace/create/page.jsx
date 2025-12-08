@@ -7,12 +7,14 @@ import BuilderCanvas from "@/components/template-builder/BuilderCanvas";
 import BuilderRightPanel from "@/components/template-builder/BuilderRightPanel";
 import TimelineDock from "@/components/template-builder/TimelineDock";
 import AssistantPanel from "@/components/template-builder/AssistantPanel";
+import LayersPanel from "@/components/template-builder/LayersPanel";
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
 export default function WorkspaceCreatePage() {
   const { currentTemplate, setEditingMode, setComponents, components, addImageLayer } = useTemplateBuilderStore();
+  const hydrateProjectFromConvex = useTemplateBuilderStore((s) => s.hydrateProjectFromConvex);
   const searchParams = useSearchParams();
   const loadTemplateFromDB = useTemplateBuilderStore((s) => s.loadTemplateFromDB);
 
@@ -97,6 +99,9 @@ export default function WorkspaceCreatePage() {
       useTemplateBuilderStore.setState({
         currentTemplate: { ...currentTemplate, id: newId },
       });
+      hydrateProjectFromConvex(newId);
+    } else {
+      hydrateProjectFromConvex(currentTemplate.id);
     }
 
     if (storedComponent) {
@@ -153,12 +158,15 @@ export default function WorkspaceCreatePage() {
   }, [searchParams]);
 
   return (
-    <div className="w-full min-h-screen flex flex-col bg-slate-50 text-gray-900">
+    <div className="w-full h-screen flex flex-col bg-slate-50 text-gray-900 overflow-hidden">
       <BuilderHeader />
       <TemplateToolbar />
       <div className="flex flex-1 overflow-hidden">
         <BuilderSidebar />
-        <BuilderCanvas />
+        <LayersPanel />
+        <div className="flex-1 overflow-hidden">
+          <BuilderCanvas />
+        </div>
         <BuilderRightPanel />
       </div>
       <TimelineDock />

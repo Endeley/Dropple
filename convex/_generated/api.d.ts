@@ -25,6 +25,7 @@ import type * as components_ from "../components.js";
 import type * as cron from "../cron.js";
 import type * as debateRooms from "../debateRooms.js";
 import type * as deployments from "../deployments.js";
+import type * as editorStates from "../editorStates.js";
 import type * as events from "../events.js";
 import type * as knowledge from "../knowledge.js";
 import type * as messages from "../messages.js";
@@ -75,6 +76,7 @@ declare const fullApi: ApiFromModules<{
   cron: typeof cron;
   debateRooms: typeof debateRooms;
   deployments: typeof deployments;
+  editorStates: typeof editorStates;
   events: typeof events;
   knowledge: typeof knowledge;
   messages: typeof messages;

@@ -25,6 +25,7 @@ export default function CanvasLayer({
     clearSelection,
     selectLayer,
     updateLayer,
+    writeNodePatch,
     editingTextId,
     setEditingTextId,
     stopEditingText,
@@ -52,6 +53,8 @@ export default function CanvasLayer({
   const loadBehaviors = useBehaviorsStore((state) => state.loadBehaviors);
   const [dragging, setDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [draggedOverIdx, setDraggedOverIdx] = useState(null);
+  const [reorderGuide, setReorderGuide] = useState(null);
   const renderX = (parentOffset?.x || 0) + layer.x;
   const renderY = (parentOffset?.y || 0) + layer.y;
   const isHidden = layer.hidden;
@@ -140,6 +143,14 @@ export default function CanvasLayer({
     controls,
     parentVariant,
   );
+
+  const offsetLine = (children, targetIdx, isVertical) => {
+    const sizes = children.map((c) => (isVertical ? c.height : c.width));
+    const gaps = (layer.autoLayout?.gap || 0) * targetIdx;
+    const padding = layer.autoLayout?.padding || 0;
+    const sumBefore = sizes.slice(0, targetIdx).reduce((a, b) => a + b, 0);
+    return padding + sumBefore + gaps;
+  };
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
   const scrollStyle = buildScrollStyle(scrollDef, scrollYProgress);
   const selectedAnim =
@@ -198,6 +209,7 @@ export default function CanvasLayer({
         x: e.clientX - renderX,
         y: e.clientY - renderY,
       });
+      setReorderGuide(null);
       setActiveGuides([]);
     }
   }
@@ -207,16 +219,69 @@ export default function CanvasLayer({
       !dragging ||
       editingTextId === layer.id ||
       isInstanceChild ||
-      (parent && parent.type === "frame" && parent.autoLayout?.enabled) ||
       layer.locked
     )
       return;
     e.preventDefault();
+
+    // Auto-layout parent: reorder children instead of free-move
+    if (!isComponentMaster && parent && parent.type === "frame" && parent.autoLayout?.enabled) {
+      const parentChildren = (parent.children || [])
+        .map((cid) => currentTemplate.layers.find((l) => l.id === cid))
+        .filter(Boolean);
+      const isVertical =
+        parent.autoLayout.direction === "vertical" ||
+        (directionOverride === "vertical" && directionOverride !== "horizontal");
+      const padding = parent.autoLayout.padding || 0;
+      const gap = parent.autoLayout.gap || 0;
+      const parentOrigin = isVertical ? parent.y + (parentOffset?.y || 0) : parent.x + (parentOffset?.x || 0);
+      const cursorPos = (isVertical ? e.clientY : e.clientX) - (parentOffset?.[isVertical ? "y" : "x"] || 0);
+      const deadZone = 4;
+
+      let offset = padding;
+      let targetIdx = parentChildren.length;
+      parentChildren.forEach((child, idx) => {
+        const size = isVertical ? child.height : child.width;
+        const start = parentOrigin + offset;
+        const mid = start + size / 2;
+        if (cursorPos < mid - deadZone) {
+          targetIdx = idx;
+          return;
+        }
+        offset += size + gap;
+      });
+      if (targetIdx > parentChildren.length) targetIdx = parentChildren.length - 1;
+      if (draggedOverIdx !== targetIdx) {
+        setDraggedOverIdx(targetIdx);
+        const move = useTemplateBuilderStore.getState().moveNode;
+        beginHistoryTransaction("reorder auto-layout");
+        move(layer.id, parent.id, targetIdx, { undoable: false });
+        endHistoryTransaction();
+      }
+      const guidePos =
+        padding + offsetLine(parentChildren, targetIdx, isVertical) + targetIdx * gap;
+      const crossPadding = parent.autoLayout?.padding || 0;
+      const guideLength = isVertical
+        ? parent.width - crossPadding * 2
+        : parent.height - crossPadding * 2;
+      const placeholderSize =
+        (isVertical ? layer.height : layer.width) + gap * 0.5;
+      setReorderGuide({
+        axis: isVertical ? "y" : "x",
+        pos: guidePos,
+        parentId: parent.id,
+        length: guideLength,
+        inset: crossPadding,
+        ghostSize: placeholderSize,
+      });
+      return;
+    }
+
     if (isComponentMaster) {
       setActiveGuides([]);
       const relX = e.clientX - dragOffset.x - (parentOffset?.x || 0);
       const relY = e.clientY - dragOffset.y - (parentOffset?.y || 0);
-      updateLayer(layer.id, { x: relX, y: relY });
+      writeNodePatch(layer.id, { x: relX, y: relY });
       return;
     }
     const layersMap = new Map(currentTemplate.layers.map((l) => [l.id, l]));
@@ -293,12 +358,15 @@ export default function CanvasLayer({
     setActiveGuides(guides);
     const relX = newRenderX - (parentOffset?.x || 0);
     const relY = newRenderY - (parentOffset?.y || 0);
-    updateLayer(layer.id, { x: relX, y: relY });
+    if (parent?.autoLayout?.enabled) return;
+    writeNodePatch(layer.id, { x: relX, y: relY });
   }
 
   function handleMouseUp() {
     setDragging(false);
     setActiveGuides([]);
+    setReorderGuide(null);
+    setDraggedOverIdx(null);
   }
 
   const triggerMap = layer.motionTriggerMap || {};
@@ -423,17 +491,17 @@ export default function CanvasLayer({
         const newHeight = mainSize;
         const newWidth = Math.max(layer.width, autoLayout.padding * 2 + crossMax);
         if (layer.height !== newHeight || layer.width !== newWidth) {
-          updateLayer(layer.id, { height: newHeight, width: newWidth });
+          writeNodePatch(layer.id, { height: newHeight, width: newWidth });
         }
       } else {
         const newWidth = mainSize;
         const newHeight = Math.max(layer.height, autoLayout.padding * 2 + crossMax);
         if (layer.width !== newWidth || layer.height !== newHeight) {
-          updateLayer(layer.id, { width: newWidth, height: newHeight });
+          writeNodePatch(layer.id, { width: newWidth, height: newHeight });
         }
       }
     }
-  }, [isComponentMaster, layer, autoLayout.enabled, autoLayout.direction, autoLayout.padding, autoLayout.gap, autoLayout.hugging, currentTemplate.layers, updateLayer, layer.children, layer.width, layer.height, directionOverride]);
+  }, [isComponentMaster, layer, autoLayout.enabled, autoLayout.direction, autoLayout.padding, autoLayout.gap, autoLayout.hugging, currentTemplate.layers, updateLayer, writeNodePatch, layer.children, layer.width, layer.height, directionOverride]);
 
   useEffect(() => {
     if (isComponentMaster) return;
@@ -476,14 +544,14 @@ export default function CanvasLayer({
     }
 
     if (newX !== layer.x || newY !== layer.y || newWidth !== layer.width || newHeight !== layer.height) {
-      updateLayer(layer.id, {
+      writeNodePatch(layer.id, {
         x: newX,
         y: newY,
         width: newWidth,
         height: newHeight,
       });
     }
-  }, [isComponentMaster, parent, layer, updateLayer]);
+  }, [isComponentMaster, parent, layer, writeNodePatch]);
 
   const activeTheme = themes.find((t) => t._id === activeThemeId) || themes[0] || null;
 
@@ -583,10 +651,10 @@ export default function CanvasLayer({
                 updateInstanceSlots(parentInstanceId, { [layer.slotId]: e.target.innerText });
               }
             }
-            updateLayer(layer.id, { content: e.target.innerText });
+            writeNodePatch(layer.id, { content: e.target.innerText });
           }}
           onInput={(e) => {
-            updateLayer(layer.id, { content: e.target.innerText });
+            writeNodePatch(layer.id, { content: e.target.innerText });
             if (layer.slotId && !isComponentMaster) {
               const parentInstanceId = layer.parentId || layer.componentInstanceId || null;
               if (parentInstanceId && instanceRegistry[parentInstanceId]) {
@@ -642,6 +710,56 @@ export default function CanvasLayer({
       {layer.type === "component-instance" && (
         <div className="w-full h-full relative">
           {renderComponentChildren()}
+          {reorderGuide && reorderGuide.parentId === layer.id && (
+            <>
+              <div
+                className="absolute pointer-events-none z-10 transition-opacity duration-150"
+                style={
+                  reorderGuide.axis === "y"
+                    ? {
+                        top: reorderGuide.pos,
+                        left: reorderGuide.inset ?? 0,
+                        width: reorderGuide.length || "100%",
+                        height: reorderGuide.ghostSize || 8,
+                        background: "rgba(88, 28, 135, 0.12)",
+                        borderRadius: 6,
+                        transform: "translateY(-50%)",
+                      }
+                    : {
+                        left: reorderGuide.pos,
+                        top: reorderGuide.inset ?? 0,
+                        height: reorderGuide.length || "100%",
+                        width: reorderGuide.ghostSize || 8,
+                        background: "rgba(88, 28, 135, 0.12)",
+                        borderRadius: 6,
+                        transform: "translateX(-50%)",
+                      }
+                }
+              />
+              <div
+                className="absolute pointer-events-none z-10 transition-opacity duration-150"
+                style={
+                  reorderGuide.axis === "y"
+                    ? {
+                        top: reorderGuide.pos,
+                        left: reorderGuide.inset ?? 0,
+                        width: reorderGuide.length || "100%",
+                        height: 2,
+                        background: "rgba(88, 28, 135, 0.9)",
+                        transform: "translateY(-1px)",
+                      }
+                    : {
+                        left: reorderGuide.pos,
+                        top: reorderGuide.inset ?? 0,
+                        height: reorderGuide.length || "100%",
+                        width: 2,
+                        background: "rgba(88, 28, 135, 0.9)",
+                        transform: "translateX(-1px)",
+                      }
+                }
+              />
+            </>
+          )}
         </div>
       )}
     </MotionWrapper>

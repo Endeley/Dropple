@@ -35,10 +35,10 @@ export default function TemplateToolbar() {
   const btn = (label, tool) => (
     <button
       onClick={() => handleToolClick(tool)}
-      className={`px-3 py-1 text-sm font-medium rounded-md border transition-colors ${
+      className={`px-4 py-2 text-sm font-semibold rounded-lg border transition-colors shadow-sm whitespace-nowrap ${
         activeTool === tool
-          ? "bg-purple-600 text-white border-purple-600 shadow-sm"
-          : "border-purple-100 text-purple-700 bg-white hover:bg-purple-50"
+          ? "bg-purple-600 text-white border-purple-600"
+          : "border-slate-200 text-slate-700 bg-white hover:bg-slate-50"
       }`}
     >
       {label}
@@ -46,19 +46,23 @@ export default function TemplateToolbar() {
   );
 
   return (
-    <div className="h-14 border-b border-slate-200 bg-white/95 backdrop-blur flex items-center gap-3 px-4 shadow-sm sticky top-14 z-20">
-      {btn("Select", "select")}
-      {btn("Text", "text")}
-      {btn("Shape", "shape")}
-      {btn("Frame", "frame")}
-      {btn("Image", "image")}
-      {btn("Component", "component")}
-      <button
-        onClick={() => addArtboard()}
-        className="ml-2 px-3 py-1 text-sm font-medium rounded-md border border-purple-600 text-purple-700 bg-purple-50 hover:bg-purple-100"
-      >
-        + Artboard
-      </button>
+    <div className="h-16 border-b border-slate-200 bg-white/95 backdrop-blur flex items-center justify-between px-4 shadow-sm sticky top-14 z-20">
+      <div className="flex items-center gap-2">
+        {btn("Select", "select")}
+        {btn("Text", "text")}
+        {btn("Shape", "shape")}
+        {btn("Frame", "frame")}
+        {btn("Image", "image")}
+        {btn("Component", "component")}
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => addArtboard()}
+          className="px-5 py-2 text-sm font-semibold rounded-lg border border-purple-600 text-purple-700 bg-purple-50 hover:bg-purple-100 shadow-sm whitespace-nowrap"
+        >
+          + Artboard
+        </button>
+      </div>
       <ComponentInsertModal open={insertOpen} onClose={() => setInsertOpen(false)} />
     </div>
   );

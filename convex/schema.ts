@@ -240,6 +240,16 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_project", ["projectId"]),
+  editorStates: defineTable({
+    projectId: v.string(),
+    templateId: v.optional(v.string()),
+    pages: v.optional(v.any()),
+    layers: v.optional(v.any()),
+    instanceRegistry: v.optional(v.any()),
+    updatedAt: v.number(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_template", ["templateId"]),
   styles: defineTable({
     userId: v.string(),
     type: v.string(), // "color" | "text" | "effect"

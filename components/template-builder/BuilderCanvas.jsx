@@ -71,7 +71,7 @@ export default function BuilderCanvas() {
       >
         <KeyboardShortcuts />
         <ExportCodeModal />
-        <div className="absolute left-4 bottom-4 z-10">
+        <div className="absolute left-4 bottom-24 z-10">
           <DevicePreviewBar />
           <div className="mt-2">
             <PageSwitcher />

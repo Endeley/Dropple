@@ -7,8 +7,10 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get("projectId");
-    if (!projectId) return Response.json({ error: "projectId required" }, { status: 400 });
     const comps = (await convexClient.query(api.components.listComponents, {})) || [];
+    if (!projectId) {
+      return Response.json({ components: comps });
+    }
     const filtered = comps.filter((c) => c.projectId === projectId);
     return Response.json({ components: filtered });
   } catch (err) {

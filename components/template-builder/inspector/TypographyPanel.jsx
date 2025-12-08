@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 
 export default function TypographyPanel({ layer }) {
-  const { updateLayer } = useTemplateBuilderStore();
+  const { writeNodePatch } = useTemplateBuilderStore();
   const props = layer.props || {};
   const [loadingCopy, setLoadingCopy] = useState(false);
 
@@ -23,7 +23,7 @@ export default function TypographyPanel({ layer }) {
       const data = await res.json();
       if (data?.copy) {
         const option = String(data.copy).split("---")[0].trim();
-        updateLayer(layer.id, { content: option });
+        writeNodePatch(layer.id, { content: option });
       }
     } catch (err) {
       console.error("Rewrite copy failed", err);
@@ -43,9 +43,7 @@ export default function TypographyPanel({ layer }) {
           className="border p-1 rounded w-full"
           value={props.fontSize || 16}
           onChange={(e) =>
-            updateLayer(layer.id, {
-              props: { ...props, fontSize: Number(e.target.value) },
-            })
+            writeNodePatch(layer.id, { props: { ...props, fontSize: Number(e.target.value) } })
           }
         />
       </label>
@@ -56,9 +54,7 @@ export default function TypographyPanel({ layer }) {
           className="border p-1 rounded w-full"
           value={props.fontWeight || 400}
           onChange={(e) =>
-            updateLayer(layer.id, {
-              props: { ...props, fontWeight: Number(e.target.value) },
-            })
+            writeNodePatch(layer.id, { props: { ...props, fontWeight: Number(e.target.value) } })
           }
         >
           <option value={300}>Light</option>
@@ -76,9 +72,7 @@ export default function TypographyPanel({ layer }) {
           className="border p-1 rounded w-full"
           value={props.lineHeight || 1.4}
           onChange={(e) =>
-            updateLayer(layer.id, {
-              props: { ...props, lineHeight: Number(e.target.value) },
-            })
+            writeNodePatch(layer.id, { props: { ...props, lineHeight: Number(e.target.value) } })
           }
         />
       </label>

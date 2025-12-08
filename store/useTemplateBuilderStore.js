@@ -111,6 +111,7 @@ export const useTemplateBuilderStore = create((set, get) => {
         currentTemplate: { ...state.currentTemplate, layers },
       };
     });
+    get().triggerAutoSave();
   };
 
   const findLayer = (id) => {
@@ -183,6 +184,7 @@ export const useTemplateBuilderStore = create((set, get) => {
 
   const applyRemappedClones = (remapped, rootNewIds, shouldSelect = true) => {
     const state = get();
+    beginHistoryTransaction("paste layers");
     const context = getActiveContext();
 
     if (context.mode === "component" && context.component) {
@@ -261,6 +263,7 @@ export const useTemplateBuilderStore = create((set, get) => {
         get().currentTemplate.layers,
       );
       get().triggerAutoSave();
+      endHistoryTransaction();
       return;
     }
 
@@ -295,9 +298,11 @@ export const useTemplateBuilderStore = create((set, get) => {
     setActivePageLayers(layers);
 
     state.triggerAutoSave();
+    endHistoryTransaction();
   };
 
   const pushHistory = (label = "change") => {
+    if (get().historyTransaction) return;
     const snap = snapshotState(get());
     set((state) => {
       const next = state.historyStack.slice(0, state.historyPointer + 1);
@@ -319,6 +324,155 @@ export const useTemplateBuilderStore = create((set, get) => {
     }));
   };
 
+  const beginHistoryTransaction = (label = "change") => {
+    pushHistory(label);
+    set({ historyTransaction: true });
+  };
+
+  const endHistoryTransaction = () => set({ historyTransaction: false });
+
+  // --- NodeStore helpers (operate on active page layers) ---
+  const getNode = (id) => getActivePage().layers?.find((l) => l.id === id) || null;
+  const getChildren = (id) => (getActivePage().layers || []).filter((l) => l.parentId === id);
+
+  const setLayersWithHistory = (layers, label = "change") => {
+    pushHistory(label);
+    setActivePageLayers(layers);
+  };
+
+  const insertNodes = (nodes = [], { parentId = null, undoable = true } = {}) => {
+    if (!nodes.length) return;
+    if (undoable) beginHistoryTransaction("insert nodes");
+    const layers = [...(getActivePage().layers || [])];
+    nodes.forEach((n) => {
+      const node = { ...n };
+      if (parentId) {
+        node.parentId = parentId;
+        const parent = layers.find((l) => l.id === parentId);
+        if (parent) {
+          parent.children = Array.from(new Set([...(parent.children || []), node.id]));
+        }
+      }
+      layers.push(node);
+    });
+    setActivePageLayers(layers);
+    get().triggerAutoSave();
+    if (undoable) endHistoryTransaction();
+  };
+
+  const updateNode = (id, patch = {}, { undoable = true } = {}) => {
+    const layers = (getActivePage().layers || []).map((l) =>
+      l.id === id ? { ...l, ...patch } : l,
+    );
+    undoable ? setLayersWithHistory(layers, "update node") : setActivePageLayers(layers);
+    get().triggerAutoSave();
+  };
+
+  const deleteNode = (id, { undoable = true } = {}) => {
+    const removeIds = new Set();
+    const walk = (targetId) => {
+      removeIds.add(targetId);
+      getChildren(targetId).forEach((c) => walk(c.id));
+    };
+    walk(id);
+    let layers = (getActivePage().layers || []).filter((l) => !removeIds.has(l.id));
+    // prune children refs
+    layers = layers.map((l) => ({
+      ...l,
+      children: (l.children || []).filter((cid) => !removeIds.has(cid)),
+    }));
+    undoable ? setLayersWithHistory(layers, "delete node") : setActivePageLayers(layers);
+    get().triggerAutoSave();
+  };
+
+  const moveNode = (id, newParentId = null, index = null, { undoable = true } = {}) => {
+    const layers = [...(getActivePage().layers || [])];
+    const nodeIdx = layers.findIndex((l) => l.id === id);
+    if (nodeIdx === -1) return;
+    const node = { ...layers[nodeIdx], parentId: newParentId };
+    layers[nodeIdx] = node;
+    // remove from old parents
+    layers.forEach((l) => {
+      if (l.children?.includes(id)) {
+        l.children = l.children.filter((cid) => cid !== id);
+      }
+    });
+    if (newParentId) {
+      const parentIdx = layers.findIndex((l) => l.id === newParentId);
+      if (parentIdx !== -1) {
+        const parent = { ...layers[parentIdx] };
+        const nextChildren = [...(parent.children || [])];
+        if (index === null || index > nextChildren.length) index = nextChildren.length;
+        nextChildren.splice(index ?? nextChildren.length, 0, id);
+        parent.children = Array.from(new Set(nextChildren));
+        layers[parentIdx] = parent;
+      }
+    }
+    undoable ? setLayersWithHistory(layers, "move node") : setActivePageLayers(layers);
+    get().triggerAutoSave();
+  };
+
+  const duplicateNodes = (ids = [], { undoable = true } = {}) => {
+    if (undoable) pushHistory("duplicate nodes");
+    const created = [];
+    ids.forEach((id) => {
+      const newIds = get().duplicateLayer(id, { select: false });
+      if (newIds?.length) created.push(...newIds);
+    });
+    if (created.length) {
+      set({ selectedLayerId: created[0], selectedLayers: created });
+    }
+    get().triggerAutoSave();
+    return created;
+  };
+
+  const transformNode = (id, transform = {}) => {
+    const node = getNode(id);
+    if (!node) return;
+    const patch = {
+      x: transform.x ?? node.x,
+      y: transform.y ?? node.y,
+      width: transform.width ?? node.width,
+      height: transform.height ?? node.height,
+      rotation: transform.rotation ?? node.rotation,
+    };
+    updateNode(id, patch);
+  };
+
+  const writeNodePatch = (id, patch = {}) => {
+    const layer = getNode(id);
+    if (!layer) return;
+    const instId = layer.componentInstanceId;
+    const inst = instId ? get().instanceRegistry?.[instId] : null;
+    const isAttached = inst && !inst.detached;
+    // slot takes priority
+    if (layer.slotId && isAttached) {
+      if (patch.content !== undefined) {
+        get().updateInstanceSlots(instId, { [layer.slotId]: patch.content });
+        return;
+      }
+    }
+    if (isAttached) {
+      get().updateInstanceOverrides(instId, {
+        [layer.id]: { ...(inst.overrides?.[layer.id] || {}), ...patch },
+      });
+      return;
+    }
+    updateNode(layer.id, patch);
+  };
+
+  const toggleLayerVisibility = (id) => {
+    const node = getNode(id);
+    if (!node) return;
+    updateNode(id, { hidden: !node.hidden }, { undoable: true });
+  };
+
+  const toggleLayerLock = (id) => {
+    const node = getNode(id);
+    if (!node) return;
+    updateNode(id, { locked: !node.locked }, { undoable: true });
+  };
+
   const persistInstance = async (instanceId, frameOverride = null) => {
     const projectId = get().currentTemplate.id;
     if (!projectId) return;
@@ -335,6 +489,26 @@ export const useTemplateBuilderStore = create((set, get) => {
       });
     } catch (_err) {
       // best-effort; ignore
+    }
+  };
+
+  const saveEditorState = async () => {
+    const projectId = get().currentTemplate.id;
+    if (!projectId) return;
+    const state = get();
+    try {
+      await fetch("/api/editor/state/save", {
+        method: "POST",
+        body: JSON.stringify({
+          projectId,
+          templateId: state.currentTemplate.id,
+          pages: state.pages,
+          layers: state.pages.reduce((acc, p) => ({ ...acc, [p.id]: p.layers || [] }), {}),
+          instanceRegistry: state.instanceRegistry || {},
+        }),
+      });
+    } catch (err) {
+      console.error("save editor state failed", err);
     }
   };
 
@@ -355,6 +529,7 @@ export const useTemplateBuilderStore = create((set, get) => {
   },
   historyStack: [],
   historyPointer: -1,
+  historyTransaction: false,
   components: [],
   styles: [],
   pages: [
@@ -629,6 +804,8 @@ export const useTemplateBuilderStore = create((set, get) => {
 
   saveTimeout: null,
 
+  saveEditorState,
+
   saveToDatabase: async () => {
     const { currentTemplate } = get();
 
@@ -650,6 +827,7 @@ export const useTemplateBuilderStore = create((set, get) => {
 
     const timeout = setTimeout(() => {
       get().saveToDatabase();
+      get().saveEditorState();
       console.log("Auto-saved template.");
     }, 1500);
 
@@ -695,6 +873,7 @@ export const useTemplateBuilderStore = create((set, get) => {
   duplicateSelection: () => {
     const state = get();
     if (!state.selectedLayers?.length) return;
+    beginHistoryTransaction("duplicate selection");
     const createdIds = [];
     state.selectedLayers.forEach((id) => {
       const newIds = state.duplicateLayer(id, { select: false });
@@ -703,6 +882,7 @@ export const useTemplateBuilderStore = create((set, get) => {
     if (createdIds.length) {
       set({ selectedLayerId: createdIds[0], selectedLayers: createdIds });
     }
+    endHistoryTransaction();
   },
 
   duplicateLayer: (id, options = { select: true }) => {
@@ -1558,6 +1738,8 @@ export const useTemplateBuilderStore = create((set, get) => {
       const compsJson = await compsResp.json();
       const instResp = await fetch(`/api/components/instances/list?projectId=${projectId}`);
       const instJson = await instResp.json();
+      const stateResp = await fetch(`/api/editor/state/load?projectId=${projectId}`);
+      const stateJson = await stateResp.json();
       if (Array.isArray(compsJson.components)) {
         set((state) => ({
           components: compsJson.components,
@@ -1578,6 +1760,24 @@ export const useTemplateBuilderStore = create((set, get) => {
           };
         });
         set({ instanceRegistry: reg });
+      }
+      if (stateJson?.state) {
+        const snap = stateJson.state;
+        if (snap.pages) {
+          set((current) => ({
+            pages: snap.pages,
+            activePageId: snap.pages[0]?.id || current.activePageId,
+            currentTemplate: { ...current.currentTemplate, layers: snap.layers?.[current.activePageId] || snap.pages?.[0]?.layers || [] },
+          }));
+        }
+        if (snap.layers && !snap.pages) {
+          set((current) => ({
+            currentTemplate: { ...current.currentTemplate, layers: snap.layers[current.activePageId] || current.currentTemplate.layers },
+          }));
+        }
+        if (snap.instanceRegistry) {
+          set({ instanceRegistry: snap.instanceRegistry });
+        }
       }
     } catch (err) {
       console.error("hydrate project failed", err);
@@ -1956,10 +2156,18 @@ export const useTemplateBuilderStore = create((set, get) => {
     if (!page) return;
     const instProtected = (state.instanceRegistry || {})[layerId];
     if (instProtected && !instProtected.detached) return;
+    pushHistory("delete layer");
     const filtered = page.layers.filter((l) => l.id !== layerId);
     setActivePageLayers(filtered);
 
     get().triggerAutoSave();
+  },
+
+  deleteLayers: (layerIds = []) => {
+    if (!layerIds.length) return;
+    beginHistoryTransaction("delete layers");
+    layerIds.forEach((id) => get().deleteLayer(id));
+    endHistoryTransaction();
   },
 
   updateLayer: (layerId, updatedData) => {

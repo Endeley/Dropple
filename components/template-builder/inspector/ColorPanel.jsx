@@ -3,7 +3,7 @@
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 
 export default function ColorPanel({ layer }) {
-  const { updateLayer } = useTemplateBuilderStore();
+  const { writeNodePatch } = useTemplateBuilderStore();
   const props = layer.props || {};
 
   return (
@@ -16,7 +16,7 @@ export default function ColorPanel({ layer }) {
         value={props.color || props.fill || "#000000"}
         onChange={(e) => {
           const value = e.target.value;
-          updateLayer(layer.id, {
+          writeNodePatch(layer.id, {
             props: {
               ...props,
               color: layer.type === "text" ? value : props.color,

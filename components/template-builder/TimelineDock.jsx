@@ -184,11 +184,11 @@ export default function TimelineDock() {
 
   return (
     <div className="border-t bg-slate-50">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-1.5 text-xs">
         <div className="flex items-center gap-2">
           <button
             onClick={togglePlayback}
-            className="flex items-center gap-2 rounded bg-slate-900 px-3 py-2 text-white hover:bg-slate-800"
+            className="flex items-center gap-2 rounded bg-slate-900 px-3 py-1.5 text-white hover:bg-slate-800"
           >
             {timeline?.playing ? <Pause size={14} /> : <Play size={14} />}
             <span className="text-xs font-semibold">
@@ -455,7 +455,7 @@ function TrackRow({
       ) : (
         <div
           ref={laneRef}
-          className="relative bg-gradient-to-r from-slate-50 via-white to-slate-50"
+          className="relative bg-linear-to-r from-slate-50 via-white to-slate-50"
           style={{ minWidth: totalWidth }}
           onDoubleClick={(e) => {
             e.stopPropagation();
