@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { action } from "./_generated/server";
 
 export const uploadAsset = mutation({
   args: {
@@ -33,6 +34,31 @@ export const uploadAsset = mutation({
       updatedAt: Date.now(),
       userId: identity?.tokenIdentifier || "anonymous",
     });
+  },
+});
+
+export const uploadImage = action({
+  args: {
+    file: v.object({
+      name: v.string(),
+      type: v.string(),
+      size: v.number(),
+      data: v.array(v.number()),
+    }),
+  },
+  handler: async (ctx, args) => {
+    // store in storage
+    const buffer = new Uint8Array(args.file.data);
+    const blob = new Blob([buffer], { type: args.file.type });
+    const storageId = await (ctx.storage as any).store(blob);
+    const url = storageId ? await ctx.storage.getUrl(storageId) : null;
+    return {
+      url,
+      storageId,
+      name: args.file.name,
+      type: args.file.type,
+      size: args.file.size,
+    };
   },
 });
 

@@ -133,7 +133,7 @@ export const saveTemplate = mutation({
       publishedAt: makePublished ? now : undefined,
       width: args.templateData?.width ?? 1080,
       height: args.templateData?.height ?? 1080,
-      layers: args.templateData?.nodes ?? [],
+      layers: normalizeLayers(args.templateData?.nodes || []),
       price: args.price ?? args.templateData?.price,
       purchases: 0,
       insertCount: 0,
@@ -254,7 +254,7 @@ export const createTemplate = mutation({
       publishedAt: args.isPublished ? now : undefined,
       width: args.width ?? templateData.width ?? 1080,
       height: args.height ?? templateData.height ?? 1080,
-      layers: templateData.nodes || templateData.layers || [],
+      layers: normalizeLayers(templateData.nodes || templateData.layers || []),
       price: args.price ?? templateData.price,
       purchases: 0,
       insertCount: 0,
@@ -268,6 +268,20 @@ export const createTemplate = mutation({
     });
   },
 });
+
+function normalizeLayers(layers: any[] = []) {
+  return (layers || []).map((l) => {
+    const { parentId, ...rest } = l;
+    const cleanedParent =
+      typeof parentId === "string" && parentId.length
+        ? parentId
+        : undefined;
+    return {
+      ...rest,
+      ...(cleanedParent ? { parentId: cleanedParent } : {}),
+    };
+  });
+}
 
 export const getTrendingTemplates = query({
   args: { days: v.optional(v.number()) },

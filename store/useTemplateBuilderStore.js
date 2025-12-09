@@ -1221,6 +1221,18 @@ export const useTemplateBuilderStore = create((set, get) => {
         return;
       }
 
+      // Validate dropple template shape if available
+      try {
+        const { validateDroppleTemplate } = await import("@/lib/droppleTemplateSpec");
+        const validation = validateDroppleTemplate(tpl);
+        if (!validation.valid) {
+          console.error("Template validation failed", validation.errors);
+          return;
+        }
+      } catch (err) {
+        console.warn("Template validation skipped", err?.message || err);
+      }
+
       const page = {
         id: "page_1",
         name: tpl.name || "Page 1",
@@ -1717,6 +1729,16 @@ export const useTemplateBuilderStore = create((set, get) => {
   loadTemplateFromObject: (tpl) =>
     set((state) => {
       if (!tpl) return state;
+      try {
+        const { validateDroppleTemplate } = require("@/lib/droppleTemplateSpec");
+        const validation = validateDroppleTemplate(tpl);
+        if (!validation.valid) {
+          console.error("Template validation failed", validation.errors);
+          return state;
+        }
+      } catch (err) {
+        console.warn("Template validation skipped", err?.message || err);
+      }
       const newId = tpl.id || tpl._id || crypto.randomUUID();
       const layers = tpl.layers || tpl.nodes || [];
       const page = {

@@ -2,6 +2,7 @@
 
 import { convexClient } from "@/lib/convex/client";
 import { api } from "@/convex/_generated/api";
+import { validateDroppleTemplate } from "@/lib/droppleTemplateSpec";
 
 const makeLocalId = () => `tpl-${crypto.randomUUID()}`;
 const isConvexId = (val) => typeof val === "string" && /^[a-z0-9]{15,}$/i.test(val);
@@ -33,6 +34,11 @@ export async function POST(request) {
       visibility: meta.visibility || "private",
     };
 
+    const validation = validateDroppleTemplate(payload.templateData);
+    if (!validation.valid) {
+      return Response.json({ error: "Template validation failed", details: validation.errors }, { status: 400 });
+    }
+
     try {
       const id = await convexClient.mutation(api.templates.saveTemplate, payload);
       return Response.json({ success: true, id });
@@ -53,6 +59,11 @@ export async function POST(request) {
 
   // fallback for older JSON payloads
   const template = await request.json();
+
+  const validation = validateDroppleTemplate(template || {});
+  if (!validation.valid) {
+    return Response.json({ error: "Template validation failed", details: validation.errors }, { status: 400 });
+  }
 
   let templateId = template?._id || template?.id;
   if (templateId && !isConvexId(templateId)) {

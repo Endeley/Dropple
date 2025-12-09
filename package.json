@@ -7,7 +7,9 @@
     "dev:turbo": "next dev --turbo",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "batch:generate": "node scripts/generateTemplates.js",
+    "batch:generate:save": "node scripts/generateTemplates.js save"
   },
   "dependencies": {
     "@stackframe/stack": "^2.8.54",
@@ -27,7 +29,9 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@tailwindcss/postcss": "^4",
+    "@types/node": "^24.10.2",
     "@types/react": "19.2.7",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",

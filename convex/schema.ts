@@ -170,6 +170,8 @@ export default defineSchema({
     packId: v.optional(v.string()),
     isPremium: v.boolean(),
     price: v.optional(v.number()),
+    source: v.optional(v.string()),
+    license: v.optional(v.string()),
     downloads: v.number(),
     favorites: v.number(),
     createdAt: v.number(),

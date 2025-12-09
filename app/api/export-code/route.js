@@ -3,11 +3,19 @@
 import { buildCodeBlueprint } from "@/lib/buildCodeBlueprint";
 import { generateProjectFiles } from "@/lib/generateProjectFiles";
 import { createZip } from "@/lib/createZip";
+import { validateDroppleTemplate } from "@/lib/droppleTemplateSpec";
 
 export async function POST(req) {
   const { workspace } = await req.json();
   if (!workspace) {
     return Response.json({ error: "workspace is required" }, { status: 400 });
+  }
+
+  if (workspace.currentTemplate) {
+    const { valid, errors } = validateDroppleTemplate(workspace.currentTemplate);
+    if (!valid) {
+      return Response.json({ error: "Invalid template", details: errors }, { status: 400 });
+    }
   }
 
   try {

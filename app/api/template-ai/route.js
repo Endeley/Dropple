@@ -15,7 +15,7 @@ export async function POST(req) {
     return Response.json({ error: "Missing OpenAI API key" }, { status: 500 });
   }
 
-  const { prompt, styleId, componentId, assembly = false, brand = null } = await req.json();
+  const { prompt, styleId, componentId, assembly = false, brand = null, imageUrl = null } = await req.json();
   if (!prompt || typeof prompt !== "string") {
     return Response.json({ error: "Prompt is required" }, { status: 400 });
   }
@@ -24,7 +24,7 @@ export async function POST(req) {
 
   if (assembly) {
     try {
-      const blueprint = await assembleTemplate({ prompt, styleId, componentId, brand });
+      const blueprint = await assembleTemplate({ prompt, styleId, componentId, brand, imageUrl });
       return Response.json({ blueprint });
     } catch (err) {
       console.error("Assembly failed", err);

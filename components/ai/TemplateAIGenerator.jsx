@@ -9,6 +9,7 @@ import { templateComponentPresets } from "@/lib/templateComponents";
 import { applyMotionThemeToLayers } from "@/lib/applyMotionTheme";
 import { motionThemeMap } from "@/lib/motionThemes";
 import { buildBrandKit } from "@/lib/buildBrandKit";
+import { validateDroppleTemplate } from "@/lib/droppleTemplateSpec";
 
 export default function TemplateAIGenerator() {
   const [prompt, setPrompt] = useState("");
@@ -29,6 +30,12 @@ export default function TemplateAIGenerator() {
   const [icons, setIcons] = useState([]);
   const [brandIcon, setBrandIcon] = useState("");
   const [savedBrandkits, setSavedBrandkits] = useState([]);
+  const [heroImageUrl, setHeroImageUrl] = useState("");
+  const [imageSource, setImageSource] = useState("pack"); // pack | asset | brand | upload | stock
+  const [assetImages, setAssetImages] = useState([]);
+  const [allowStock, setAllowStock] = useState(false);
+  const [useAIImage, setUseAIImage] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
   useEffect(() => {
     try {
@@ -59,6 +66,16 @@ export default function TemplateAIGenerator() {
         setIcons(data.slice(0, 25));
       } catch (err) {
         console.warn("Failed to load icons", err);
+      }
+
+      try {
+        const resImages = await fetch("/api/asset-library/all?type=image");
+        if (resImages.ok) {
+          const data = await resImages.json();
+          setAssetImages(data);
+        }
+      } catch (err) {
+        console.warn("Failed to load images", err);
       }
 
       try {
@@ -165,6 +182,79 @@ export default function TemplateAIGenerator() {
     setLoading(true);
     setError(null);
     try {
+      let resolvedImageUrl = heroImageUrl;
+      if (imageSource === "brand" && brandKit?.logos?.length) {
+        resolvedImageUrl = brandKit.logos[0];
+      }
+      if (imageSource === "asset" && !resolvedImageUrl && assetImages.length) {
+        resolvedImageUrl = assetImages[0]?.fileUrl || assetImages[0]?.url;
+      }
+      if (imageSource === "stock" && allowStock && !resolvedImageUrl) {
+        const query = encodeURIComponent(prompt || styleId || "design");
+        resolvedImageUrl = `https://source.unsplash.com/1600x900/?${query}`;
+        // cache into asset library
+        try {
+          await fetch("/api/asset-library/create", {
+            method: "POST",
+            body: JSON.stringify({
+              type: "image",
+              title: `Stock: ${prompt?.slice(0, 40) || query}`,
+              description: "",
+              tags: ["stock"],
+              fileUrl: resolvedImageUrl,
+              previewUrl: resolvedImageUrl,
+              fileType: "image/jpeg",
+              size: 0,
+              width: 1600,
+              height: 900,
+              isPremium: false,
+              price: 0,
+            }),
+          });
+        } catch (err) {
+          console.warn("Failed to cache stock image", err);
+        }
+      }
+
+      if (imageSource === "ai" && useAIImage && !resolvedImageUrl) {
+        setIsGeneratingImage(true);
+        try {
+          const resAI = await fetch("/api/asset-ai", {
+            method: "POST",
+            body: JSON.stringify({
+              prompt: prompt || "high-quality cinematic photo",
+              style: styleId,
+            }),
+          });
+          const dataAI = await resAI.json();
+          if (resAI.ok && dataAI?.url) {
+            resolvedImageUrl = dataAI.url;
+            // cache into asset library
+            await fetch("/api/asset-library/create", {
+              method: "POST",
+              body: JSON.stringify({
+                type: "image",
+                title: `AI: ${prompt?.slice(0, 40) || "generated"}`,
+                description: "",
+                tags: ["ai"],
+                fileUrl: resolvedImageUrl,
+                previewUrl: resolvedImageUrl,
+                fileType: "image/jpeg",
+                size: 0,
+                width: 1600,
+                height: 900,
+                isPremium: false,
+                price: 0,
+              }),
+            });
+          }
+        } catch (err) {
+          console.warn("AI image generation failed", err);
+        } finally {
+          setIsGeneratingImage(false);
+        }
+      }
+
       const res = await fetch("/api/template-ai", {
         method: "POST",
         body: JSON.stringify({
@@ -173,6 +263,7 @@ export default function TemplateAIGenerator() {
           componentId,
           assembly,
           brand: brandKit,
+          imageUrl: resolvedImageUrl || null,
         }),
       });
       const data = await res.json();
@@ -186,7 +277,17 @@ export default function TemplateAIGenerator() {
         componentId: componentId || tpl.componentId,
         tags: Array.from(new Set([...(tpl.tags || []), styleId, componentId].filter(Boolean))),
         brand: brandKit || tpl.brand,
+        images:
+          tpl.images && tpl.images.length
+            ? tpl.images
+            : resolvedImageUrl
+              ? [{ id: "img1", url: resolvedImageUrl }]
+              : tpl.images,
       };
+      const validation = validateDroppleTemplate(styledTpl);
+      if (!validation.valid) {
+        throw new Error(`Template validation failed: ${validation.errors?.[0] || "invalid template"}`);
+      }
       setTemplate(styledTpl);
       applyTemplateToCanvas(styledTpl);
     } catch (err) {
@@ -281,6 +382,102 @@ export default function TemplateAIGenerator() {
         </select>
         <p className="text-[11px] text-gray-500 leading-snug">
           Guides the AI to include the right blocks (hero image, badge, CTA, icon, etc.) and motion.
+        </p>
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-gray-700">Hero image source</label>
+        <select
+          className="w-full border rounded p-2 text-sm bg-white"
+          value={imageSource}
+          onChange={(e) => setImageSource(e.target.value)}
+        >
+          <option value="pack">Pack (default)</option>
+          <option value="asset">Asset Library</option>
+          <option value="brand">Brand logo/photo</option>
+          <option value="upload">Upload</option>
+          <option value="stock">Stock (Unsplash/Pexels)</option>
+          <option value="ai">AI (off by default)</option>
+        </select>
+        {imageSource === "asset" ? (
+          <select
+            className="w-full border rounded p-2 text-sm bg-white"
+            value={heroImageUrl}
+            onChange={(e) => setHeroImageUrl(e.target.value)}
+          >
+            <option value="">Select asset</option>
+            {assetImages.map((img) => (
+              <option key={img._id || img.id || img.fileUrl} value={img.fileUrl || img.url}>
+                {img.title || img.name || img.fileUrl || "image"}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        {imageSource === "brand" ? (
+          <button
+            type="button"
+            className="w-full border rounded p-2 text-sm bg-white hover:bg-gray-50"
+            onClick={() => {
+              if (brandKit?.logos?.length) setHeroImageUrl(brandKit.logos[0]);
+            }}
+          >
+            Use brand logo/photo
+          </button>
+        ) : null}
+        {imageSource === "upload" ? (
+          <input
+            type="file"
+            accept="image/*"
+            className="w-full text-xs"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const form = new FormData();
+              form.append("file", file);
+              try {
+                const res = await fetch("/api/assets/upload", { method: "POST", body: form });
+                const data = await res.json();
+                if (res.ok && (data.url || data.fileUrl)) {
+                  const url = data.url || data.fileUrl;
+                  setHeroImageUrl(url);
+                  setAssetImages((prev) => [{ ...(data || {}), fileUrl: url }, ...prev]);
+                }
+              } catch (err) {
+                console.warn("Upload failed", err);
+              }
+            }}
+          />
+        ) : null}
+        {imageSource === "stock" ? (
+          <label className="flex items-center gap-2 text-xs text-gray-700">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={allowStock}
+              onChange={(e) => setAllowStock(e.target.checked)}
+            />
+            <span>Allow Unsplash/Pexels fallback</span>
+          </label>
+        ) : null}
+        {imageSource === "ai" ? (
+          <label className="flex items-center gap-2 text-xs text-gray-700">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={useAIImage}
+              onChange={(e) => setUseAIImage(e.target.checked)}
+            />
+            <span>Generate AI image (stores to library)</span>
+          </label>
+        ) : null}
+        <input
+          className="w-full border rounded p-2 text-sm"
+          placeholder="Paste image URL or leave blank to use pack"
+          value={heroImageUrl}
+          onChange={(e) => setHeroImageUrl(e.target.value)}
+        />
+        <p className="text-[11px] text-gray-500 leading-snug">
+          Choose a source or paste a URL. If empty, a style-specific pack image is used.
         </p>
       </div>
 
@@ -456,3 +653,12 @@ export default function TemplateAIGenerator() {
     </div>
   );
 }
+      try {
+        const resImages = await fetch("/api/asset-library/all?type=image");
+        if (resImages.ok) {
+          const data = await resImages.json();
+          setAssetImages(data);
+        }
+      } catch (err) {
+        console.warn("Failed to load images", err);
+      }

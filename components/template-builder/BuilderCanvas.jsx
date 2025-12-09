@@ -35,6 +35,7 @@ export default function BuilderCanvas() {
             <div
                 ref={containerRef}
                 className='flex-1 bg-slate-100 flex items-center justify-center overflow-auto relative'
+                data-builder-canvas
                 onWheel={(e) => {
                     // Mouse wheel/trackpad zoom (no preventDefault to avoid passive listener warning).
                     const rect = containerRef.current?.getBoundingClientRect();

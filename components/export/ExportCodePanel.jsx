@@ -42,6 +42,7 @@ export default function ExportCodePanel() {
         brand,
         motionThemeId: currentTemplate?.motionThemeId,
         deterministic: deterministicExport,
+        currentTemplate,
         assets: [],
         prototype: {},
         animations: [],

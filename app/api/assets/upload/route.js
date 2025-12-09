@@ -22,6 +22,32 @@ export async function POST(req) {
     },
   });
 
+  if (!res?.url) {
+    return Response.json({ error: "Upload failed" }, { status: 500 });
+  }
+
+  // Also add to asset library for reuse
+  try {
+    await convexClient.mutation(api.assetLibrary.createLibraryAsset, {
+      type: "image",
+      title: file.name,
+      description: "",
+      tags: [],
+      fileUrl: res.url,
+      previewUrl: res.url,
+      fileType: file.type,
+      size: file.size,
+      width: null,
+      height: null,
+      isPremium: false,
+      price: 0,
+      source: "upload",
+      license: "owner",
+    });
+  } catch (err) {
+    console.warn("Failed to create library asset", err);
+  }
+
   return Response.json({
     ...res,
     size: file.size,

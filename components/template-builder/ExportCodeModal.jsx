@@ -6,6 +6,7 @@ import { exportMotionComponent } from "@/lib/exportMotionToCode";
 import { buildStarterPack, validateMotionPack } from "@/lib/motionPack";
 import { exportThemeToCSS } from "@/lib/exportThemeToCSS";
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
+import { generateTemplateThumbnail } from "@/lib/templates/exportTemplate";
 
 export default function ExportCodeModal() {
   const {
@@ -19,6 +20,8 @@ export default function ExportCodeModal() {
     editingVariantId,
     themes,
     activeThemeId,
+    pages,
+    timeline,
   } = useTemplateBuilderStore();
 
   const contextLayers = useMemo(() => {
@@ -119,6 +122,99 @@ export default function ExportCodeModal() {
     URL.revokeObjectURL(url);
   };
 
+  const downloadTemplateJson = () => {
+    const tpl = {
+      ...currentTemplate,
+      layers: pages?.find((p) => p.id === currentTemplate.activePageId)?.layers || currentTemplate.layers || [],
+    };
+    const blob = new Blob([JSON.stringify(tpl, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${tpl.name || "template"}.dropple.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadPNG = async () => {
+    try {
+      const tpl = {
+        ...currentTemplate,
+        layers: pages?.find((p) => p.id === currentTemplate.activePageId)?.layers || currentTemplate.layers || [],
+      };
+      const blob = await generateTemplateThumbnail(tpl);
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${tpl.name || "template"}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PNG export failed", err);
+    }
+  };
+
+  const downloadWebM = () => {
+    const target = document.querySelector("[data-builder-canvas]");
+    const stream = target?.captureStream?.(30) || target?.querySelector("canvas")?.captureStream?.(30);
+    if (!stream) {
+      console.warn("captureStream not supported on target");
+      return;
+    }
+    const durationMs = (timeline?.duration || 4000);
+    const chunks = [];
+    const recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunks.push(e.data);
+    };
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: "video/webm" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${currentTemplate?.name || "template"}.webm`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+    recorder.start();
+    setTimeout(() => recorder.stop(), durationMs);
+  };
+
+  const downloadAnimatedServer = async () => {
+    try {
+      const tpl = {
+        ...currentTemplate,
+        layers: pages?.find((p) => p.id === currentTemplate.activePageId)?.layers || currentTemplate.layers || [],
+      };
+      const durationMs = timeline?.duration || 4000;
+      const res = await fetch("/api/export-animated", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          template: tpl,
+          durationMs,
+          width: tpl.width || 1080,
+          height: tpl.height || 1080,
+          format: "webm",
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || "Animated export failed");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${tpl.name || "template"}.webm`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Server animated export failed", err);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-white w-[760px] max-w-[92vw] rounded-lg shadow-2xl p-6 space-y-4">
@@ -203,6 +299,30 @@ export default function ExportCodeModal() {
             className="px-4 py-2 rounded-md bg-fuchsia-600 text-white hover:bg-fuchsia-700 shadow-sm"
           >
             Download Motion Pack
+          </button>
+          <button
+            onClick={downloadTemplateJson}
+            className="px-4 py-2 rounded-md bg-slate-700 text-white hover:bg-slate-800 shadow-sm"
+          >
+            Download JSON
+          </button>
+          <button
+            onClick={downloadPNG}
+            className="px-4 py-2 rounded-md bg-amber-600 text-white hover:bg-amber-700 shadow-sm"
+          >
+            Download PNG
+          </button>
+          <button
+            onClick={downloadWebM}
+            className="px-4 py-2 rounded-md bg-rose-600 text-white hover:bg-rose-700 shadow-sm"
+          >
+            Download WebM (beta)
+          </button>
+          <button
+            onClick={downloadAnimatedServer}
+            className="px-4 py-2 rounded-md bg-orange-600 text-white hover:bg-orange-700 shadow-sm"
+          >
+            Download WebM (server)
           </button>
         </div>
       </div>

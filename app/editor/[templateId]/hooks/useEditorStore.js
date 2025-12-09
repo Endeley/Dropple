@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { generateId } from "../utils/generateId";
 import { applyAutoLayout } from "../utils/autoLayout";
 import { convertToAutoLayout } from "../utils/convertToAutoLayout";
+import { validateDroppleTemplate } from "@/lib/droppleTemplateSpec";
 
 export const useEditorStore = create((set, get) => ({
   width: 1080,
@@ -142,10 +143,17 @@ export const useEditorStore = create((set, get) => ({
   },
 
   loadTemplate: (template) =>
-    set({
-      width: template.width || 1080,
-      height: template.height || 1080,
-      background: template.background?.value || template.background || "#ffffff",
-      nodes: template.nodes || [],
+    set((state) => {
+      const validation = validateDroppleTemplate(template || {});
+      if (!validation.valid) {
+        console.error("Template validation failed", validation.errors);
+        return state;
+      }
+      return {
+        width: template.width || 1080,
+        height: template.height || 1080,
+        background: template.background?.value || template.background || "#ffffff",
+        nodes: template.nodes || [],
+      };
     }),
 }));
