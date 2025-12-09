@@ -301,6 +301,16 @@ export const useTemplateBuilderStore = create((set, get) => {
     endHistoryTransaction();
   };
 
+  const snapshotState = (state) => ({
+    pages: cloneDeep(state.pages),
+    activePageId: state.activePageId,
+    currentTemplate: cloneDeep(state.currentTemplate),
+    components: cloneDeep(state.components),
+    instanceRegistry: cloneDeep(state.instanceRegistry),
+    selectedLayers: cloneDeep(state.selectedLayers),
+    selectedLayerId: state.selectedLayerId,
+  });
+
   const pushHistory = (label = "change") => {
     if (get().historyTransaction) return;
     const snap = snapshotState(get());
@@ -609,6 +619,9 @@ export const useTemplateBuilderStore = create((set, get) => {
   clipboardRootIds: [],
   clipboardStyles: null,
   pasteCount: 0,
+  writeNodePatch,
+  beginHistoryTransaction,
+  endHistoryTransaction,
 
   /* --------------------------------------------------------
    * UI STATE

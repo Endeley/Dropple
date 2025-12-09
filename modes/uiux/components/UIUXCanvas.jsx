@@ -5,6 +5,10 @@ import { useNodeTreeStore } from "@/zustand/nodeTreeStore";
 import { useSelectionStore } from "@/zustand/selectionStore";
 import { usePageStore } from "@/zustand/pageStore";
 import { useEffect } from "react";
+import DevicePreviewBar from "@/components/template-builder/DevicePreviewBar";
+import { usePageStore } from "@/zustand/pageStore";
+import { useNodeTreeStore } from "@/zustand/nodeTreeStore";
+import { useSelectionStore } from "@/zustand/selectionStore";
 
 export default function UIUXCanvas() {
   const nodes = useNodeTreeStore((s) => s.nodes);
@@ -17,6 +21,35 @@ export default function UIUXCanvas() {
   const currentBreakpointId = usePageStore((s) => s.currentBreakpointId);
   const pages = usePageStore((s) => s.pages);
   const currentPage = pages.find((p) => p.id === currentPageId);
+  const setCurrentBreakpoint = usePageStore((s) => s.setCurrentBreakpoint);
+  const attachFrameToPage = usePageStore((s) => s.attachFrameToPage);
+  const addNode = useNodeTreeStore((s) => s.addNode);
+  const setSelectedManual = useSelectionStore((s) => s.setSelectedManual);
+
+  const addFramePreset = (presetId) => {
+    const presets = {
+      mobile: { width: 390, height: 844 },
+      tablet: { width: 1024, height: 1366 },
+      desktop: { width: 1440, height: 900 },
+      large: { width: 1680, height: 1050 },
+    };
+    const preset = presets[presetId];
+    if (!preset) return;
+    const id = crypto.randomUUID();
+    addNode({
+      id,
+      type: "frame",
+      name: `${presetId} frame`,
+      x: 120,
+      y: 120,
+      width: preset.width,
+      height: preset.height,
+      children: [],
+      pageId: currentPageId,
+    });
+    attachFrameToPage(currentPageId, id);
+    setSelectedManual([id]);
+  };
 
   useEffect(() => {
     applyResponsiveLayout(viewportWidth, currentBreakpointId);
@@ -33,6 +66,12 @@ export default function UIUXCanvas() {
   return (
     <CanvasHost enablePanZoom nodeMap={nodes}>
       <div id="uiux-canvas-area" className="w-full h-full relative">
+        <div className="fixed left-4 top-28 z-50">
+          <DevicePreviewBar
+            onSelect={(bp) => setCurrentBreakpoint(bp)}
+            addArtboard={(preset) => addFramePreset(preset)}
+          />
+        </div>
         {frames.length === 0 ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="pointer-events-none select-none rounded-full border border-neutral-200 bg-white/90 px-4 py-2 text-sm text-neutral-600 shadow-sm">

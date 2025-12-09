@@ -25,7 +25,7 @@ export default function CanvasLayer({
     clearSelection,
     selectLayer,
     updateLayer,
-    writeNodePatch,
+    writeNodePatch: writePatchFn,
     editingTextId,
     setEditingTextId,
     stopEditingText,
@@ -131,6 +131,7 @@ export default function CanvasLayer({
     layer.componentInstanceId && instanceRegistry[layer.componentInstanceId]
       ? instanceRegistry[layer.componentInstanceId]
       : null;
+  const writeNodePatch = writePatchFn || updateLayer;
   const override = instanceMeta?.overrides?.[layer.id] || {};
   const useMasterMotion = instanceMeta?.useMasterMotion !== false;
   const resolvedAnimations = useMasterMotion
@@ -163,23 +164,27 @@ export default function CanvasLayer({
   useEffect(() => {
     if (!selectedAnim?.playTimelineOnLoad) return;
     if (!timelineTracks?.length) return;
+    if (!ref.current) return;
     const seq = buildTimelineSequence(timelineTracks);
     if (!seq.length) return;
     let cancelled = false;
-    (async () => {
+    let mounted = true;
+    const run = async () => {
       let remaining = timelineLoop ? (timelineLoopCount || -1) : 1;
-      while (!cancelled && remaining !== 0) {
+      while (!cancelled && mounted && remaining !== 0) {
         for (const step of seq) {
-          if (cancelled) break;
+          if (cancelled || !mounted) break;
           await controls.start(step);
         }
         if (remaining > 0) remaining -= 1;
       }
-    })();
+    };
+    run();
     return () => {
       cancelled = true;
+      mounted = false;
     };
-  }, [timelineTracks, timelineLoop, timelineLoopCount, controls, selectedAnim?.playTimelineOnLoad]);
+  }, [timelineTracks, timelineLoop, timelineLoopCount, controls, selectedAnim?.playTimelineOnLoad, ref]);
 
   function handleMouseDown(e) {
     if (editingTextId === layer.id) return;

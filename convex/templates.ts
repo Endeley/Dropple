@@ -206,6 +206,69 @@ export const getRecommendedTemplates = query({
   },
 });
 
+// Minimal createTemplate for clients expecting templates:createTemplate
+export const createTemplate = mutation({
+  args: {
+    name: v.string(),
+    mode: v.string(),
+    description: v.optional(v.string()),
+    category: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
+    styles: v.optional(v.array(v.string())),
+    formats: v.optional(v.array(v.string())),
+    templateData: v.optional(v.any()),
+    width: v.optional(v.number()),
+    height: v.optional(v.number()),
+    thumbnail: v.optional(v.string()),
+    thumbnailUrl: v.optional(v.string()),
+    pageTransitions: v.optional(v.any()),
+    animation: v.optional(v.any()),
+    isPublished: v.optional(v.boolean()),
+    price: v.optional(v.number()),
+    license: v.optional(v.string()),
+  },
+  handler: async ({ db, auth }, args) => {
+    const identity = await auth.getUserIdentity();
+    const userId = identity?.subject ?? "system";
+    const now = Date.now();
+    const templateData = args.templateData || {};
+    return await db.insert("templates", {
+      name: args.name,
+      mode: args.mode,
+      category: args.category,
+      tags: args.tags ?? [],
+      styles: args.styles ?? [],
+      formats: args.formats ?? [],
+      authorId: userId,
+      userId,
+      templateData,
+      thumbnail: args.thumbnail,
+      thumbnailUrl: args.thumbnailUrl,
+      templateJsonUrl: templateData.templateJsonUrl,
+      description: args.description,
+      isPublished: args.isPublished ?? false,
+      version: 1,
+      versions: [],
+      createdAt: now,
+      updatedAt: now,
+      publishedAt: args.isPublished ? now : undefined,
+      width: args.width ?? templateData.width ?? 1080,
+      height: args.height ?? templateData.height ?? 1080,
+      layers: templateData.nodes || templateData.layers || [],
+      price: args.price ?? templateData.price,
+      purchases: 0,
+      insertCount: 0,
+      viewCount: 0,
+      favoriteCount: 0,
+      searchClicks: 0,
+      score: 0,
+      creatorName: templateData.creatorName,
+      creatorAvatar: templateData.creatorAvatar,
+      license: args.license ?? templateData.license ?? "free",
+    });
+  },
+});
+
 export const getTrendingTemplates = query({
   args: { days: v.optional(v.number()) },
   handler: async ({ db }, { days }) => {

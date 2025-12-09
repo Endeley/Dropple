@@ -1,6 +1,9 @@
 "use server";
 
 import OpenAI from "openai";
+import { buildStylePrompt, templateStyleMap } from "@/lib/templateStyles";
+import { buildComponentPrompt, templateComponentPresetMap } from "@/lib/templateComponents";
+import { assembleTemplate } from "@/lib/templateAssembler";
 
 const client =
   process.env.OPENAI_API_KEY || process.env.OPENAI_KEY
@@ -12,9 +15,21 @@ export async function POST(req) {
     return Response.json({ error: "Missing OpenAI API key" }, { status: 500 });
   }
 
-  const { prompt } = await req.json();
+  const { prompt, styleId, componentId, assembly = false, brand = null } = await req.json();
   if (!prompt || typeof prompt !== "string") {
     return Response.json({ error: "Prompt is required" }, { status: 400 });
+  }
+  const styleHint = styleId && templateStyleMap[styleId] ? buildStylePrompt(styleId) : "";
+  const layoutHint = componentId && templateComponentPresetMap[componentId] ? buildComponentPrompt(componentId) : "";
+
+  if (assembly) {
+    try {
+      const blueprint = await assembleTemplate({ prompt, styleId, componentId, brand });
+      return Response.json({ blueprint });
+    } catch (err) {
+      console.error("Assembly failed", err);
+      // fallback to AI path below
+    }
   }
 
   try {
@@ -24,7 +39,7 @@ export async function POST(req) {
         {
           role: "system",
           content: `
-You are an AI Template Designer inside Dropple. Output a FULLY EDITABLE, MOTION-READY template JSON that the Dropple editor can hydrate without changes.
+You are an AI Template Designer inside Dropple. Output a FULLY EDITABLE, MOTION-READY template JSON that the Dropple editor can hydrate without changes. Design it like a Framer Motion template: hero image with gradient/overlay, strong typography, CTA chips, and layered motion.
 
 Follow EXACTLY this structure:
 {
@@ -32,50 +47,64 @@ Follow EXACTLY this structure:
   "description": "Short summary",
   "width": 1440,
   "height": 1024,
-  "background": "#ffffff",
-  "colors": ["#000000", "#ffffff", "#FF6B00"],
-  "fonts": ["Inter", "Poppins", "Roboto"],
+  "background": "linear-gradient(135deg, #0f172a, #111827)",
+  "colors": ["#0f172a", "#ffffff", "#FF6B00", "#8B5CF6"],
+  "fonts": ["Sora", "Inter", "Poppins"],
   "pageTransitions": {
     "default": { "type": "slide", "direction": "right", "duration": 0.6, "ease": "easeOut" }
   },
   "nodes": [
-    { "id": "text1", "type": "text", "content": "Heading", "x": 120, "y": 140, "width": 840, "height": 120, "fontSize": 64, "fontWeight": 700, "color": "#0f172a" },
-    { "id": "image1", "type": "image", "imageId": "img1", "x": 0, "y": 0, "width": 1440, "height": 560, "fit": "cover" },
-    { "id": "shape1", "type": "shape", "shape": "rectangle", "x": 120, "y": 760, "width": 1200, "height": 220, "fill": "#FF6B00", "radius": 24 }
+    { "id": "hero_image", "type": "image", "imageId": "img1", "x": 0, "y": 0, "width": 1440, "height": 780, "fit": "cover" },
+    { "id": "overlay", "type": "shape", "shape": "rectangle", "x": 0, "y": 0, "width": 1440, "height": 780, "fill": "linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.1))" },
+    { "id": "badge", "type": "shape", "shape": "rectangle", "x": 120, "y": 140, "width": 156, "height": 42, "radius": 999, "fill": "rgba(255,255,255,0.18)" },
+    { "id": "badge_text", "type": "text", "content": "New Collection", "x": 140, "y": 146, "width": 200, "height": 28, "fontSize": 16, "fontWeight": 600, "color": "#ffffff" },
+    { "id": "headline", "type": "text", "content": "Transform your body.", "x": 120, "y": 210, "width": 880, "height": 180, "fontSize": 96, "fontWeight": 800, "color": "#ffffff" },
+    { "id": "subhead", "type": "text", "content": "High-energy program with pro coaches and cinematic visuals.", "x": 120, "y": 370, "width": 720, "height": 90, "fontSize": 22, "fontWeight": 500, "color": "rgba(255,255,255,0.9)" },
+    { "id": "cta", "type": "shape", "shape": "rectangle", "x": 120, "y": 480, "width": 210, "height": 64, "radius": 16, "fill": "linear-gradient(135deg, #FF6B00, #F97316)" },
+    { "id": "cta_label", "type": "text", "content": "Start Now", "x": 146, "y": 500, "width": 160, "height": 30, "fontSize": 18, "fontWeight": 700, "color": "#ffffff" }
   ],
   "images": [
-    { "id": "img1", "prompt": "high-detail photo or illustration that matches the category/style" }
+    { "id": "img1", "prompt": "cinematic fitness photography, dramatic lighting, energetic, action shot, vapor glow" }
   ],
   "animations": [
     {
-      "id": "anim_text1",
-      "nodeId": "text1",
+      "id": "anim_parent",
+      "nodeId": "overlay",
       "variants": {
-        "initial": { "opacity": 0, "y": 32 },
-        "animate": { "opacity": 1, "y": 0, "transition": { "duration": 0.6, "ease": "easeOut" } },
-        "hover": { "scale": 1.03 },
-        "tap": { "scale": 0.97 },
-        "exit": { "opacity": 0, "y": -12 },
-        "inView": { "opacity": 1, "y": 0 }
+        "initial": { "opacity": 0, "y": 24 },
+        "animate": { "opacity": 1, "y": 0, "transition": { "duration": 0.7, "ease": "easeOut", "staggerChildren": 0.08 } },
+        "exit": { "opacity": 0, "y": -16 }
+      },
+      "triggers": ["onLoad", "onView"],
+      "playTimelineOnLoad": false
+    },
+    {
+      "id": "anim_headline",
+      "nodeId": "headline",
+      "variants": {
+        "initial": { "opacity": 0, "y": 26 },
+        "animate": { "opacity": 1, "y": 0, "transition": { "duration": 0.65, "ease": "easeOut", "delay": 0.08 } },
+        "hover": { "scale": 1.01 },
+        "tap": { "scale": 0.99 }
       },
       "triggers": ["onLoad", "onHover", "onClick", "onView"]
     },
     {
-      "id": "anim_image1",
-      "nodeId": "image1",
+      "id": "anim_image",
+      "nodeId": "hero_image",
       "variants": {
-        "initial": { "opacity": 0.85, "scale": 1.02 },
-        "animate": { "opacity": 1, "scale": 1, "transition": { "duration": 0.8 } },
+        "initial": { "opacity": 0.9, "scale": 1.04 },
+        "animate": { "opacity": 1, "scale": 1, "transition": { "duration": 0.9, "ease": "easeOut" } },
         "hover": { "scale": 1.02 },
-        "tap": { "scale": 0.98 }
+        "tap": { "scale": 0.985 }
       },
       "scroll": {
-        "inputRange": [0, 400],
-        "outputRange": { "y": [0, -40], "opacity": [1, 0.92] }
+        "inputRange": [0, 420],
+        "outputRange": { "y": [0, -38], "opacity": [1, 0.92] }
       },
       "triggers": ["onLoad", "onHover", "onScroll"],
       "tracks": [
-        { "property": "y", "keyframes": [ { "time": 0, "value": 0 }, { "time": 1200, "value": -6, "easing": "easeInOut" } ] }
+        { "property": "y", "keyframes": [ { "time": 0, "value": 0 }, { "time": 1200, "value": -8, "easing": "easeInOut" } ] }
       ],
       "playTimelineOnLoad": true,
       "timelineLoop": true,
@@ -87,17 +116,19 @@ Follow EXACTLY this structure:
 Hard requirements:
 - Return VALID JSON ONLY (no prose, no backticks).
 - Every node must include numeric x, y, width, height for layout.
-- Use node types: "text" (content/fontSize/fontWeight/color/font optional), "image" (imageId/fit), "shape" (rectangle/ellipse/line with fill/radius).
-- animations: array where each item targets a nodeId and includes "variants" (initial/animate/hover/tap/exit/inView as needed) plus "triggers". Include scroll effects when relevant. Optional "tracks" for looping/float effects (property, keyframes[{time,value,easing?,duration?}]). Use playTimelineOnLoad + timelineLoop when you include tracks.
+- Must include: at least 1 image node + overlay text + CTA + gradient/shape layer for contrast. Use rich palettes and gradients (linear/radial) instead of flat fills.
+- Use node types: "text" (content/fontSize/fontWeight/color/font optional), "image" (imageId/url/fit), "shape" (rectangle/ellipse/line with fill/radius).
+- animations: array where each item targets a nodeId and includes "variants" (initial/animate/hover/tap/exit/inView as needed) plus "triggers". Include scroll effects when relevant. Optional "tracks" for looping/float effects (property, keyframes[{time,value,easing?,duration?}]). Use playTimelineOnLoad + timelineLoop when you include tracks. Encourage Framer-style staggering via transition.staggerChildren/delay.
 - pageTransitions (optional): { "default": { "type": "slide|fade|scale|flip|push|overlay|timeline", "direction": "left|right|up|down", "duration": 0.6, "ease": "easeOut" } }
-- animations: array where each item targets a nodeId and includes "variants" (initial/animate/hover/tap/exit/inView as needed) plus "triggers". Include scroll effects when relevant. Optional "tracks" for looping/float effects (property, keyframes[{time,value,easing?,duration?}]). Use playTimelineOnLoad + timelineLoop when you include tracks.
 - Use colors/fonts that fit the requested style; keep spacing/hierarchy professional.
 - images: 1-3 prompts, varied and specific to the category/style (avoid generic/duplicate prompts).
-- If the user asks for staggered elements, add small transition delays per element in animate.
 - Keep output compact but complete; avoid nulls/undefined.
           `,
         },
-        { role: "user", content: prompt },
+        {
+          role: "user",
+          content: [prompt, styleHint, layoutHint].filter(Boolean).join("\n\n"),
+        },
       ],
       response_format: { type: "json_object" },
       temperature: 0.6,

@@ -1,17 +1,97 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { convertBlueprintToDroppleTemplate } from "@/lib/convertBlueprintToDroppleTemplate";
 import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
 import { generateTemplateThumbnail } from "@/lib/templates/exportTemplate";
+import { templateStyles, templateStyleMap } from "@/lib/templateStyles";
+import { templateComponentPresets } from "@/lib/templateComponents";
+import { applyMotionThemeToLayers } from "@/lib/applyMotionTheme";
+import { motionThemeMap } from "@/lib/motionThemes";
+import { buildBrandKit } from "@/lib/buildBrandKit";
 
 export default function TemplateAIGenerator() {
   const [prompt, setPrompt] = useState("");
+  const [styleId, setStyleId] = useState(templateStyles?.[0]?.id || "");
+  const [componentId, setComponentId] = useState(templateComponentPresets?.[0]?.id || "");
   const [template, setTemplate] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [saveStatus, setSaveStatus] = useState("idle");
   const [saveError, setSaveError] = useState(null);
+  const [assembly, setAssembly] = useState(true);
+  const [brandKit, setBrandKit] = useState(null);
+  const [brandName, setBrandName] = useState("");
+  const [brandTagline, setBrandTagline] = useState("");
+  const [brandPersonality, setBrandPersonality] = useState("");
+  const [brandPrimary, setBrandPrimary] = useState("");
+  const [brandSecondary, setBrandSecondary] = useState("");
+  const [icons, setIcons] = useState([]);
+  const [brandIcon, setBrandIcon] = useState("");
+  const [savedBrandkits, setSavedBrandkits] = useState([]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("AI_BRAND_KIT");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setBrandKit(parsed);
+        setBrandName(parsed.name || "");
+        setBrandTagline(parsed.tagline || "");
+        setBrandPersonality(
+          Array.isArray(parsed.personality) ? parsed.personality.join(", ") : "",
+        );
+        setBrandPrimary(parsed.theme?.tokens?.colors?.primary || "");
+        setBrandSecondary(parsed.theme?.tokens?.colors?.secondary || "");
+        setBrandIcon(parsed.icon || parsed.iconUrl || "");
+      }
+    } catch (err) {
+      console.warn("Failed to load stored brand kit", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/asset-library/all?type=icon");
+        if (!res.ok) return;
+        const data = await res.json();
+        setIcons(data.slice(0, 25));
+      } catch (err) {
+        console.warn("Failed to load icons", err);
+      }
+
+      try {
+        const resKits = await fetch("/api/brandkits/all");
+        if (resKits.ok) {
+          const data = await resKits.json();
+          setSavedBrandkits(data.brandkits || []);
+        }
+      } catch (err) {
+        console.warn("Failed to load brand kits", err);
+      }
+    })();
+  }, []);
+  const buildThemeFromStyle = (style) => {
+    if (!style) return null;
+    return {
+      _id: `style-${style.id}`,
+      name: style.label,
+      tokens: {
+        colors: {
+          primary: style.palette.primary,
+          secondary: style.palette.accent || style.palette.primary,
+          surface: style.palette.surface || style.palette.background,
+          background: style.palette.background,
+          text: style.palette.text,
+          muted: style.palette.muted || style.palette.text,
+        },
+      },
+      radius: style.radius,
+      shadow: style.shadow,
+    };
+  };
+
   const applyTemplateToCanvas = (tpl) => {
     if (!tpl) return;
     const page = {
@@ -21,6 +101,41 @@ export default function TemplateAIGenerator() {
       layers: tpl.layers || [],
     };
     const prev = useTemplateBuilderStore.getState().currentTemplate || {};
+    const state = useTemplateBuilderStore.getState();
+    const style = tpl.styleId ? templateStyleMap[tpl.styleId] : null;
+    const styleTheme = buildThemeFromStyle(style);
+    const motionTheme = style?.motionTheme ? motionThemeMap[style.motionTheme] : null;
+    const themedLayers = motionTheme ? applyMotionThemeToLayers(page.layers || [], motionTheme, null) : page.layers || [];
+    const themes = state.themes || [];
+
+    const brandTheme =
+      tpl?.brand?.theme ||
+      (brandKit?.theme ? { ...brandKit.theme, _id: brandKit.theme._id || brandKit.theme.id } : null);
+
+    const withStyle =
+      styleTheme && styleTheme._id
+        ? (() => {
+            const existing = themes.find((t) => t._id === styleTheme._id);
+            if (existing) {
+              return themes.map((t) => (t._id === styleTheme._id ? { ...existing, ...styleTheme } : t));
+            }
+            return [...themes, styleTheme];
+          })()
+        : themes;
+
+    const withBrand =
+      brandTheme && brandTheme._id
+        ? (() => {
+            const existing = withStyle.find((t) => t._id === brandTheme._id);
+            if (existing) {
+              return withStyle.map((t) => (t._id === brandTheme._id ? { ...existing, ...brandTheme } : t));
+            }
+            return [...withStyle, brandTheme];
+          })()
+        : withStyle;
+
+    const nextActiveThemeId = brandTheme?._id || styleTheme?._id || state.activeThemeId;
+
     useTemplateBuilderStore.setState({
       currentTemplate: {
         ...prev,
@@ -30,12 +145,18 @@ export default function TemplateAIGenerator() {
         mode: tpl.mode || "uiux",
         width: tpl.width || prev.width || 1440,
         height: tpl.height || prev.height || 1024,
-        layers: tpl.layers || [],
+        layers: themedLayers,
         tags: tpl.tags || [],
         thumbnail: tpl.thumbnail || "",
+        styleId: tpl.styleId,
+        componentId: tpl.componentId,
+        motionThemeId: style?.motionTheme || tpl.motionThemeId,
+        brand: tpl.brand || brandKit,
       },
-      pages: [page],
+      pages: [{ ...page, layers: themedLayers }],
       activePageId: page.id,
+      themes: withBrand,
+      activeThemeId: nextActiveThemeId,
     });
   };
 
@@ -46,15 +167,28 @@ export default function TemplateAIGenerator() {
     try {
       const res = await fetch("/api/template-ai", {
         method: "POST",
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({
+          prompt,
+          styleId,
+          componentId,
+          assembly,
+          brand: brandKit,
+        }),
       });
       const data = await res.json();
       if (!res.ok || data.error) {
         throw new Error(data.error || "Generation failed");
       }
       const tpl = convertBlueprintToDroppleTemplate(data.blueprint || {});
-      setTemplate(tpl);
-      applyTemplateToCanvas(tpl);
+      const styledTpl = {
+        ...tpl,
+        styleId: styleId || tpl.styleId,
+        componentId: componentId || tpl.componentId,
+        tags: Array.from(new Set([...(tpl.tags || []), styleId, componentId].filter(Boolean))),
+        brand: brandKit || tpl.brand,
+      };
+      setTemplate(styledTpl);
+      applyTemplateToCanvas(styledTpl);
     } catch (err) {
       console.error(err);
       setError(err.message);
@@ -113,6 +247,176 @@ export default function TemplateAIGenerator() {
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
       />
+
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-gray-700">Style preset</label>
+        <select
+          className="w-full border rounded p-2 text-sm bg-white"
+          value={styleId}
+          onChange={(e) => setStyleId(e.target.value)}
+        >
+          {templateStyles.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-[11px] text-gray-500 leading-snug">
+          Applies palette, fonts, gradients, and motion vibe to the generated template.
+        </p>
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-gray-700">Layout preset</label>
+        <select
+          className="w-full border rounded p-2 text-sm bg-white"
+          value={componentId}
+          onChange={(e) => setComponentId(e.target.value)}
+        >
+          {templateComponentPresets.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-[11px] text-gray-500 leading-snug">
+          Guides the AI to include the right blocks (hero image, badge, CTA, icon, etc.) and motion.
+        </p>
+      </div>
+
+      <label className="flex items-center space-x-2 text-sm text-gray-700">
+        <input
+          type="checkbox"
+          checked={assembly}
+          onChange={(e) => setAssembly(e.target.checked)}
+          className="h-4 w-4"
+        />
+        <span>Use deterministic assembly (local layout + motion, AI only for content)</span>
+      </label>
+
+      <div className="space-y-2 border-t pt-3">
+        <p className="text-xs font-semibold text-gray-700">Brand (optional)</p>
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            className="border rounded p-2 text-sm col-span-2"
+            placeholder="Brand name"
+            value={brandName}
+            onChange={(e) => setBrandName(e.target.value)}
+          />
+          <input
+            className="border rounded p-2 text-sm col-span-2"
+            placeholder="Tagline"
+            value={brandTagline}
+            onChange={(e) => setBrandTagline(e.target.value)}
+          />
+          <input
+            className="border rounded p-2 text-sm"
+            placeholder="Personality (comma-separated)"
+            value={brandPersonality}
+            onChange={(e) => setBrandPersonality(e.target.value)}
+          />
+          <input
+            className="border rounded p-2 text-sm"
+            placeholder="Primary color (#hex)"
+            value={brandPrimary}
+            onChange={(e) => setBrandPrimary(e.target.value)}
+          />
+          <input
+            className="border rounded p-2 text-sm"
+            placeholder="Secondary color (#hex)"
+            value={brandSecondary}
+            onChange={(e) => setBrandSecondary(e.target.value)}
+          />
+          <select
+            className="border rounded p-2 text-sm col-span-2 bg-white"
+            value={brandIcon}
+            onChange={(e) => setBrandIcon(e.target.value)}
+          >
+            <option value="">Select icon (optional)</option>
+            {icons.map((icon) => (
+              <option key={icon._id || icon.id || icon.fileUrl} value={icon.fileUrl || icon.url}>
+                {icon.title || icon.name || icon.fileUrl}
+              </option>
+            ))}
+          </select>
+
+          {savedBrandkits.length ? (
+            <select
+              className="border rounded p-2 text-sm col-span-2 bg-white"
+              onChange={(e) => {
+                const id = e.target.value;
+                const kit = savedBrandkits.find((k) => (k._id || k.id) === id);
+                if (!kit) return;
+                setBrandKit(kit);
+                setBrandName(kit.name || "");
+                setBrandTagline(kit.tagline || "");
+                setBrandPersonality(Array.isArray(kit.personality) ? kit.personality.join(", ") : "");
+                setBrandPrimary(kit.theme?.tokens?.colors?.primary || "");
+                setBrandSecondary(kit.theme?.tokens?.colors?.secondary || "");
+                setBrandIcon(kit.icon || kit.iconUrl || "");
+              }}
+            >
+              <option value="">Load saved brand kit</option>
+              {savedBrandkits.map((kit) => (
+                <option key={kit._id || kit.id} value={kit._id || kit.id}>
+                  {kit.name || kit._id || kit.id}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          <select
+            className="border rounded p-2 text-sm col-span-2 bg-white"
+            value={brandIcon}
+            onChange={(e) => setBrandIcon(e.target.value)}
+          >
+            <option value="">Select icon (optional)</option>
+            {icons.map((icon) => (
+              <option key={icon._id || icon.id || icon.fileUrl} value={icon.fileUrl || icon.url}>
+                {icon.title || icon.name || icon.fileUrl}
+              </option>
+            ))}
+          </select>
+          <button
+            className="col-span-2 bg-gray-100 text-gray-800 rounded p-2 text-sm hover:bg-gray-200"
+            type="button"
+          onClick={() => {
+            const colors = {
+              primary: brandPrimary ? [brandPrimary] : [],
+              secondary: brandSecondary ? [brandSecondary] : [],
+              neutral: [],
+              semantic: {},
+            };
+            const blueprint = {
+              name: brandName || "Brand",
+              tagline: brandTagline || "",
+              brandPersonality: brandPersonality
+                ? brandPersonality.split(",").map((s) => s.trim()).filter(Boolean)
+                : [],
+              colorPalette: colors,
+            };
+            const kit = buildBrandKit(blueprint, brandIcon ? [brandIcon] : [], []);
+            if (brandIcon) {
+              kit.icon = brandIcon;
+              kit.iconUrl = brandIcon;
+            }
+            setBrandKit(kit);
+            try {
+              localStorage.setItem("AI_BRAND_KIT", JSON.stringify(kit));
+            } catch (err) {
+              console.warn("Failed to store brand kit", err);
+            }
+          }}
+        >
+          Save brand for generation
+        </button>
+          {brandKit ? (
+            <p className="text-[11px] text-emerald-600 col-span-2">
+              Brand applied: {brandKit.name || "Brand"} (primary {brandKit.theme?.tokens?.colors?.primary || "n/a"})
+              {brandKit.icon ? ` • icon set` : ""}
+            </p>
+          ) : null}
+        </div>
+      </div>
 
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
 
