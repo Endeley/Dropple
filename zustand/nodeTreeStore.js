@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { useComponentStore } from "./componentStore";
 
 const defaultConstraints = {
   horizontal: "left",
@@ -61,7 +62,77 @@ const withDefaults = (node = {}) => {
 
   // Give frames a visible default fill unless explicitly provided.
   if (base.type === "frame" && base.fill == null) {
-    base.fill = "#ffffff";
+    base.fill = "#f8fafc";
+    if (base.stroke == null) base.stroke = "#cbd5e1";
+    if (base.strokeWidth == null) base.strokeWidth = 1;
+    if (base.backgroundGradient == null) base.backgroundGradient = null;
+    if (base.scroll == null) base.scroll = { overflowX: "visible", overflowY: "visible" };
+  }
+
+  // Default container-like shapes (div/section behavior)
+  if (base.type === "shape" || base.type === "rect") {
+    if (base.fill == null) base.fill = "#f8fafc";
+    if (base.backgroundImage == null) base.backgroundImage = null;
+    if (base.backgroundGradient == null) base.backgroundGradient = null;
+    if (base.padding == null) base.padding = 0;
+    if (base.radius == null && base.borderRadius == null) base.radius = 0;
+    if (base.autoLayout == null) {
+      base.autoLayout = {
+        enabled: false,
+        direction: "vertical",
+        spacing: 12,
+        align: "start",
+        justify: "start",
+        padding: { top: 0, right: 0, bottom: 0, left: 0 },
+      };
+    }
+    if (base.scroll == null) base.scroll = { overflowX: "visible", overflowY: "visible" };
+  }
+
+  // Default box model for visual nodes
+  const eligibleForBox = ["frame", "shape", "rect", "image", "text", "richtext"];
+  if (eligibleForBox.includes(base.type)) {
+    if (!base.box) {
+      base.box = {
+        margin: { top: 0, right: 0, bottom: 0, left: 0 },
+        border: {
+          width: 0,
+          color: "rgba(0,0,0,0.2)",
+          style: "solid",
+          radius: base.radius || base.borderRadius || 0,
+          radiusTopLeft: base.radius || base.borderRadius || 0,
+          radiusTopRight: base.radius || base.borderRadius || 0,
+          radiusBottomRight: base.radius || base.borderRadius || 0,
+          radiusBottomLeft: base.radius || base.borderRadius || 0,
+        },
+        shadow: {
+          enabled: false,
+          x: 0,
+          y: 2,
+          blur: 8,
+          spread: 0,
+          color: "rgba(0,0,0,0.2)",
+        },
+        opacity: 1,
+        outline: {
+          width: 0,
+          color: "rgba(0,0,0,0.2)",
+          style: "solid",
+        },
+      };
+    }
+  }
+
+  if (base.order == null) base.order = 0;
+  if (base.slot === undefined) base.slot = null;
+  if (base.slotName === undefined) base.slotName = null;
+
+  // Default constraints for all nodes (except frames already have defaults above)
+  if (!base.constraints) {
+    base.constraints = {
+      horizontal: "left", // left, right, center, left-right, stretch
+      vertical: "top", // top, bottom, center, top-bottom, stretch
+    };
   }
   return base;
 };
@@ -326,6 +397,45 @@ export const useNodeTreeStore = create((set, get) => ({
 
   setTree: (nodes = {}, rootIds = []) => set({ nodes, rootIds }),
 
+  createComponent: (rootId) =>
+    set((state) => {
+      const master = collectSubtree(state.nodes, rootId);
+      const compId = crypto.randomUUID();
+      useComponentStore.getState().addComponent({
+        id: compId,
+        rootId,
+        nodes: master,
+        rootIds: [rootId],
+      });
+      return state;
+    }),
+
+  createInstance: (componentId, x = 0, y = 0) =>
+    set((state) => {
+      const comp = useComponentStore.getState().getComponent(componentId);
+      if (!comp) return state;
+      const instanceId = crypto.randomUUID();
+      const masterRoot = comp.nodes?.[comp.rootId];
+      const width = masterRoot?.width || 100;
+      const height = masterRoot?.height || 100;
+      const node = withDefaults({
+        id: instanceId,
+        type: "component-instance",
+        componentId,
+        nodeOverrides: {},
+        propOverrides: {},
+        x,
+        y,
+        width,
+        height,
+        children: [],
+      });
+      return {
+        nodes: { ...state.nodes, [instanceId]: node },
+        rootIds: [...state.rootIds, instanceId],
+      };
+    }),
+
   addNode: (node, parentId = null, index = null) =>
     set((state) => {
       const nodes = { ...state.nodes };
@@ -354,6 +464,37 @@ export const useNodeTreeStore = create((set, get) => ({
         nextNodes = applyAutoLayout(nextNodes, targetParent);
       }
       return { nodes: nextNodes, rootIds: Array.from(nextRootIds) };
+    }),
+
+  reparentNode: (id, newParentId = null) =>
+    set((state) => {
+      const nodes = { ...state.nodes };
+      if (!nodes[id]) return state;
+      const nextRootIds = new Set(state.rootIds);
+
+      // Remove from old parent/root
+      const prevParent = nodes[id].parent;
+      if (prevParent && nodes[prevParent]) {
+        nodes[prevParent] = {
+          ...nodes[prevParent],
+          children: (nodes[prevParent].children || []).filter((cid) => cid !== id),
+        };
+      } else {
+        nextRootIds.delete(id);
+      }
+
+      // Attach to new parent or root
+      if (newParentId && nodes[newParentId]) {
+        const parent = nodes[newParentId];
+        const children = Array.from(new Set([...(parent.children || []), id]));
+        nodes[newParentId] = { ...parent, children };
+        nodes[id] = { ...nodes[id], parent: newParentId };
+      } else {
+        nodes[id] = { ...nodes[id], parent: null };
+        nextRootIds.add(id);
+      }
+
+      return { nodes, rootIds: Array.from(nextRootIds) };
     }),
 
   updateNode: (id, updates) =>

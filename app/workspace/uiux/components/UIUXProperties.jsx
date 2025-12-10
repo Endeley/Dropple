@@ -9,6 +9,8 @@ import { SpanTypographyPanel } from "@/components/properties/typography/SpanTypo
 import { ComponentInstancePanel } from "@/components/properties/ComponentInstancePanel";
 import { usePrototypeStore } from "@/zustand/prototypeStore";
 import { usePageStore } from "@/zustand/pageStore";
+import ConstraintsWidget from "@/components/ui/ConstraintsWidget";
+import { useComponentStore } from "@/zustand/componentStore";
 
 const labelClass = "text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500";
 const inputClass =
@@ -24,6 +26,7 @@ const pillButton = (active) =>
 
 const isVectorType = (type) => ["line", "polygon", "pen", "pencil", "path"].includes(type);
 const finiteOrEmpty = (v, empty = "") => (Number.isFinite(v) ? v : empty);
+const buildLinearGradient = (c1, c2, angle = 90) => `linear-gradient(${angle}deg, ${c1}, ${c2})`;
 
 export default function UIUXProperties() {
   const selectedIds = useSelectionStore((s) => s.selectedIds);
@@ -55,6 +58,7 @@ export default function UIUXProperties() {
   const isText = selection?.type === "text" || selection?.type === "richtext";
   const isImage = selection?.type === "image";
   const isFrame = selection?.type === "frame";
+  const isShape = selection?.type === "shape" || selection?.type === "rect";
   const isVector = isVectorType(selection?.type);
   const isComponentInstance = selection?.type === "component-instance";
   const layout = selection?.layout || {};
@@ -66,6 +70,7 @@ export default function UIUXProperties() {
     () => Object.values(nodes).filter((n) => n.type === "frame"),
     [nodes],
   );
+  const components = useComponentStore((s) => s.components);
   const hasTextSelection =
     selection?.type === "richtext" &&
     textEditingId === selection?.id &&
@@ -93,6 +98,34 @@ export default function UIUXProperties() {
             onBlur={(e) => selection && updateNode(selection.id, { name: e.target.value })}
           />
         </div>
+        {selection ? (
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <div>
+              <div className={labelClass}>Slot Type</div>
+              <select
+                className={inputClass}
+                value={selection.slot || ""}
+                onChange={(e) => updateNode(selection.id, { slot: e.target.value || null })}
+              >
+                <option value="">None</option>
+                <option value="text">Text Slot</option>
+                <option value="image">Image Slot</option>
+                <option value="icon">Icon Slot</option>
+                <option value="container">Container Slot</option>
+                <option value="custom">Custom Slot</option>
+              </select>
+            </div>
+            <div>
+              <div className={labelClass}>Slot Name</div>
+              <input
+                className={inputClass}
+                placeholder="label, avatar, body..."
+                value={selection.slotName || ""}
+                onChange={(e) => updateNode(selection.id, { slotName: e.target.value })}
+              />
+            </div>
+          </div>
+        ) : null}
         {!selection ? (
           <div className="rounded-md bg-neutral-50 border border-dashed border-neutral-200 px-3 py-2 text-xs text-neutral-500">
             Select a frame, shape, or text layer to edit its properties.
@@ -199,7 +232,132 @@ export default function UIUXProperties() {
           </div>
         ) : null}
         {isFrame ? (
-          <div className="grid grid-cols-2 gap-2 mt-2">
+          <>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <div>
+                <div className={labelClass}>Background Image</div>
+                <input
+                  className={inputClass}
+                  placeholder="https://..."
+                  value={selection?.backgroundImage || ""}
+                  onChange={(e) => updateNode(selection.id, { backgroundImage: e.target.value })}
+                />
+              </div>
+              <div>
+                <div className={labelClass}>Background Fit</div>
+                <select
+                  className={inputClass}
+                  value={selection?.backgroundSize || "cover"}
+                  onChange={(e) => updateNode(selection.id, { backgroundSize: e.target.value })}
+                >
+                  <option value="cover">Cover</option>
+                  <option value="contain">Contain</option>
+                  <option value="fill">Fill</option>
+                  <option value="auto">Auto</option>
+                </select>
+              </div>
+            </div>
+            <div className="mt-2">
+              <div className={labelClass}>Background Gradient</div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <div className="text-[10px] uppercase text-neutral-500">Color 1</div>
+                  <input
+                    type="color"
+                    className="w-full h-10 border border-neutral-200 rounded-md"
+                    value={selection?.gradientColor1 || "#ff8a00"}
+                    onChange={(e) =>
+                      updateNode(selection.id, {
+                        gradientColor1: e.target.value,
+                        backgroundGradient: buildLinearGradient(e.target.value, selection?.gradientColor2 || "#e52e71", selection?.gradientAngle || 90),
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase text-neutral-500">Color 2</div>
+                  <input
+                    type="color"
+                    className="w-full h-10 border border-neutral-200 rounded-md"
+                    value={selection?.gradientColor2 || "#e52e71"}
+                    onChange={(e) =>
+                      updateNode(selection.id, {
+                        gradientColor2: e.target.value,
+                        backgroundGradient: buildLinearGradient(selection?.gradientColor1 || "#ff8a00", e.target.value, selection?.gradientAngle || 90),
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase text-neutral-500">Angle</div>
+                  <input
+                    className={inputClass}
+                    type="number"
+                    min="0"
+                    max="360"
+                    value={selection?.gradientAngle ?? 90}
+                    onChange={(e) => {
+                      const angle = parseFloat(e.target.value || "90");
+                      updateNode(selection.id, {
+                        gradientAngle: angle,
+                        backgroundGradient: buildLinearGradient(selection?.gradientColor1 || "#ff8a00", selection?.gradientColor2 || "#e52e71", angle),
+                      });
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="mt-2">
+                <input
+                  className={inputClass}
+                  placeholder="Custom: linear-gradient(90deg, #ff00cc, #3333ff)"
+                  value={selection?.backgroundGradient || ""}
+                  onChange={(e) => updateNode(selection.id, { backgroundGradient: e.target.value })}
+                />
+              </div>
+            </div>
+          </>
+        ) : null}
+      </Section>
+
+      {!isImage && selection ? (
+        <Section title="Fill & Stroke" defaultOpen>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <div className={labelClass}>Background Color</div>
+              <input
+                type="color"
+                className="w-full h-10 border border-neutral-200 rounded-md"
+                value={selection?.fill || "#f8fafc"}
+                onChange={(e) => updateNode(selection.id, { fill: e.target.value })}
+              />
+            </div>
+            <div>
+              <div className={labelClass}>Stroke</div>
+              <input
+                type="color"
+                className="w-full h-10 border border-neutral-200 rounded-md"
+                value={selection?.stroke || "#000000"}
+                onChange={(e) => updateNode(selection.id, { stroke: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="mt-2">
+            <div className={labelClass}>Stroke Width</div>
+            <input
+              className={inputClass}
+              type="number"
+              min="0"
+              step="0.5"
+              value={selection?.strokeWidth ?? 1}
+              onChange={(e) => updateNode(selection.id, { strokeWidth: parseFloat(e.target.value || "0") })}
+            />
+          </div>
+        </Section>
+      ) : null}
+
+      {isShape && selection ? (
+        <Section title="Shape Layout" defaultOpen>
+          <div className="mt-2 grid grid-cols-2 gap-2">
             <div>
               <div className={labelClass}>Background Image</div>
               <input
@@ -210,57 +368,423 @@ export default function UIUXProperties() {
               />
             </div>
             <div>
-              <div className={labelClass}>Background Fit</div>
-              <select
+              <div className={labelClass}>Gradient</div>
+              <input
                 className={inputClass}
-                value={selection?.backgroundSize || "cover"}
-                onChange={(e) => updateNode(selection.id, { backgroundSize: e.target.value })}
-              >
-                <option value="cover">Cover</option>
-                <option value="contain">Contain</option>
-                <option value="fill">Fill</option>
-                <option value="auto">Auto</option>
-              </select>
+                placeholder="linear-gradient(90deg, #ff00cc, #3333ff)"
+                value={selection?.backgroundGradient || ""}
+                onChange={(e) => updateNode(selection.id, { backgroundGradient: e.target.value })}
+              />
             </div>
           </div>
-        ) : null}
-      </Section>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            <div>
+              <div className={labelClass}>Radius</div>
+              <input
+                className={inputClass}
+                type="number"
+                min="0"
+                value={selection?.radius ?? selection?.borderRadius ?? 0}
+                onChange={(e) =>
+                  updateNode(selection.id, {
+                    radius: parseFloat(e.target.value || "0"),
+                    borderRadius: parseFloat(e.target.value || "0"),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <div className={labelClass}>Padding</div>
+              <input
+                className={inputClass}
+                type="number"
+                min="0"
+                value={selection?.padding ?? 0}
+                onChange={(e) => updateNode(selection.id, { padding: parseInt(e.target.value || "0", 10) })}
+              />
+            </div>
+            <div className="flex items-end">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selection?.autoLayout?.enabled || false}
+                  onChange={(e) =>
+                    updateNode(selection.id, {
+                      autoLayout: { ...(selection.autoLayout || {}), enabled: e.target.checked },
+                    })
+                  }
+                />
+                <span className="text-neutral-700">Auto Layout</span>
+              </label>
+            </div>
+          </div>
+          {selection?.autoLayout?.enabled ? (
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <select
+                className={inputClass}
+                value={selection?.autoLayout?.direction || "vertical"}
+                onChange={(e) =>
+                  updateNode(selection.id, {
+                    autoLayout: { ...(selection.autoLayout || {}), direction: e.target.value },
+                  })
+                }
+              >
+                <option value="vertical">Vertical</option>
+                <option value="horizontal">Horizontal</option>
+              </select>
+              <input
+                className={inputClass}
+                type="number"
+                min="0"
+                value={selection?.autoLayout?.spacing ?? 12}
+                onChange={(e) =>
+                  updateNode(selection.id, {
+                    autoLayout: { ...(selection.autoLayout || {}), spacing: parseInt(e.target.value || "0", 10) },
+                  })
+                }
+              />
+              <select
+                className={inputClass}
+                value={selection?.autoLayout?.align || "start"}
+                onChange={(e) =>
+                  updateNode(selection.id, {
+                    autoLayout: { ...(selection.autoLayout || {}), align: e.target.value },
+                  })
+                }
+              >
+                <option value="start">Align Start</option>
+                <option value="center">Align Center</option>
+                <option value="end">Align End</option>
+                <option value="stretch">Stretch</option>
+              </select>
+            </div>
+          ) : null}
+          {selection?.autoLayout?.enabled ? (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <select
+                className={inputClass}
+                value={selection?.autoLayout?.justify || "start"}
+                onChange={(e) =>
+                  updateNode(selection.id, {
+                    autoLayout: { ...(selection.autoLayout || {}), justify: e.target.value },
+                  })
+                }
+              >
+                <option value="start">Justify Start</option>
+                <option value="center">Justify Center</option>
+                <option value="end">Justify End</option>
+                <option value="space-between">Space Between</option>
+              </select>
+              <div className="grid grid-cols-4 gap-1">
+                {["top", "right", "bottom", "left"].map((side) => (
+                  <input
+                    key={side}
+                    className="w-full bg-white border border-neutral-200 rounded-md px-2 py-2 text-xs text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500 transition"
+                    placeholder={side[0].toUpperCase()}
+                    value={selection?.autoLayout?.padding?.[side] ?? 0}
+                    onChange={(e) =>
+                      updateNode(selection.id, {
+                        autoLayout: {
+                          ...(selection.autoLayout || {}),
+                          padding: {
+                            ...(selection.autoLayout?.padding || {}),
+                            [side]: parseInt(e.target.value || "0", 10),
+                          },
+                        },
+                      })
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </Section>
+      ) : null}
 
-      {!isImage && selection ? (
-        <Section title="Fill & Stroke" defaultOpen>
-          <div className="grid grid-cols-2 gap-2">
-          <div>
-            <div className={labelClass}>Fill</div>
-            <input
-              type="color"
-              className="w-full h-10 border border-neutral-200 rounded-md"
-              value={selection?.fill || "#ffffff"}
-              onChange={(e) => updateNode(selection.id, { fill: e.target.value })}
-            />
-          </div>
-          <div>
-            <div className={labelClass}>Stroke</div>
-            <input
-              type="color"
-              className="w-full h-10 border border-neutral-200 rounded-md"
-              value={selection?.stroke || "#000000"}
-              onChange={(e) => updateNode(selection.id, { stroke: e.target.value })}
-            />
-          </div>
-        </div>
-        <div className="mt-2">
-          <div className={labelClass}>Stroke Width</div>
-          <input
-            className={inputClass}
-            type="number"
-            min="0"
-            step="0.5"
-            value={selection?.strokeWidth ?? 1}
-            onChange={(e) => updateNode(selection.id, { strokeWidth: parseFloat(e.target.value || "0") })}
-          />
-        </div>
-      </Section>
-    ) : null}
+      {(selection?.box) ? (
+        <>
+          <Section title="Scroll" defaultOpen={false}>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className={labelClass}>Vertical Overflow</div>
+                <select
+                  className={inputClass}
+                  value={selection?.scroll?.overflowY || "visible"}
+                  onChange={(e) =>
+                    updateNode(selection.id, {
+                      scroll: { ...(selection.scroll || {}), overflowY: e.target.value },
+                    })
+                  }
+                >
+                  <option value="visible">Visible</option>
+                  <option value="scroll">Scroll</option>
+                  <option value="hidden">Hidden</option>
+                </select>
+              </div>
+              <div>
+                <div className={labelClass}>Horizontal Overflow</div>
+                <select
+                  className={inputClass}
+                  value={selection?.scroll?.overflowX || "visible"}
+                  onChange={(e) =>
+                    updateNode(selection.id, {
+                      scroll: { ...(selection.scroll || {}), overflowX: e.target.value },
+                    })
+                  }
+                >
+                  <option value="visible">Visible</option>
+                  <option value="scroll">Scroll</option>
+                  <option value="hidden">Hidden</option>
+                </select>
+              </div>
+            </div>
+          </Section>
+
+          <Section title="Box Model" defaultOpen={false}>
+            <div className="mt-2">
+              <div className={labelClass}>Margin</div>
+              <div className="grid grid-cols-4 gap-2">
+                {["top", "right", "bottom", "left"].map((side) => (
+                  <input
+                    key={side}
+                    className={inputClass}
+                    type="number"
+                    value={selection?.box?.margin?.[side] ?? 0}
+                    onChange={(e) =>
+                      updateNode(selection.id, {
+                        box: {
+                          ...(selection.box || {}),
+                          margin: {
+                            ...(selection.box?.margin || {}),
+                            [side]: parseInt(e.target.value || "0", 10),
+                          },
+                        },
+                      })
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <div>
+                <div className={labelClass}>Border Width</div>
+                <input
+                  className={inputClass}
+                  type="number"
+                  min="0"
+                  value={selection?.box?.border?.width ?? 0}
+                  onChange={(e) =>
+                    updateNode(selection.id, {
+                      box: {
+                        ...(selection.box || {}),
+                        border: {
+                          ...(selection.box?.border || {}),
+                          width: parseInt(e.target.value || "0", 10),
+                        },
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <div className={labelClass}>Border Color</div>
+                <input
+                  className={inputClass}
+                  type="color"
+                  value={selection?.box?.border?.color || "#cccccc"}
+                  onChange={(e) =>
+                    updateNode(selection.id, {
+                      box: {
+                        ...(selection.box || {}),
+                        border: {
+                          ...(selection.box?.border || {}),
+                          color: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <div className={labelClass}>Border Style</div>
+                <select
+                  className={inputClass}
+                  value={selection?.box?.border?.style || "solid"}
+                  onChange={(e) =>
+                    updateNode(selection.id, {
+                      box: {
+                        ...(selection.box || {}),
+                        border: {
+                          ...(selection.box?.border || {}),
+                          style: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                >
+                  <option value="solid">Solid</option>
+                  <option value="dashed">Dashed</option>
+                  <option value="dotted">Dotted</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-2 grid grid-cols-4 gap-2">
+              {[
+                { key: "radiusTopLeft", label: "TL" },
+                { key: "radiusTopRight", label: "TR" },
+                { key: "radiusBottomRight", label: "BR" },
+                { key: "radiusBottomLeft", label: "BL" },
+              ].map((r) => (
+                <div key={r.key}>
+                  <div className={labelClass}>{r.label}</div>
+                  <input
+                    className={inputClass}
+                    type="number"
+                    min="0"
+                    value={selection?.box?.border?.[r.key] ?? selection?.box?.border?.radius ?? 0}
+                    onChange={(e) =>
+                      updateNode(selection.id, {
+                        box: {
+                          ...(selection.box || {}),
+                          border: {
+                            ...(selection.box?.border || {}),
+                            [r.key]: parseFloat(e.target.value || "0"),
+                          },
+                        },
+                      })
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <div>
+                <div className={labelClass}>Outline Width</div>
+                <input
+                  className={inputClass}
+                  type="number"
+                  min="0"
+                  value={selection?.box?.outline?.width ?? 0}
+                  onChange={(e) =>
+                    updateNode(selection.id, {
+                      box: {
+                        ...(selection.box || {}),
+                        outline: { ...(selection.box?.outline || {}), width: parseInt(e.target.value || "0", 10) },
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <div className={labelClass}>Outline Color</div>
+                <input
+                  className={inputClass}
+                  type="color"
+                  value={selection?.box?.outline?.color || "#cccccc"}
+                  onChange={(e) =>
+                    updateNode(selection.id, {
+                      box: {
+                        ...(selection.box || {}),
+                        outline: { ...(selection.box?.outline || {}), color: e.target.value },
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <div className={labelClass}>Outline Style</div>
+                <select
+                  className={inputClass}
+                  value={selection?.box?.outline?.style || "solid"}
+                  onChange={(e) =>
+                    updateNode(selection.id, {
+                      box: {
+                        ...(selection.box || {}),
+                        outline: { ...(selection.box?.outline || {}), style: e.target.value },
+                      },
+                    })
+                  }
+                >
+                  <option value="solid">Solid</option>
+                  <option value="dashed">Dashed</option>
+                  <option value="dotted">Dotted</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-2">
+              <div className={labelClass}>Shadow</div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selection?.box?.shadow?.enabled || false}
+                  onChange={(e) =>
+                    updateNode(selection.id, {
+                      box: {
+                        ...(selection.box || {}),
+                        shadow: { ...(selection.box?.shadow || {}), enabled: e.target.checked },
+                      },
+                    })
+                  }
+                />
+                <span className="text-neutral-700">Enable Shadow</span>
+              </label>
+              {selection?.box?.shadow?.enabled ? (
+                <div className="grid grid-cols-5 gap-2 mt-2">
+                  {["x", "y", "blur", "spread"].map((prop) => (
+                    <input
+                      key={prop}
+                      className={inputClass}
+                      type="number"
+                      value={selection?.box?.shadow?.[prop] ?? 0}
+                      onChange={(e) =>
+                        updateNode(selection.id, {
+                          box: {
+                            ...(selection.box || {}),
+                            shadow: { ...(selection.box?.shadow || {}), [prop]: parseInt(e.target.value || "0", 10) },
+                          },
+                        })
+                      }
+                    />
+                  ))}
+                  <input
+                    className={inputClass}
+                    type="color"
+                    value={selection?.box?.shadow?.color || "#000000"}
+                    onChange={(e) =>
+                      updateNode(selection.id, {
+                        box: {
+                          ...(selection.box || {}),
+                          shadow: { ...(selection.box?.shadow || {}), color: e.target.value },
+                        },
+                      })
+                    }
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-3">
+              <div className={labelClass}>Opacity</div>
+              <input
+                className={inputClass}
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={selection?.box?.opacity ?? 1}
+                onChange={(e) =>
+                  updateNode(selection.id, {
+                    box: { ...(selection.box || {}), opacity: parseFloat(e.target.value || "1") },
+                  })
+                }
+              />
+            </div>
+          </Section>
+        </>
+      ) : null}
 
       {isImage && selection ? (
         <Section title="Image" defaultOpen>
@@ -565,21 +1089,11 @@ export default function UIUXProperties() {
               <option value="fluid">Fluid</option>
               <option value="adaptive">Adaptive</option>
             </select>
-          ) : (
-            <select
-              className={inputClass}
-              value={constraints.horizontal || "left"}
-              onChange={(e) =>
-                selection && updateNode(selection.id, { constraints: { ...(constraints || {}), horizontal: e.target.value } })
-              }
-            >
-              <option value="left">Left</option>
-              <option value="center">Center</option>
-              <option value="right">Right</option>
-              <option value="left-right">Left & Right</option>
-              <option value="scale">Scale</option>
-            </select>
-          )}
+          ) : null}
+        </div>
+        <div className="mt-2">
+          <div className={labelClass}>Constraints</div>
+          <ConstraintsWidget node={selection} updateNode={updateNode} />
         </div>
         {layout.enabled ? (
           <div className="grid grid-cols-2 gap-2 mt-2">
@@ -1035,8 +1549,72 @@ export default function UIUXProperties() {
       )}
 
       {isComponentInstance && selection && (
-        <Section title="Component" defaultOpen={false}>
+        <Section title="Component Overrides" defaultOpen>
           <ComponentInstancePanel node={selection} />
+          {(() => {
+            const master = components?.[selection.componentId];
+            if (!master) return null;
+            const slots = Object.values(master.nodes || {}).filter((n) => n.slot);
+            if (!slots.length) return <div className="text-xs text-neutral-500 mt-2">No slots defined on master.</div>;
+
+            const setOverride = (nodeId, prop, value) => {
+              const overrides = selection.nodeOverrides || {};
+              const next = { ...overrides, [`${nodeId}.${prop}`]: value };
+              updateNode(selection.id, { nodeOverrides: next });
+            };
+            const clearOverride = (nodeId, prop) => {
+              const overrides = { ...(selection.nodeOverrides || {}) };
+              delete overrides[`${nodeId}.${prop}`];
+              updateNode(selection.id, { nodeOverrides: overrides });
+            };
+
+            return (
+              <div className="space-y-3 mt-3">
+                {slots.map((slot) => (
+                  <div key={slot.id} className="border border-neutral-200 rounded-md p-3 space-y-2">
+                    <div className="flex items-center justify-between text-sm font-semibold text-neutral-800">
+                      <span>{slot.slotName || slot.id}</span>
+                      <span className="text-[11px] text-neutral-500">{slot.slot || "slot"}</span>
+                    </div>
+                    {slot.slot === "text" ? (
+                      <input
+                        className={inputClass}
+                        placeholder={slot.text || "Override text"}
+                        value={selection.nodeOverrides?.[`${slot.id}.text`] || ""}
+                        onChange={(e) => setOverride(slot.id, "text", e.target.value)}
+                      />
+                    ) : null}
+                    {slot.slot === "image" || slot.slot === "icon" ? (
+                      <input
+                        className={inputClass}
+                        placeholder={slot.src || "Image URL"}
+                        value={selection.nodeOverrides?.[`${slot.id}.src`] || ""}
+                        onChange={(e) => setOverride(slot.id, "src", e.target.value)}
+                      />
+                    ) : null}
+                    {slot.slot === "container" || slot.slot === "custom" ? (
+                      <input
+                        className={inputClass}
+                        type="color"
+                        value={selection.nodeOverrides?.[`${slot.id}.fill`] || slot.fill || "#ffffff"}
+                        onChange={(e) => setOverride(slot.id, "fill", e.target.value)}
+                      />
+                    ) : null}
+                    <button
+                      className={miniButton}
+                      onClick={() => {
+                        clearOverride(slot.id, "text");
+                        clearOverride(slot.id, "src");
+                        clearOverride(slot.id, "fill");
+                      }}
+                    >
+                      Clear Overrides
+                    </button>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </Section>
       )}
 

@@ -8,11 +8,15 @@ import { useAssetBrowserStore } from "@/zustand/assetBrowserStore";
 import { useComponentStore } from "@/zustand/componentStore";
 import { useUndoStore } from "@/zustand/undoStore";
 import { usePageStore } from "@/zustand/pageStore";
+import ComponentsLibraryPanel from "@/components/workspace/ComponentsLibraryPanel";
+import { useMemo } from "react";
 
 export default function UIUXTools() {
   const { tool, setTool } = useToolStore();
   const addNode = useNodeTreeStore((s) => s.addNode);
   const removeNode = useNodeTreeStore((s) => s.removeNode);
+  const createComponent = useNodeTreeStore((s) => s.createComponent);
+  const createInstance = useNodeTreeStore((s) => s.createInstance);
   const nodes = useNodeTreeStore((s) => s.nodes);
   const rootIds = useNodeTreeStore((s) => s.rootIds);
   const setSelectedManual = useSelectionStore((s) => s.setSelectedManual);
@@ -21,7 +25,6 @@ export default function UIUXTools() {
   const fileRef = useRef(null);
   const frames = useMemo(() => rootIds.map((id) => nodes[id]).filter((n) => n?.type === "frame"), [nodes, rootIds]);
   const openBrowser = useAssetBrowserStore((s) => s.openBrowser);
-  const addComponent = useComponentStore((s) => s.addComponent);
   const components = useComponentStore((s) => s.components);
   const pushHistory = useUndoStore((s) => s.push);
   const pages = usePageStore((s) => s.pages);
@@ -85,58 +88,8 @@ export default function UIUXTools() {
     if (!selectedIds.length) return;
     const id = selectedIds[0];
     const node = nodes[id];
-    if (!node || node.type !== "frame") return;
-    const componentId = "component_" + crypto.randomUUID();
-    const tree = {};
-    const collect = (nid) => {
-      const n = nodes[nid];
-      if (!n) return;
-      tree[nid] = { ...n };
-      (n.children || []).forEach(collect);
-    };
-    collect(id);
-    addComponent({
-      id: componentId,
-      name: node.name || "Component",
-      nodes: tree,
-      rootIds: [id],
-      variants: [],
-      props: {},
-    });
-    const before = {
-      kind: "tree",
-      before: {
-        nodes: JSON.parse(JSON.stringify(nodes)),
-        rootIds: [...rootIds],
-        components: JSON.parse(JSON.stringify(components)),
-      },
-    };
-
-    removeNode(id);
-    addNode({
-      id,
-      type: "component-instance",
-      componentId,
-      variantId: null,
-      propOverrides: {},
-      nodeOverrides: {},
-      x: node.x,
-      y: node.y,
-      width: node.width,
-      height: node.height,
-      rotation: node.rotation,
-      parent: node.parent,
-      children: [],
-    });
-    setSelectedManual([id]);
-    const afterSnapshotNodes = useNodeTreeStore.getState().nodes;
-    const afterRootIds = useNodeTreeStore.getState().rootIds;
-    before.after = {
-      nodes: JSON.parse(JSON.stringify(afterSnapshotNodes)),
-      rootIds: [...afterRootIds],
-      components: JSON.parse(JSON.stringify(useComponentStore.getState().components)),
-    };
-    pushHistory(before);
+    if (!node) return;
+    createComponent(id);
   };
 
   const handleImageUpload = (e) => {
@@ -190,6 +143,19 @@ export default function UIUXTools() {
           >
             + Add Page
           </button>
+        </div>
+      </div>
+      <div className="space-y-2">
+        <div className={sectionLabel}>Components</div>
+        <div className="space-y-2">
+          <button
+            className="w-full px-3 py-2 text-left rounded-md text-sm font-medium transition border bg-white border-neutral-200 text-neutral-700 hover:border-violet-300 hover:bg-violet-50"
+            onClick={handleCreateComponent}
+            disabled={!selectedIds.length}
+          >
+            Create Component from Selection
+          </button>
+          <ComponentsLibraryPanel />
         </div>
       </div>
 

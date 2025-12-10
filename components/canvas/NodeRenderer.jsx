@@ -17,6 +17,22 @@ import { useVectorEditStore } from "@/zustand/vectorEditStore";
 import { resolveValue } from "@/lib/tokens/resolveValue";
 import { useComponentStore } from "@/zustand/componentStore";
 import { measureResolvedBounds, resolveInstance } from "@/lib/components/resolveInstance";
+import { useSnappingStore } from "@/zustand/snappingStore";
+
+const autoAlignToCSS = (value) => {
+  switch (value) {
+    case "start":
+      return "flex-start";
+    case "center":
+      return "center";
+    case "end":
+      return "flex-end";
+    case "stretch":
+      return "stretch";
+    default:
+      return "flex-start";
+  }
+};
 
 function RichTextNode({
   node,
@@ -328,6 +344,8 @@ export default function NodeRenderer({ onNodePointerDown }) {
   const beginSelection = useTextEditStore((s) => s.beginSelection);
   const updateSelection = useTextEditStore((s) => s.updateSelection);
   const endSelection = useTextEditStore((s) => s.endSelection);
+  const highlightTarget = useSnappingStore((s) => s.highlightTarget);
+  const dropIndicator = useSnappingStore((s) => s.dropIndicator);
   const pendingStyle = useTextEditStore((s) => s.pendingStyle);
   const setPendingStyle = useTextEditStore((s) => s.setPendingStyle);
   const setTool = useToolStore((s) => s.setTool);
@@ -477,6 +495,37 @@ export default function NodeRenderer({ onNodePointerDown }) {
       display: node.hidden ? "none" : "block",
       ...build3DStyle(node),
     };
+    // Apply box model if present
+    if (node.box) {
+      style.marginTop = node.box.margin?.top ?? style.marginTop;
+      style.marginRight = node.box.margin?.right ?? style.marginRight;
+      style.marginBottom = node.box.margin?.bottom ?? style.marginBottom;
+      style.marginLeft = node.box.margin?.left ?? style.marginLeft;
+      style.borderWidth = node.box.border?.width ?? style.borderWidth;
+      style.borderColor = node.box.border?.color ?? style.borderColor;
+      style.borderStyle = node.box.border?.style ?? style.borderStyle;
+      const tl = node.box.border?.radiusTopLeft;
+      const tr = node.box.border?.radiusTopRight;
+      const br = node.box.border?.radiusBottomRight;
+      const bl = node.box.border?.radiusBottomLeft;
+      if ([tl, tr, br, bl].some((v) => v != null)) {
+        style.borderRadius = `${tl ?? 0}px ${tr ?? tl ?? 0}px ${br ?? tl ?? 0}px ${bl ?? tl ?? 0}px`;
+      } else {
+        style.borderRadius = node.box.border?.radius ?? style.borderRadius ?? node.borderRadius ?? 0;
+      }
+      if (node.box.shadow?.enabled) {
+        const s = node.box.shadow;
+        style.boxShadow = `${s.x || 0}px ${s.y || 0}px ${s.blur || 0}px ${s.spread || 0}px ${s.color || "rgba(0,0,0,0.2)"}`;
+      }
+      style.opacity = node.box.opacity ?? style.opacity;
+      if (node.box.outline) {
+        const ow = node.box.outline.width ?? 0;
+        if (ow > 0) {
+          style.outline = `${ow}px ${node.box.outline.style || "solid"} ${node.box.outline.color || "rgba(0,0,0,0.2)"}`;
+          style.outlineOffset = node.box.outline.offset ?? 0;
+        }
+      }
+    }
 
     let content = null;
     switch (node.type) {
@@ -634,27 +683,88 @@ export default function NodeRenderer({ onNodePointerDown }) {
               onNodePointerDown?.(e, id);
             }}
           >
-            {(resolved.rootIds || []).map((rid) => renderResolved(rid))}
-          </div>
-        );
-        break;
-      }
-      case "frame":
-        style.backgroundColor = resolveValue(node.fill) || "#ffffff";
-        style.backgroundImage = node.backgroundImage ? `url(${node.backgroundImage})` : undefined;
-        style.backgroundSize = node.backgroundSize || "cover";
-        style.backgroundPosition = "center";
-        style.backgroundRepeat = "no-repeat";
+          {(resolved.rootIds || []).map((rid) => renderResolved(rid))}
+        </div>
+      );
+      break;
+    }
+      case "frame": {
+        // FRAME BACKGROUND SYSTEM
+        const frameFill =
+          typeof node.fill === "string" && node.fill.trim().length ? node.fill : "#f8fafc";
+        const gradient = typeof node.backgroundGradient === "string" && node.backgroundGradient.trim().length
+          ? node.backgroundGradient
+          : null;
+        const bgImage = typeof node.backgroundImage === "string" && node.backgroundImage.trim().length
+          ? `url(${node.backgroundImage})`
+          : null;
+
+        // Order of precedence: gradient > image > color.
+        style.background = gradient || bgImage || frameFill;
+        if (bgImage && !gradient) {
+          style.backgroundSize = node.backgroundSize || "cover";
+          style.backgroundPosition = "center";
+          style.backgroundRepeat = "no-repeat";
+        }
+
         style.borderStyle = node.strokeWidth ? "solid" : "none";
-        style.borderColor = node.stroke ? resolveValue(node.stroke) : "transparent";
-        style.borderWidth = node.strokeWidth || 0;
+        style.borderColor = node.stroke ? resolveValue(node.stroke) : "#cbd5e1";
+        style.borderWidth = node.strokeWidth || 1;
         style.borderRadius = node.borderRadius || 0;
+        style.overflowX = node.scroll?.overflowX || "visible";
+        style.overflowY = node.scroll?.overflowY || "visible";
         content = null;
         break;
+      }
       case "rect":
-      case "shape":
-        content = <div style={{ background: resolveValue(node.fill) || "#666", width: "100%", height: "100%" }} />;
+      case "shape": {
+        const shapeFill =
+          typeof node.fill === "string" && node.fill.trim().length ? node.fill : "#f8fafc";
+        const gradient =
+          typeof node.backgroundGradient === "string" && node.backgroundGradient.trim().length
+            ? node.backgroundGradient
+            : null;
+        const bgImage =
+          typeof node.backgroundImage === "string" && node.backgroundImage.trim().length
+            ? `url(${node.backgroundImage})`
+            : null;
+
+        style.background = gradient || bgImage || shapeFill;
+        if (bgImage && !gradient) {
+          style.backgroundSize = "cover";
+          style.backgroundPosition = "center";
+          style.backgroundRepeat = "no-repeat";
+        }
+        style.borderRadius = node.radius ?? node.borderRadius ?? 0;
+        style.padding = node.padding ?? 0;
+        style.overflow = "hidden";
+        if (node.autoLayout?.enabled) {
+          style.display = "flex";
+          style.flexDirection = node.autoLayout?.direction === "horizontal" ? "row" : "column";
+          style.gap = node.autoLayout?.spacing ?? 0;
+          style.alignItems = autoAlignToCSS(node.autoLayout?.align);
+          const justifyMap = {
+            start: "flex-start",
+            center: "center",
+            end: "flex-end",
+            "space-between": "space-between",
+          };
+          style.justifyContent = justifyMap[node.autoLayout?.justify] || "flex-start";
+          if (node.autoLayout?.padding) {
+            style.paddingTop = node.autoLayout.padding.top ?? 0;
+            style.paddingRight = node.autoLayout.padding.right ?? 0;
+            style.paddingBottom = node.autoLayout.padding.bottom ?? 0;
+            style.paddingLeft = node.autoLayout.padding.left ?? 0;
+          }
+        }
+        style.borderStyle = node.strokeWidth ? "solid" : "none";
+        style.borderColor = node.stroke ? resolveValue(node.stroke) : "#cbd5e1";
+        style.borderWidth = node.strokeWidth || 0;
+        style.overflowX = node.scroll?.overflowX || "visible";
+        style.overflowY = node.scroll?.overflowY || "visible";
+        content = null;
         break;
+      }
       case "ellipse": {
         const w = node.width || 1;
         const h = node.height || 1;
@@ -842,6 +952,13 @@ export default function NodeRenderer({ onNodePointerDown }) {
         content = <div className="bg-neutral-700 w-full h-full" />;
     }
 
+  // Render children in order if auto-layout container
+  const childIds = (node.children || []).map((cid) => nodes[cid]).filter(Boolean);
+  const orderedChildren =
+    node.autoLayout?.enabled || node.type === "frame" || node.type === "shape"
+      ? childIds.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      : childIds;
+
   return (
     <div
       key={id}
@@ -852,8 +969,35 @@ export default function NodeRenderer({ onNodePointerDown }) {
       }}
       onClick={() => triggerInteractions(id, "onClick")}
     >
+      {highlightTarget === id && (
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            border: "2px solid #3b82f6",
+            boxShadow: "0 0 0 4px rgba(59,130,246,0.3)",
+            borderRadius: style.borderRadius || 4,
+          }}
+        />
+      )}
+      {dropIndicator?.parentId === id && node.autoLayout?.enabled && (
+        <div
+          className="absolute bg-blue-500 pointer-events-none"
+          style={{
+            left:
+              node.autoLayout.direction === "horizontal"
+                ? (dropIndicator.x || 0) - safe(node.x)
+                : 0,
+            top:
+              node.autoLayout.direction === "horizontal"
+                ? 0
+                : (dropIndicator.y || 0) - safe(node.y),
+            width: node.autoLayout.direction === "horizontal" ? 2 : "100%",
+            height: node.autoLayout.direction === "horizontal" ? "100%" : 2,
+          }}
+        />
+      )}
       {content}
-      {node.children?.map((childId) => renderNode(childId))}
+      {orderedChildren.map((child) => renderNode(child.id))}
     </div>
   );
   };

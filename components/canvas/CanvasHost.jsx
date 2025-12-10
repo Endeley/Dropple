@@ -43,10 +43,15 @@ export default function CanvasHost({
   const rootIds = useNodeTreeStore((s) => s.rootIds);
   const updateNode = useNodeTreeStore((s) => s.updateNode);
   const addNode = useNodeTreeStore((s) => s.addNode);
+  const reparentNode = useNodeTreeStore((s) => s.reparentNode);
   const snapToGrid = useToolStore((s) => s.snapToGrid);
   const gridSize = useToolStore((s) => s.gridSize);
   const setGuides = useSnappingStore((s) => s.setGuides);
   const clearGuides = useSnappingStore((s) => s.clearGuides);
+  const setHighlightTarget = useSnappingStore((s) => s.setHighlightTarget);
+  const clearHighlight = useSnappingStore((s) => s.clearHighlight);
+  const setDropIndicator = useSnappingStore((s) => s.setDropIndicator);
+  const clearDropIndicator = useSnappingStore((s) => s.clearDropIndicator);
   const draggingComponentId = useComponentStore((s) => s.draggingComponentId);
   const clearDraggingComponent = useComponentStore((s) => s.clearDraggingComponent);
   const pushHistory = useUndoStore((s) => s.push);
@@ -83,6 +88,7 @@ export default function CanvasHost({
         if (n) acc[id] = { x: n.x, y: n.y };
         return acc;
       }, {}),
+      lastPos: toLocal(e.clientX, e.clientY),
     };
   };
 
@@ -396,6 +402,33 @@ export default function CanvasHost({
       const { startX, startY, initialPositions } = dragRef.current;
       const dx = (e.clientX - startX) / zoom;
       const dy = (e.clientY - startY) / zoom;
+      dragRef.current.lastPos = toLocal(e.clientX, e.clientY);
+      const hoveredContainer = hitTestContainer(dragRef.current.lastPos.x, dragRef.current.lastPos.y);
+      if (hoveredContainer) {
+        setHighlightTarget(hoveredContainer.id);
+        if (hoveredContainer.autoLayout?.enabled) {
+          const dropIndicator = computeAutoLayoutDropIndicator(
+            hoveredContainer,
+            dragRef.current.lastPos.x,
+            dragRef.current.lastPos.y,
+          );
+          setDropIndicator(dropIndicator);
+        } else {
+          clearDropIndicator();
+        }
+        // Alt-drag to adjust spacing quickly.
+        if (e.altKey && hoveredContainer.autoLayout?.enabled) {
+          const vertical = hoveredContainer.autoLayout.direction !== "horizontal";
+          const delta = vertical ? dy : dx;
+          const nextSpacing = Math.max(0, (hoveredContainer.autoLayout.spacing || 0) + delta);
+          updateNode(hoveredContainer.id, {
+            autoLayout: { ...(hoveredContainer.autoLayout || {}), spacing: nextSpacing },
+          });
+        }
+      } else {
+        clearHighlight();
+        clearDropIndicator();
+      }
       const snapPoints = getSnapPoints(nodes, selectedIds);
       const guides = [];
       selectedIds.forEach((id) => {
@@ -427,7 +460,41 @@ export default function CanvasHost({
   };
 
   const onMouseUp = () => {
-    dragRef.current = null;
+    if (dragRef.current) {
+      const lastPos = dragRef.current.lastPos;
+      if (lastPos) {
+        // Hit-test for potential parent frame.
+        const potentialParent = hitTestNode(lastPos.x, lastPos.y);
+        const childId = selectedIds[0];
+        if (
+          potentialParent &&
+          potentialParent.type === NODE_TYPES.FRAME &&
+          childId &&
+          childId !== potentialParent.id &&
+          nodes[potentialParent.id]?.parent !== childId
+        ) {
+          reparentNode(childId, potentialParent.id);
+        }
+        if (potentialParent?.autoLayout?.enabled && dropIndicator?.parentId === potentialParent.id) {
+          const parent = nodes[potentialParent.id];
+          const draggedId = selectedIds[0];
+          if (parent && draggedId && parent.children?.includes(draggedId)) {
+            const newChildren = [...parent.children];
+            const fromIdx = newChildren.indexOf(draggedId);
+            const toIdx = Math.min(dropIndicator.index, newChildren.length - 1);
+            if (fromIdx > -1 && toIdx > -1 && fromIdx !== toIdx) {
+              newChildren.splice(fromIdx, 1);
+              newChildren.splice(toIdx, 0, draggedId);
+              newChildren.forEach((cid, i) => updateNode(cid, { order: i }));
+              updateNode(parent.id, { children: newChildren });
+            }
+          }
+        }
+      }
+      dragRef.current = null;
+    }
+    clearHighlight();
+    clearDropIndicator();
     resizeRef.current = null;
     rotateRef.current = null;
     if (creationRef.current) {
@@ -437,7 +504,70 @@ export default function CanvasHost({
     clearGuides();
   };
 
-  const onMouseLeave = () => {};
+  const onMouseLeave = () => {
+    clearHighlight();
+    clearDropIndicator();
+  };
+
+  // Hit-test any node at point (local coordinates).
+  const hitTestNode = (localX, localY) => {
+    const all = Object.values(nodes || {});
+    const sorted = all
+      .filter((n) => n && n.width != null && n.height != null)
+      .sort((a, b) => {
+        const areaA = (a.width || 0) * (a.height || 0);
+        const areaB = (b.width || 0) * (b.height || 0);
+        return areaA - areaB;
+      });
+    return sorted.find(
+      (n) => localX >= n.x && localX <= n.x + (n.width || 0) && localY >= n.y && localY <= n.y + (n.height || 0),
+    );
+  };
+
+  // Hit-test only container nodes (frames/shapes).
+  const hitTestContainer = (x, y) => {
+    const containers = Object.values(nodes || {}).filter((n) => n && (n.type === NODE_TYPES.FRAME || n.type === "shape"));
+    const sorted = containers.sort((a, b) => (a.width || 0) * (a.height || 0) - (b.width || 0) * (b.height || 0));
+    return sorted.find((n) => x >= n.x && x <= n.x + (n.width || 0) && y >= n.y && y <= n.y + (n.height || 0));
+  };
+
+  const computeAutoLayoutDropIndicator = (parent, localX, localY) => {
+    if (!parent) return { parentId: null, index: 0, x: 0, y: 0 };
+    const vertical = parent.autoLayout?.direction !== "horizontal";
+    const children = (parent.children || [])
+      .map((id) => nodes[id])
+      .filter(Boolean)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    let targetIndex = children.length;
+    const gap = parent.autoLayout?.spacing || 0;
+    const pad = parent.autoLayout?.padding || { top: 0, right: 0, bottom: 0, left: 0 };
+    let lineX = vertical ? parent.x : parent.x + pad.left;
+    let lineY = vertical ? parent.y + pad.top : parent.y;
+
+    for (let i = 0; i < children.length; i++) {
+      const c = children[i];
+      const mid = vertical ? c.y + c.height / 2 : c.x + c.width / 2;
+      if ((vertical && localY < mid) || (!vertical && localX < mid)) {
+        targetIndex = i;
+        lineX = vertical ? parent.x + pad.left : c.x - gap / 2;
+        lineY = vertical ? c.y - gap / 2 : parent.y + pad.top;
+        break;
+      }
+    }
+
+    if (!children.length) {
+      lineX = parent.x + pad.left;
+      lineY = parent.y + pad.top;
+      targetIndex = 0;
+    } else if (targetIndex === children.length) {
+      const last = children[children.length - 1];
+      lineX = vertical ? parent.x + pad.left : last.x + last.width + gap / 2;
+      lineY = vertical ? last.y + last.height + gap / 2 : parent.y + pad.top;
+    }
+
+    return { parentId: parent.id, index: targetIndex, x: lineX, y: lineY };
+  };
 
   const handleDrop = (e) => {
     const transferId = e.dataTransfer?.getData("application/x-component-id");

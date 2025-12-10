@@ -1,16 +1,16 @@
 "use client";
 
-import GraphicWorkspace from "@/modes/graphic/Workspace";
-import UIUXWorkspace from "@/modes/uiux/Workspace";
-import PodcastWorkspace from "@/modes/podcast/Workspace";
-import VideoWorkspace from "@/modes/video/Workspace";
-import AISuiteWorkspace from "@/modes/ai/Workspace";
-import CartoonWorkspace from "@/modes/cartoon/Workspace";
-import MaterialWorkspace from "@/modes/material/Workspace";
-import DevWorkspace from "@/modes/dev/Workspace";
-import BrandingWorkspace from "@/modes/branding/Workspace";
-import DocumentsWorkspace from "@/modes/documents/Workspace";
-import EducationWorkspace from "@/modes/education/Workspace";
+import GraphicWorkspace from "@/app/workspace/graphic-design/Workspace";
+import UIUXWorkspace from "@/app/workspace/uiux/Workspace";
+import PodcastWorkspace from "@/app/workspace/podcast/Workspace";
+import VideoWorkspace from "@/app/workspace/video/Workspace";
+import AISuiteWorkspace from "@/app/workspace/ai-suite/Workspace";
+import CartoonWorkspace from "@/app/workspace/cartoon-animation/Workspace";
+import MaterialWorkspace from "@/app/workspace/material-ui/Workspace";
+import DevWorkspace from "@/app/workspace/dev/Workspace";
+import BrandingWorkspace from "@/app/workspace/branding-kit/Workspace";
+import DocumentsWorkspace from "@/app/workspace/documents/Workspace";
+import EducationWorkspace from "@/app/workspace/education/Workspace";
 import BaseModeWorkspace from "./BaseModeWorkspace";
 
 const MODES = {
