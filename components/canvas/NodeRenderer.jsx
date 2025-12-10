@@ -456,17 +456,23 @@ export default function NodeRenderer({ onNodePointerDown }) {
     };
   }, [onVectorDrag, endVectorDrag]);
 
+  const safe = (v, fallback = 0) => (Number.isFinite(v) ? v : fallback);
+
   const renderNode = (id) => {
     const node = nodes[id];
     if (!node) return null;
 
+    const x1 = node.x1 ?? node.x ?? 0;
+    const y1 = node.y1 ?? node.y ?? 0;
+    const x2 = node.x2 ?? x1;
+    const y2 = node.y2 ?? y1;
     const style = {
       position: "absolute",
-      left: node.x ?? 0,
-      top: node.y ?? 0,
-      width: node.width ?? (Math.abs(node.x2 - node.x1) || 1),
-      height: node.height ?? (Math.abs(node.y2 - node.y1) || 1),
-      opacity: node.opacity ?? 1,
+      left: safe(node.x),
+      top: safe(node.y),
+      width: safe(node.width ?? Math.max(1, Math.abs(x2 - x1)), 1),
+      height: safe(node.height ?? Math.max(1, Math.abs(y2 - y1)), 1),
+      opacity: safe(node.opacity ?? 1, 1),
       pointerEvents: node.locked ? "none" : "auto",
       display: node.hidden ? "none" : "block",
       ...build3DStyle(node),
@@ -480,11 +486,11 @@ export default function NodeRenderer({ onNodePointerDown }) {
         const bounds = measureResolvedBounds(resolved.nodes, resolved.rootIds);
         const containerStyle = {
           position: "absolute",
-          left: node.x ?? 0,
-          top: node.y ?? 0,
-          width: node.width ?? bounds.width,
-          height: node.height ?? bounds.height,
-          opacity: node.opacity ?? 1,
+          left: safe(node.x),
+          top: safe(node.y),
+          width: safe(node.width ?? bounds.width, 1),
+          height: safe(node.height ?? bounds.height, 1),
+          opacity: safe(node.opacity ?? 1, 1),
           pointerEvents: node.locked ? "none" : "auto",
           display: node.hidden ? "none" : "block",
           ...build3DStyle(node),
@@ -495,10 +501,10 @@ export default function NodeRenderer({ onNodePointerDown }) {
           if (!rnode) return null;
           const localStyle = {
             position: "absolute",
-            left: rnode.x || 0,
-            top: rnode.y || 0,
-            width: rnode.width || 0,
-            height: rnode.height || 0,
+            left: safe(rnode.x),
+            top: safe(rnode.y),
+            width: safe(rnode.width, 1),
+            height: safe(rnode.height, 1),
             pointerEvents: "none",
             ...build3DStyle(rnode),
           };
@@ -535,7 +541,9 @@ export default function NodeRenderer({ onNodePointerDown }) {
                   y2={y2}
                   stroke={resolveValue(rnode.stroke) || "#000"}
                   strokeWidth={rnode.strokeWidth || 2}
-                  strokeLinecap="round"
+                  strokeLinecap={rnode.strokeLinecap || "round"}
+                  strokeLinejoin={rnode.strokeLinejoin || "round"}
+                  strokeDasharray={rnode.strokeDasharray || undefined}
                 />
               </svg>
             );
@@ -552,6 +560,9 @@ export default function NodeRenderer({ onNodePointerDown }) {
                     fill={resolveValue(rnode.fill) || "transparent"}
                     stroke={resolveValue(rnode.stroke) || "#000"}
                     strokeWidth={rnode.strokeWidth || 1}
+                    strokeLinejoin={rnode.strokeLinejoin || "round"}
+                    strokeLinecap={rnode.strokeLinecap || "round"}
+                    strokeDasharray={rnode.strokeDasharray || undefined}
                   />
                 </svg>
               );
@@ -571,6 +582,9 @@ export default function NodeRenderer({ onNodePointerDown }) {
                     stroke={resolveValue(rnode.stroke) || "#000"}
                     strokeWidth={rnode.strokeWidth || 2}
                     fill={resolveValue(rnode.fill) || "transparent"}
+                    strokeLinejoin={rnode.strokeLinejoin || "round"}
+                    strokeLinecap={rnode.strokeLinecap || "round"}
+                    strokeDasharray={rnode.strokeDasharray || undefined}
                   />
                 </svg>
               );
@@ -580,8 +594,15 @@ export default function NodeRenderer({ onNodePointerDown }) {
               <img
                 src={rnode.src}
                 alt={rnode.name || ""}
-                className="w-full h-full object-cover"
-                style={{ pointerEvents: "none" }}
+                className="w-full h-full"
+                style={{
+                  objectFit: rnode.objectFit || "cover",
+                  borderRadius: rnode.borderRadius ? `${rnode.borderRadius}px` : undefined,
+                  opacity: rnode.opacity ?? 1,
+                  filter: rnode.blur ? `blur(${rnode.blur}px)` : undefined,
+                  backgroundColor: rnode.tint || undefined,
+                  pointerEvents: "none",
+                }}
               />
             );
           } else if (rnode.type === "text") {
@@ -618,6 +639,18 @@ export default function NodeRenderer({ onNodePointerDown }) {
         );
         break;
       }
+      case "frame":
+        style.backgroundColor = resolveValue(node.fill) || "#ffffff";
+        style.backgroundImage = node.backgroundImage ? `url(${node.backgroundImage})` : undefined;
+        style.backgroundSize = node.backgroundSize || "cover";
+        style.backgroundPosition = "center";
+        style.backgroundRepeat = "no-repeat";
+        style.borderStyle = node.strokeWidth ? "solid" : "none";
+        style.borderColor = node.stroke ? resolveValue(node.stroke) : "transparent";
+        style.borderWidth = node.strokeWidth || 0;
+        style.borderRadius = node.borderRadius || 0;
+        content = null;
+        break;
       case "rect":
       case "shape":
         content = <div style={{ background: resolveValue(node.fill) || "#666", width: "100%", height: "100%" }} />;

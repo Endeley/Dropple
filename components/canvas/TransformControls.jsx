@@ -2,6 +2,12 @@
 
 export default function TransformControls({ bounds, onResizeStart }) {
   if (!bounds) return null;
+  const isFiniteBounds =
+    Number.isFinite(bounds.x) &&
+    Number.isFinite(bounds.y) &&
+    Number.isFinite(bounds.width) &&
+    Number.isFinite(bounds.height);
+  if (!isFiniteBounds) return null;
   return (
     <div
       id="transform-overlay"

@@ -60,6 +60,9 @@ export default function UIUXTools() {
       children: [],
       parent: null,
       pageId: currentPageId,
+      fill: "#ffffff",
+      stroke: "#d4d4d8",
+      strokeWidth: 1,
     });
     usePageStore.getState().attachFrameToPage(currentPageId, id);
     setSelectedManual([id]);

@@ -1,38 +1,50 @@
-'use client';
+"use client";
 
-import { useRouter } from 'next/navigation';
-import { useGlobalStore } from '@/zustand/globalModeStore';
+import { useRouter } from "next/navigation";
+import { useGlobalStore } from "@/zustand/globalModeStore";
 
+// Centralized mode list: modeKey -> route path + label.
 const MODES = [
-    { id: 'graphic', label: 'Graphic Design' },
-    { id: 'uiux', label: 'UI/UX' },
-    { id: 'podcast', label: 'Podcast' },
-    { id: 'video', label: 'Video' },
-    { id: 'ai', label: 'AI Suite' },
-    { id: 'cartoon', label: 'Cartoon/Animation' },
-    { id: 'material', label: 'Material UI' },
-    { id: 'dev', label: 'Dev Mode' },
-    { id: 'branding', label: 'Branding Kit' },
-    { id: 'documents', label: 'Documents' },
-    { id: 'education', label: 'Education' },
+  { id: "graphic", path: "/workspace/graphic-design", label: "Graphic Design" },
+  { id: "uiux", path: "/workspace/uiux", label: "UI/UX" },
+  { id: "podcast", path: "/workspace/podcast", label: "Podcast" },
+  { id: "video", path: "/workspace/video", label: "Video" },
+  { id: "ai", path: "/workspace/ai-suite", label: "AI Suite" },
+  { id: "cartoon", path: "/workspace/cartoon-animation", label: "Cartoon / Animation" },
+  { id: "material", path: "/workspace/material-ui", label: "Material UI" },
+  { id: "dev", path: "/workspace/dev", label: "Dev Mode" },
+  { id: "branding", path: "/workspace/branding-kit", label: "Branding Kit" },
+  { id: "documents", path: "/workspace/documents", label: "Documents" },
+  { id: "education", path: "/workspace/education", label: "Education" },
+  { id: "icon", path: "/workspace/icon", label: "Icon" },
 ];
 
 export default function ModeSwitcher() {
-    const { mode, setMode } = useGlobalStore();
-    const router = useRouter();
+  const { mode, setMode } = useGlobalStore();
+  const router = useRouter();
 
-    const handleSelect = (id) => {
-        setMode(id);
-        router.push(`/workspace/${id}`);
-    };
+  const handleSelect = (e) => {
+    const id = e.target.value;
+    const selected = MODES.find((m) => m.id === id);
+    if (!selected) return;
+    setMode(id);
+    router.push(selected.path);
+  };
 
-    return (
-        <div className='flex gap-2 px-4 text-sm overflow-x-auto'>
-            {MODES.map((m) => (
-                <button key={m.id} onClick={() => handleSelect(m.id)} className={`px-2 py-1 rounded whitespace-nowrap transition ${mode === m.id ? 'text-white font-semibold bg-linear-to-r from-violet-500 via-fuchsia-500 to-blue-400' : 'text-neutral-600 hover:text-neutral-900'}`}>
-                    {m.label}
-                </button>
-            ))}
-        </div>
-    );
+  return (
+    <div className="flex items-center gap-2 px-4 text-sm">
+      <span className="text-xs uppercase tracking-wide text-neutral-500">Mode</span>
+      <select
+        className="bg-white border border-neutral-200 rounded-md px-3 py-2 text-sm text-neutral-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-500"
+        value={mode}
+        onChange={handleSelect}
+      >
+        {MODES.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 }

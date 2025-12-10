@@ -25,6 +25,14 @@ const MODES = {
   branding: BrandingWorkspace,
   documents: DocumentsWorkspace,
   education: EducationWorkspace,
+  // Placeholder until icon mode is implemented.
+  icon: () => (
+    <BaseModeWorkspace
+      modeKey="icon"
+      title="Icon Mode"
+      subtitle="Icon workspace is coming soon."
+    />
+  ),
 };
 
 export default function ModeLoader({ mode }) {

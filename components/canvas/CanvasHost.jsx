@@ -65,6 +65,14 @@ export default function CanvasHost({
   const activeNodeMap = nodeMap && Object.keys(nodeMap).length ? nodeMap : nodes;
   const selectedBounds = getSelectedBounds(selectedIds, activeNodeMap);
 
+  const findParentFrame = (x, y) => {
+    const frames = Object.values(nodes || {}).filter((n) => n?.type === NODE_TYPES.FRAME);
+    const containing = frames.filter((f) => x >= f.x && x <= f.x + f.width && y >= f.y && y <= f.y + f.height);
+    if (!containing.length) return null;
+    // Prefer the smallest enclosing frame (deepest).
+    return containing.sort((a, b) => a.width * a.height - b.width * b.height)[0].id;
+  };
+
   const startDrag = (e) => {
     if (!selectedIds?.length || !selectedBounds) return;
     dragRef.current = {
@@ -113,6 +121,7 @@ export default function CanvasHost({
     if (tool !== "select") {
       if (tool === "rectangle" || tool === "frame") {
         const id = crypto.randomUUID();
+        const parent = tool === "frame" ? null : findParentFrame(localX, localY);
         addNode({
           id,
           type: tool === "rectangle" ? NODE_TYPES.RECT : NODE_TYPES.FRAME,
@@ -123,7 +132,7 @@ export default function CanvasHost({
           height: 1,
           rotation: 0,
           fill: tool === "frame" ? "#ffffff" : "#4a4a4a",
-          parent: null,
+          parent,
           children: [],
         });
         useSelectionStore.getState().setSelectedManual([id]);
@@ -133,6 +142,7 @@ export default function CanvasHost({
 
       if (tool === "ellipse") {
         const id = crypto.randomUUID();
+        const parent = findParentFrame(localX, localY);
         addNode({
           id,
           type: NODE_TYPES.ELLIPSE,
@@ -145,7 +155,7 @@ export default function CanvasHost({
           fill: "#ffffff",
           stroke: "#000000",
           strokeWidth: 1,
-          parent: null,
+          parent,
           children: [],
         });
         useSelectionStore.getState().setSelectedManual([id]);
@@ -155,6 +165,7 @@ export default function CanvasHost({
 
       if (tool === "line") {
         const id = crypto.randomUUID();
+        const parent = findParentFrame(localX, localY);
         addNode({
           id,
           type: NODE_TYPES.LINE,
@@ -169,7 +180,7 @@ export default function CanvasHost({
           height: 1,
           stroke: "#000000",
           strokeWidth: 2,
-          parent: null,
+          parent,
           children: [],
         });
         useSelectionStore.getState().setSelectedManual([id]);
@@ -179,6 +190,7 @@ export default function CanvasHost({
 
       if (tool === "polygon") {
         const id = crypto.randomUUID();
+        const parent = findParentFrame(localX, localY);
         const points = [
           { x: localX, y: localY },
           { x: localX + 1, y: localY + 1 },
@@ -199,7 +211,7 @@ export default function CanvasHost({
           fill: "#ffffff",
           stroke: "#000000",
           strokeWidth: 1,
-          parent: null,
+          parent,
           children: [],
         });
         useSelectionStore.getState().setSelectedManual([id]);
@@ -209,6 +221,7 @@ export default function CanvasHost({
 
       if (tool === "pen" || tool === "pencil") {
         const id = crypto.randomUUID();
+        const parent = findParentFrame(localX, localY);
         const segments = [{ x: localX, y: localY, type: "move" }];
         addNode({
           id,
@@ -223,7 +236,7 @@ export default function CanvasHost({
           fill: "transparent",
           segments,
           closed: false,
-          parent: null,
+          parent,
           children: [],
         });
         useSelectionStore.getState().setSelectedManual([id]);
@@ -233,6 +246,7 @@ export default function CanvasHost({
 
       if (tool === "text") {
         const id = crypto.randomUUID();
+        const parent = findParentFrame(localX, localY);
         addNode({
           id,
           type: NODE_TYPES.RICH_TEXT,
@@ -257,7 +271,7 @@ export default function CanvasHost({
             },
           ],
           rotation: 0,
-          parent: null,
+          parent,
           children: [],
         });
         useSelectionStore.getState().setSelectedManual([id]);

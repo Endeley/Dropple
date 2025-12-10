@@ -1,6 +1,7 @@
 "use client";
 
 import CanvasHost from "@/components/canvas/CanvasHost";
+import NodeRenderer from "@/components/canvas/NodeRenderer";
 import { useNodeTreeStore } from "@/zustand/nodeTreeStore";
 import { useSelectionStore } from "@/zustand/selectionStore";
 import { usePageStore } from "@/zustand/pageStore";
@@ -89,6 +90,9 @@ export default function UIUXCanvas() {
       height: preset.height,
       children: [],
       pageId: currentPageId,
+      fill: "#ffffff",
+      stroke: "#d4d4d8",
+      strokeWidth: 1,
     });
     attachFrameToPage(currentPageId, id);
     setSelectedManual([id]);
@@ -101,11 +105,6 @@ export default function UIUXCanvas() {
   const frames = rootIds
     .map((id) => nodes[id])
     .filter((n) => n?.type === "frame" && (!currentPageId || n.pageId === currentPageId));
-
-  const handleSelectFrame = (id) => {
-    setSelectedManual([id]);
-  };
-
   return (
     <CanvasHost enablePanZoom nodeMap={nodes}>
       <div id="uiux-canvas-area" className="w-full h-full relative">
@@ -122,30 +121,11 @@ export default function UIUXCanvas() {
             </div>
           </div>
         ) : null}
-
-        {frames.map((frame) => {
-          const isSelected = selectedIds.includes(frame.id);
-          return (
-            <div
-              key={frame.id}
-              className={`absolute rounded-xl border transition ${
-                isSelected ? "border-violet-500 shadow-[0_12px_32px_-16px_rgba(99,102,241,0.35)]" : "border-neutral-300/80"
-              }`}
-              style={{
-                left: frame.x,
-                top: frame.y,
-                width: frame.width,
-                height: frame.height,
-              }}
-              onMouseDownCapture={() => handleSelectFrame(frame.id)}
-            >
-              <div className="absolute top-2 left-2 px-2 py-1 rounded-md text-xs font-semibold bg-white/90 border border-neutral-200 text-neutral-700 shadow-sm">
-                {frame.name || "Frame"} · {Math.round(frame.width)} × {Math.round(frame.height)} ·{" "}
-                {currentPage?.name || "Page"} ({currentBreakpointId})
-              </div>
-            </div>
-          );
-        })}
+        <div className="absolute inset-0">
+          {rootIds.map((id) => (
+            <NodeRenderer key={id} nodeId={id} />
+          ))}
+        </div>
       </div>
     </CanvasHost>
   );

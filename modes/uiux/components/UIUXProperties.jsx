@@ -23,6 +23,7 @@ const pillButton = (active) =>
   }`;
 
 const isVectorType = (type) => ["line", "polygon", "pen", "pencil", "path"].includes(type);
+const finiteOrEmpty = (v, empty = "") => (Number.isFinite(v) ? v : empty);
 
 export default function UIUXProperties() {
   const selectedIds = useSelectionStore((s) => s.selectedIds);
@@ -31,6 +32,7 @@ export default function UIUXProperties() {
   const textEditingId = useTextEditStore((s) => s.editingId);
   const selectionStart = useTextEditStore((s) => s.selectionStart);
   const selectionEnd = useTextEditStore((s) => s.selectionEnd);
+  const setPendingStyle = useTextEditStore((s) => s.setPendingStyle);
   const currentBreakpointId = usePageStore((s) => s.currentBreakpointId);
 
   const selection = useMemo(() => {
@@ -102,54 +104,54 @@ export default function UIUXProperties() {
         <div className="grid grid-cols-2 gap-2">
           <div>
             <div className={labelClass}>X</div>
-            <input
-              className={inputClass}
-              placeholder="0"
-              defaultValue={selection?.x}
-              onBlur={(e) => selection && updateNode(selection.id, { x: parseFloat(e.target.value || "0") })}
-            />
-          </div>
-          <div>
-            <div className={labelClass}>Y</div>
-            <input
-              className={inputClass}
-              placeholder="0"
-              defaultValue={selection?.y}
-              onBlur={(e) => selection && updateNode(selection.id, { y: parseFloat(e.target.value || "0") })}
-            />
-          </div>
-          <div>
-            <div className={labelClass}>Width</div>
-            <input
-              className={inputClass}
-              placeholder="1440"
-              defaultValue={selection?.width}
-              onBlur={(e) => selection && updateNode(selection.id, { width: parseFloat(e.target.value || "0") })}
-            />
-          </div>
-          <div>
-            <div className={labelClass}>Height</div>
-            <input
-              className={inputClass}
-              placeholder="900"
-              defaultValue={selection?.height}
-              onBlur={(e) => selection && updateNode(selection.id, { height: parseFloat(e.target.value || "0") })}
-            />
-          </div>
+          <input
+            className={inputClass}
+            placeholder="0"
+            value={finiteOrEmpty(selection?.x)}
+            onChange={(e) => selection && updateNode(selection.id, { x: parseFloat(e.target.value || "0") })}
+          />
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          <div>
-            <div className={labelClass}>Rotation</div>
-            <input
-              className={inputClass}
-              placeholder="0°"
-              defaultValue={selection?.rotation || 0}
-              onBlur={(e) => selection && updateNode(selection.id, { rotation: parseFloat(e.target.value || "0") })}
-            />
-          </div>
-          <button className={miniButton}>Flip H</button>
-          <button className={miniButton}>Flip V</button>
+        <div>
+          <div className={labelClass}>Y</div>
+          <input
+            className={inputClass}
+            placeholder="0"
+            value={finiteOrEmpty(selection?.y)}
+            onChange={(e) => selection && updateNode(selection.id, { y: parseFloat(e.target.value || "0") })}
+          />
         </div>
+        <div>
+          <div className={labelClass}>Width</div>
+          <input
+            className={inputClass}
+            placeholder="1440"
+            value={finiteOrEmpty(selection?.width)}
+            onChange={(e) => selection && updateNode(selection.id, { width: parseFloat(e.target.value || "0") })}
+          />
+        </div>
+        <div>
+          <div className={labelClass}>Height</div>
+          <input
+            className={inputClass}
+            placeholder="900"
+            value={finiteOrEmpty(selection?.height)}
+            onChange={(e) => selection && updateNode(selection.id, { height: parseFloat(e.target.value || "0") })}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <div className={labelClass}>Rotation</div>
+          <input
+            className={inputClass}
+            placeholder="0°"
+            value={finiteOrEmpty(selection?.rotation, 0)}
+            onChange={(e) => selection && updateNode(selection.id, { rotation: parseFloat(e.target.value || "0") })}
+          />
+        </div>
+        <button className={miniButton}>Flip H</button>
+        <button className={miniButton}>Flip V</button>
+      </div>
         {isFrame ? (
           <div className="grid grid-cols-3 gap-2 mt-2">
             <div>
@@ -157,8 +159,8 @@ export default function UIUXProperties() {
               <input
                 className={inputClass}
                 placeholder="e.g. 1.777"
-                defaultValue={selection?.aspectRatio || ""}
-                onBlur={(e) =>
+                value={selection?.aspectRatio ?? ""}
+                onChange={(e) =>
                   selection &&
                   updateNode(selection.id, {
                     aspectRatio: e.target.value ? parseFloat(e.target.value) : null,
@@ -171,8 +173,8 @@ export default function UIUXProperties() {
               <input
                 className={inputClass}
                 placeholder="320"
-                defaultValue={responsive?.minWidth}
-                onBlur={(e) =>
+                value={responsive?.minWidth ?? ""}
+                onChange={(e) =>
                   selection &&
                   updateNode(selection.id, {
                     responsive: { ...(selection.responsive || {}), minWidth: parseFloat(e.target.value || "320") },
@@ -185,8 +187,8 @@ export default function UIUXProperties() {
               <input
                 className={inputClass}
                 placeholder="1920"
-                defaultValue={responsive?.maxWidth}
-                onBlur={(e) =>
+                value={responsive?.maxWidth ?? ""}
+                onChange={(e) =>
                   selection &&
                   updateNode(selection.id, {
                     responsive: { ...(selection.responsive || {}), maxWidth: parseFloat(e.target.value || "1920") },
@@ -196,7 +198,348 @@ export default function UIUXProperties() {
             </div>
           </div>
         ) : null}
+        {isFrame ? (
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <div>
+              <div className={labelClass}>Background Image</div>
+              <input
+                className={inputClass}
+                placeholder="https://..."
+                value={selection?.backgroundImage || ""}
+                onChange={(e) => updateNode(selection.id, { backgroundImage: e.target.value })}
+              />
+            </div>
+            <div>
+              <div className={labelClass}>Background Fit</div>
+              <select
+                className={inputClass}
+                value={selection?.backgroundSize || "cover"}
+                onChange={(e) => updateNode(selection.id, { backgroundSize: e.target.value })}
+              >
+                <option value="cover">Cover</option>
+                <option value="contain">Contain</option>
+                <option value="fill">Fill</option>
+                <option value="auto">Auto</option>
+              </select>
+            </div>
+          </div>
+        ) : null}
       </Section>
+
+      {!isImage && selection ? (
+        <Section title="Fill & Stroke" defaultOpen>
+          <div className="grid grid-cols-2 gap-2">
+          <div>
+            <div className={labelClass}>Fill</div>
+            <input
+              type="color"
+              className="w-full h-10 border border-neutral-200 rounded-md"
+              value={selection?.fill || "#ffffff"}
+              onChange={(e) => updateNode(selection.id, { fill: e.target.value })}
+            />
+          </div>
+          <div>
+            <div className={labelClass}>Stroke</div>
+            <input
+              type="color"
+              className="w-full h-10 border border-neutral-200 rounded-md"
+              value={selection?.stroke || "#000000"}
+              onChange={(e) => updateNode(selection.id, { stroke: e.target.value })}
+            />
+          </div>
+        </div>
+        <div className="mt-2">
+          <div className={labelClass}>Stroke Width</div>
+          <input
+            className={inputClass}
+            type="number"
+            min="0"
+            step="0.5"
+            value={selection?.strokeWidth ?? 1}
+            onChange={(e) => updateNode(selection.id, { strokeWidth: parseFloat(e.target.value || "0") })}
+          />
+        </div>
+      </Section>
+    ) : null}
+
+      {isImage && selection ? (
+        <Section title="Image" defaultOpen>
+          <div className="space-y-2">
+            <div>
+              <div className={labelClass}>Image URL</div>
+              <input
+                className={inputClass}
+                placeholder="https://..."
+                value={selection?.src || selection?.url || ""}
+                onChange={(e) => updateNode(selection.id, { src: e.target.value, url: e.target.value })}
+              />
+            </div>
+            <div>
+              <div className={labelClass}>Fit</div>
+              <select
+                className={inputClass}
+                value={selection?.objectFit || "cover"}
+                onChange={(e) => updateNode(selection.id, { objectFit: e.target.value })}
+              >
+                <option value="cover">Cover</option>
+                <option value="contain">Contain</option>
+                <option value="fill">Fill</option>
+                <option value="scale-down">Scale Down</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className={labelClass}>Opacity</div>
+                <input
+                  className={inputClass}
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={selection?.opacity ?? 1}
+                  onChange={(e) => updateNode(selection.id, { opacity: parseFloat(e.target.value || "1") })}
+                />
+              </div>
+              <div>
+                <div className={labelClass}>Radius</div>
+                <input
+                  className={inputClass}
+                  type="number"
+                  min="0"
+                  step="2"
+                  value={selection?.borderRadius ?? 0}
+                  onChange={(e) => updateNode(selection.id, { borderRadius: parseFloat(e.target.value || "0") })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className={labelClass}>Tint</div>
+                <input
+                  type="color"
+                  className="w-full h-10 border border-neutral-200 rounded-md"
+                  value={selection?.tint || "#ffffff"}
+                  onChange={(e) => updateNode(selection.id, { tint: e.target.value })}
+                />
+              </div>
+              <div>
+                <div className={labelClass}>Blur</div>
+                <input
+                  className={inputClass}
+                  type="range"
+                  min="0"
+                  max="40"
+                  step="1"
+                  value={selection?.blur || 0}
+                  onChange={(e) => updateNode(selection.id, { blur: parseFloat(e.target.value || "0") })}
+                />
+                <div className="text-[11px] text-neutral-500">{selection?.blur || 0}px</div>
+              </div>
+            </div>
+            <div>
+              <div className={labelClass}>Replace Image</div>
+              <input
+                type="file"
+                accept="image/*"
+                className="w-full text-xs"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const form = new FormData();
+                  form.append("file", file);
+                  fetch("/api/assets/upload", { method: "POST", body: form })
+                    .then((res) => res.json().then((data) => ({ res, data })))
+                    .then(({ res, data }) => {
+                      if (res.ok && (data.url || data.fileUrl)) {
+                        const url = data.url || data.fileUrl;
+                        updateNode(selection.id, { src: url, url });
+                      }
+                    })
+                    .catch((err) => console.warn("Upload failed", err));
+                }}
+              />
+            </div>
+          </div>
+        </Section>
+      ) : null}
+
+      {isText && selection ? (
+        <Section title="Text" defaultOpen>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <div className={labelClass}>Font Family</div>
+              <input
+                className={inputClass}
+                value={selection?.fontFamily || "Inter"}
+                onChange={(e) => {
+                  if (textEditingId === selection.id) {
+                    setPendingStyle({ fontFamily: e.target.value });
+                  }
+                  updateNode(selection.id, { fontFamily: e.target.value });
+                }}
+              />
+            </div>
+            <div>
+              <div className={labelClass}>Font Size</div>
+              <input
+                className={inputClass}
+                type="number"
+                min="8"
+                max="200"
+                value={selection?.fontSize || 16}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value || "16");
+                  if (textEditingId === selection.id) {
+                    setPendingStyle({ fontSize: val });
+                  }
+                  updateNode(selection.id, { fontSize: val });
+                }}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2 mt-2">
+            <div>
+              <div className={labelClass}>Weight</div>
+              <input
+                className={inputClass}
+                type="number"
+                min="100"
+                max="900"
+                step="100"
+                value={selection?.fontWeight || 400}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value || "400", 10);
+                  if (textEditingId === selection.id) {
+                    setPendingStyle({ fontWeight: val });
+                  }
+                  updateNode(selection.id, { fontWeight: val });
+                }}
+              />
+            </div>
+            <div>
+              <div className={labelClass}>Line Height</div>
+              <input
+                className={inputClass}
+                type="number"
+                min="0.5"
+                max="3"
+                step="0.05"
+                value={selection?.lineHeight || 1.3}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value || "1.3");
+                  if (textEditingId === selection.id) {
+                    setPendingStyle({ lineHeight: val });
+                  }
+                  updateNode(selection.id, { lineHeight: val });
+                }}
+              />
+            </div>
+            <div>
+              <div className={labelClass}>Letter Spacing</div>
+              <input
+                className={inputClass}
+                type="number"
+                step="0.5"
+                value={selection?.letterSpacing || 0}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value || "0");
+                  if (textEditingId === selection.id) {
+                    setPendingStyle({ letterSpacing: val });
+                  }
+                  updateNode(selection.id, { letterSpacing: val });
+                }}
+              />
+            </div>
+          </div>
+          <div className="mt-2">
+            <div className={labelClass}>Color</div>
+            <input
+              type="color"
+              className="w-full h-10 border border-neutral-200 rounded-md"
+              value={selection?.fill || "#ffffff"}
+              onChange={(e) => {
+                if (textEditingId === selection.id) {
+                  setPendingStyle({ color: e.target.value, fill: e.target.value });
+                }
+                updateNode(selection.id, { fill: e.target.value, color: e.target.value });
+              }}
+            />
+          </div>
+          <div className="mt-2 grid grid-cols-4 gap-2">
+            {["left", "center", "right", "justify"].map((align) => (
+              <button
+                key={align}
+                className={pillButton(selection?.textAlign === align)}
+                onClick={() => {
+                  if (textEditingId === selection.id) {
+                    setPendingStyle({ textAlign: align });
+                  }
+                  updateNode(selection.id, { textAlign: align });
+                }}
+              >
+                {align}
+              </button>
+            ))}
+          </div>
+        </Section>
+      ) : null}
+
+      {isVector && selection ? (
+        <Section title="Vector" defaultOpen>
+          {selection.type === "polygon" ? (
+            <div className="mb-2">
+              <div className={labelClass}>Sides</div>
+              <input
+                className={inputClass}
+                type="number"
+                min="3"
+                step="1"
+                value={selection?.sides ?? selection?.points?.length ?? 3}
+                onChange={(e) =>
+                  updateNode(selection.id, {
+                    sides: parseInt(e.target.value || "3", 10),
+                  })
+                }
+              />
+            </div>
+          ) : null}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <div className={labelClass}>Stroke Cap</div>
+              <select
+                className={inputClass}
+                value={selection?.strokeLinecap || "round"}
+                onChange={(e) => updateNode(selection.id, { strokeLinecap: e.target.value })}
+              >
+                <option value="butt">Butt</option>
+                <option value="round">Round</option>
+                <option value="square">Square</option>
+              </select>
+            </div>
+            <div>
+              <div className={labelClass}>Stroke Join</div>
+              <select
+                className={inputClass}
+                value={selection?.strokeLinejoin || "round"}
+                onChange={(e) => updateNode(selection.id, { strokeLinejoin: e.target.value })}
+              >
+                <option value="miter">Miter</option>
+                <option value="round">Round</option>
+                <option value="bevel">Bevel</option>
+              </select>
+            </div>
+          </div>
+          <div className="mt-2">
+            <div className={labelClass}>Dash</div>
+            <input
+              className={inputClass}
+              placeholder="e.g. 4 2"
+              value={selection?.strokeDasharray || ""}
+              onChange={(e) => updateNode(selection.id, { strokeDasharray: e.target.value })}
+            />
+          </div>
+        </Section>
+      ) : null}
 
       <Section title="Constraints & Layout" defaultOpen>
         <div className="grid grid-cols-2 gap-2">

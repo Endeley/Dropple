@@ -48,15 +48,23 @@ const spacingTokens = {
   xl: 24,
 };
 
-const withDefaults = (node = {}) => ({
-  constraints: { ...defaultConstraints, ...(node.constraints || {}) },
-  layout: { ...defaultLayout, ...(node.layout || {}) },
-  transform3d: { ...defaultTransform3d, ...(node.transform3d || {}) },
-  interactions: node.interactions || [],
-  responsive: { ...defaultResponsiveFrame, ...(node.responsive || {}) },
-  aspectRatio: node.aspectRatio ?? null,
-  ...node,
-});
+const withDefaults = (node = {}) => {
+  const base = {
+    constraints: { ...defaultConstraints, ...(node.constraints || {}) },
+    layout: { ...defaultLayout, ...(node.layout || {}) },
+    transform3d: { ...defaultTransform3d, ...(node.transform3d || {}) },
+    interactions: node.interactions || [],
+    responsive: { ...defaultResponsiveFrame, ...(node.responsive || {}) },
+    aspectRatio: node.aspectRatio ?? null,
+    ...node,
+  };
+
+  // Give frames a visible default fill unless explicitly provided.
+  if (base.type === "frame" && base.fill == null) {
+    base.fill = "#ffffff";
+  }
+  return base;
+};
 
 const collectSubtree = (nodes, rootId) => {
   const result = {};
