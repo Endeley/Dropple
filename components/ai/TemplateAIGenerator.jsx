@@ -10,6 +10,7 @@ import { applyMotionThemeToLayers } from "@/lib/applyMotionTheme";
 import { motionThemeMap } from "@/lib/motionThemes";
 import { buildBrandKit } from "@/lib/buildBrandKit";
 import { validateDroppleTemplate } from "@/lib/droppleTemplateSpec";
+import { normalizeAssets } from "@/lib/normalizeAssets";
 
 export default function TemplateAIGenerator() {
   const [prompt, setPrompt] = useState("");
@@ -58,36 +59,26 @@ export default function TemplateAIGenerator() {
   }, []);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/asset-library/all?type=icon");
-        if (!res.ok) return;
-        const data = await res.json();
-        setIcons(data.slice(0, 25));
-      } catch (err) {
-        console.warn("Failed to load icons", err);
-      }
+    fetch("/api/asset-library/all?type=icon")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setIcons(data.slice(0, 25));
+      })
+      .catch((err) => console.warn("Failed to load icons", err));
 
-      try {
-        const resImages = await fetch("/api/asset-library/all?type=image");
-        if (resImages.ok) {
-          const data = await resImages.json();
-          setAssetImages(data);
-        }
-      } catch (err) {
-        console.warn("Failed to load images", err);
-      }
+    fetch("/api/asset-library/all?type=image")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setAssetImages(data);
+      })
+      .catch((err) => console.warn("Failed to load images", err));
 
-      try {
-        const resKits = await fetch("/api/brandkits/all");
-        if (resKits.ok) {
-          const data = await resKits.json();
-          setSavedBrandkits(data.brandkits || []);
-        }
-      } catch (err) {
-        console.warn("Failed to load brand kits", err);
-      }
-    })();
+    fetch("/api/brandkits/all")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setSavedBrandkits(data.brandkits || []);
+      })
+      .catch((err) => console.warn("Failed to load brand kits", err));
   }, []);
   const buildThemeFromStyle = (style) => {
     if (!style) return null;
@@ -177,125 +168,126 @@ export default function TemplateAIGenerator() {
     });
   };
 
-  async function handleGenerate() {
+  function handleGenerate() {
     if (!prompt.trim()) return;
     setLoading(true);
     setError(null);
-    try {
-      let resolvedImageUrl = heroImageUrl;
-      if (imageSource === "brand" && brandKit?.logos?.length) {
-        resolvedImageUrl = brandKit.logos[0];
-      }
-      if (imageSource === "asset" && !resolvedImageUrl && assetImages.length) {
-        resolvedImageUrl = assetImages[0]?.fileUrl || assetImages[0]?.url;
-      }
-      if (imageSource === "stock" && allowStock && !resolvedImageUrl) {
-        const query = encodeURIComponent(prompt || styleId || "design");
-        resolvedImageUrl = `https://source.unsplash.com/1600x900/?${query}`;
-        // cache into asset library
-        try {
-          await fetch("/api/asset-library/create", {
-            method: "POST",
-            body: JSON.stringify({
-              type: "image",
-              title: `Stock: ${prompt?.slice(0, 40) || query}`,
-              description: "",
-              tags: ["stock"],
-              fileUrl: resolvedImageUrl,
-              previewUrl: resolvedImageUrl,
-              fileType: "image/jpeg",
-              size: 0,
-              width: 1600,
-              height: 900,
-              isPremium: false,
-              price: 0,
-            }),
-          });
-        } catch (err) {
-          console.warn("Failed to cache stock image", err);
-        }
-      }
+    let resolvedImageUrl = heroImageUrl;
 
-      if (imageSource === "ai" && useAIImage && !resolvedImageUrl) {
-        setIsGeneratingImage(true);
-        try {
-          const resAI = await fetch("/api/asset-ai", {
+    const cacheImage = (title, url, tags) =>
+      fetch("/api/asset-library/create", {
+        method: "POST",
+        body: JSON.stringify({
+          type: "image",
+          title,
+          description: "",
+          tags,
+          fileUrl: url,
+          previewUrl: url,
+          fileType: "image/jpeg",
+          size: 0,
+          width: 1600,
+          height: 900,
+          isPremium: false,
+          price: 0,
+        }),
+      }).catch((err) => console.warn("Failed to cache image", err));
+
+    Promise.resolve()
+      .then(() => {
+        if (imageSource === "brand" && brandKit?.logos?.length) {
+          resolvedImageUrl = brandKit.logos[0];
+        }
+        if (imageSource === "asset" && !resolvedImageUrl && assetImages.length) {
+          resolvedImageUrl = assetImages[0]?.fileUrl || assetImages[0]?.url;
+        }
+      })
+      .then(() => {
+        if (imageSource === "stock" && allowStock && !resolvedImageUrl) {
+          const query = encodeURIComponent(prompt || styleId || "design");
+          resolvedImageUrl = `https://source.unsplash.com/1600x900/?${query}`;
+          return cacheImage(`Stock: ${prompt?.slice(0, 40) || query}`, resolvedImageUrl, ["stock"]);
+        }
+        return null;
+      })
+      .then(() => {
+        if (imageSource === "ai" && useAIImage && !resolvedImageUrl) {
+          setIsGeneratingImage(true);
+          return fetch("/api/asset-ai", {
             method: "POST",
             body: JSON.stringify({
               prompt: prompt || "high-quality cinematic photo",
               style: styleId,
             }),
-          });
-          const dataAI = await resAI.json();
-          if (resAI.ok && dataAI?.url) {
-            resolvedImageUrl = dataAI.url;
-            // cache into asset library
-            await fetch("/api/asset-library/create", {
-              method: "POST",
-              body: JSON.stringify({
-                type: "image",
-                title: `AI: ${prompt?.slice(0, 40) || "generated"}`,
-                description: "",
-                tags: ["ai"],
-                fileUrl: resolvedImageUrl,
-                previewUrl: resolvedImageUrl,
-                fileType: "image/jpeg",
-                size: 0,
-                width: 1600,
-                height: 900,
-                isPremium: false,
-                price: 0,
+          })
+            .then((resAI) =>
+              resAI.json().then((dataAI) => {
+                if (resAI.ok && dataAI?.url) {
+                  resolvedImageUrl = dataAI.url;
+                  return cacheImage(
+                    `AI: ${prompt?.slice(0, 40) || "generated"}`,
+                    resolvedImageUrl,
+                    ["ai"],
+                  );
+                }
+                return null;
               }),
-            });
-          }
-        } catch (err) {
-          console.warn("AI image generation failed", err);
-        } finally {
-          setIsGeneratingImage(false);
+            )
+            .catch((err) => console.warn("AI image generation failed", err))
+            .finally(() => setIsGeneratingImage(false));
         }
-      }
-
-      const res = await fetch("/api/template-ai", {
-        method: "POST",
-        body: JSON.stringify({
-          prompt,
-          styleId,
-          componentId,
-          assembly,
-          brand: brandKit,
-          imageUrl: resolvedImageUrl || null,
+        return null;
+      })
+      .then(() =>
+        fetch("/api/template-ai", {
+          method: "POST",
+          body: JSON.stringify({
+            prompt,
+            styleId,
+            componentId,
+            assembly,
+            brand: brandKit,
+            imageUrl: resolvedImageUrl || null,
+          }),
         }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "Generation failed");
-      }
-      const tpl = convertBlueprintToDroppleTemplate(data.blueprint || {});
-      const styledTpl = {
-        ...tpl,
-        styleId: styleId || tpl.styleId,
-        componentId: componentId || tpl.componentId,
-        tags: Array.from(new Set([...(tpl.tags || []), styleId, componentId].filter(Boolean))),
-        brand: brandKit || tpl.brand,
-        images:
-          tpl.images && tpl.images.length
-            ? tpl.images
-            : resolvedImageUrl
-              ? [{ id: "img1", url: resolvedImageUrl }]
-              : tpl.images,
-      };
-      const validation = validateDroppleTemplate(styledTpl);
-      if (!validation.valid) {
-        throw new Error(`Template validation failed: ${validation.errors?.[0] || "invalid template"}`);
-      }
-      setTemplate(styledTpl);
-      applyTemplateToCanvas(styledTpl);
-    } catch (err) {
-      console.error(err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+      )
+      .then((res) =>
+        res.json().then((data) => {
+          if (!res.ok || data.error) {
+            throw new Error(data.error || "Generation failed");
+          }
+          return data;
+        }),
+      )
+      .then((data) => {
+        const tpl = convertBlueprintToDroppleTemplate(data.blueprint || {});
+        const styledTpl = {
+          ...tpl,
+          styleId: styleId || tpl.styleId,
+          componentId: componentId || tpl.componentId,
+          tags: Array.from(new Set([...(tpl.tags || []), styleId, componentId].filter(Boolean))),
+          brand: brandKit || tpl.brand,
+          nodes: tpl.nodes || tpl.layers || [],
+          images:
+            tpl.images && tpl.images.length
+              ? tpl.images
+              : resolvedImageUrl
+                ? [{ id: "img1", url: resolvedImageUrl }]
+                : tpl.images,
+        };
+        styledTpl.assets = normalizeAssets(styledTpl.assets || tpl.assets || tpl.images || []);
+        const validation = validateDroppleTemplate(styledTpl);
+        if (!validation.valid) {
+          throw new Error(`Template validation failed: ${validation.errors?.[0] || "invalid template"}`);
+        }
+        setTemplate(styledTpl);
+        applyTemplateToCanvas(styledTpl);
+      })
+      .catch((err) => {
+        console.error(err);
+        setError(err.message);
+      })
+      .finally(() => setLoading(false));
   }
 
   function addToEditor() {
@@ -304,35 +296,44 @@ export default function TemplateAIGenerator() {
     window.location.href = "/editor/templates/create";
   }
 
-  async function saveToMarketplace() {
+  function saveToMarketplace() {
     if (!template) return;
     setSaveStatus("saving");
     setSaveError(null);
-    try {
-      const thumbBlob = await generateTemplateThumbnail(template);
-      const form = new FormData();
-      form.append(
-        "metadata",
-        JSON.stringify({
-          name: template.name || "AI Template",
-          category: template.category || "AI Generated",
-          tags: template.tags || ["ai-generated"],
-          visibility: "public",
+    generateTemplateThumbnail(template)
+      .then((thumbBlob) => {
+        const form = new FormData();
+        form.append(
+          "metadata",
+          JSON.stringify({
+            name: template.name || "AI Template",
+            category: template.category || "AI Generated",
+            tags: template.tags || ["ai-generated"],
+            visibility: "public",
+          }),
+        );
+        form.append(
+          "template",
+          new Blob([JSON.stringify(template)], { type: "application/json" }),
+          `${template.id || "ai-template"}.json`,
+        );
+        if (thumbBlob) form.append("thumbnail", thumbBlob, `${template.id || "ai-template"}.png`);
+        return fetch("/api/templates/save", { method: "POST", body: form });
+      })
+      .then((res) =>
+        res.json().catch(() => ({})).then((data) => {
+          if (!res.ok) {
+            if (res.status === 401) throw new Error("Sign in to publish to the marketplace.");
+            throw new Error(data?.error || "Save failed");
+          }
+          return data;
         }),
-      );
-      form.append("template", new Blob([JSON.stringify(template)], { type: "application/json" }), `${template.id || "ai-template"}.json`);
-      if (thumbBlob) form.append("thumbnail", thumbBlob, `${template.id || "ai-template"}.png`);
-      const res = await fetch("/api/templates/save", { method: "POST", body: form });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (res.status === 401) throw new Error("Sign in to publish to the marketplace.");
-        throw new Error(data?.error || "Save failed");
-      }
-      setSaveStatus("saved");
-    } catch (err) {
-      setSaveStatus("error");
-      setSaveError(err?.message || "Save failed");
-    }
+      )
+      .then(() => setSaveStatus("saved"))
+      .catch((err) => {
+        setSaveStatus("error");
+        setSaveError(err?.message || "Save failed");
+      });
   }
 
   return (
@@ -429,22 +430,21 @@ export default function TemplateAIGenerator() {
             type="file"
             accept="image/*"
             className="w-full text-xs"
-            onChange={async (e) => {
+            onChange={(e) => {
               const file = e.target.files?.[0];
               if (!file) return;
               const form = new FormData();
               form.append("file", file);
-              try {
-                const res = await fetch("/api/assets/upload", { method: "POST", body: form });
-                const data = await res.json();
-                if (res.ok && (data.url || data.fileUrl)) {
-                  const url = data.url || data.fileUrl;
-                  setHeroImageUrl(url);
-                  setAssetImages((prev) => [{ ...(data || {}), fileUrl: url }, ...prev]);
-                }
-              } catch (err) {
-                console.warn("Upload failed", err);
-              }
+              fetch("/api/assets/upload", { method: "POST", body: form })
+                .then((res) => res.json().then((data) => ({ res, data })))
+                .then(({ res, data }) => {
+                  if (res.ok && (data.url || data.fileUrl)) {
+                    const url = data.url || data.fileUrl;
+                    setHeroImageUrl(url);
+                    setAssetImages((prev) => [{ ...(data || {}), fileUrl: url }, ...prev]);
+                  }
+                })
+                .catch((err) => console.warn("Upload failed", err));
             }}
           />
         ) : null}
@@ -653,12 +653,3 @@ export default function TemplateAIGenerator() {
     </div>
   );
 }
-      try {
-        const resImages = await fetch("/api/asset-library/all?type=image");
-        if (resImages.ok) {
-          const data = await resImages.json();
-          setAssetImages(data);
-        }
-      } catch (err) {
-        console.warn("Failed to load images", err);
-      }

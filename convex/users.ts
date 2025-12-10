@@ -16,20 +16,15 @@ export const ensureUser = mutation({
       )
       .unique();
 
-    const patch = {
-      stackUserId: identity.subject,
-      email: identity.email ?? undefined,
-      displayName: identity.name ?? undefined,
-      avatarUrl: identity.pictureUrl ?? undefined,
-    };
-
     if (existing) {
-      await ctx.db.patch(existing._id, patch);
       return existing._id;
     }
 
     return await ctx.db.insert("users", {
-      ...patch,
+      stackUserId: identity.subject,
+      email: identity.email ?? undefined,
+      displayName: identity.name ?? undefined,
+      avatarUrl: identity.pictureUrl ?? undefined,
       createdAt: Date.now(),
     });
   },

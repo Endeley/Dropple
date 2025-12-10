@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import CanvasGrid from "./CanvasGrid";
-import CanvasRulers from "./CanvasRulers";
+import { useCallback, useMemo, useRef } from "react";
+import AdaptiveGrid from "./AdaptiveGrid";
+import InfinitePlane from "./InfinitePlane";
+import RulerHorizontal from "./Rulers/RulerHorizontal";
+import RulerVertical from "./Rulers/RulerVertical";
 import CanvasOverlays from "./CanvasOverlays";
 import { useSelectionStore } from "@/zustand/selectionStore";
 import { useNodeTreeStore } from "@/zustand/nodeTreeStore";
@@ -11,12 +13,13 @@ import { applyResize, calculateAngle } from "@/lib/canvas-core/transforms";
 import { useToolStore } from "@/zustand/toolStore";
 import { getSnapPoints, snapValue } from "@/lib/canvas-core/snapping";
 import { useSnappingStore } from "@/zustand/snappingStore";
-import { useCanvasState } from "@/lib/canvas-core/canvasState";
 import { NODE_TYPES } from "@/lib/nodeTypes";
 import { useComponentStore } from "@/zustand/componentStore";
 import { useUndoStore } from "@/zustand/undoStore";
-
-const clampZoom = (value) => Math.min(8, Math.max(0.1, value));
+import useCanvasPan from "./interactions/useCanvasPan";
+import useCanvasZoom from "./interactions/useCanvasZoom";
+import { useCanvasTransforms } from "./interactions/useCanvasTransforms";
+import { useCanvasState } from "@/lib/canvas-core/canvasState";
 const boundsFromPoints = (points = []) => {
   if (!points.length) return { x: 0, y: 0, width: 1, height: 1 };
   const xs = points.map((p) => p.x);
@@ -47,51 +50,20 @@ export default function CanvasHost({
   const draggingComponentId = useComponentStore((s) => s.draggingComponentId);
   const clearDraggingComponent = useComponentStore((s) => s.clearDraggingComponent);
   const pushHistory = useUndoStore((s) => s.push);
+  const containerRef = useRef(null);
+  const { pan, isPanning } = useCanvasPan(containerRef);
+  const { zoom } = useCanvasZoom(containerRef);
+  const showGrid = useCanvasState((s) => s.gridVisible);
+  const showRulers = useCanvasState((s) => s.rulersVisible);
 
   const dragRef = useRef(null);
   const resizeRef = useRef(null);
   const creationRef = useRef(null);
-  const containerRef = useRef(null);
   const rotateRef = useRef(null);
-  const panRef = useRef(null);
-  const pan = useCanvasState((s) => s.pan);
-  const setPan = useCanvasState((s) => s.setPan);
-  const zoom = useCanvasState((s) => s.zoom);
-  const setZoom = useCanvasState((s) => s.setZoom);
-  const showGrid = useCanvasState((s) => s.gridVisible);
-  const showRulers = useCanvasState((s) => s.rulersVisible);
-  const [isPanning, setIsPanning] = useState(false);
-  const [spacePressed, setSpacePressed] = useState(false);
-
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.code === "Space") {
-        e.preventDefault();
-        setSpacePressed(true);
-      }
-    };
-    const handleKeyUp = (e) => {
-      if (e.code === "Space") {
-        setSpacePressed(false);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-    };
-  }, []);
+  const { toLocal } = useCanvasTransforms(containerRef, pan, zoom);
 
   const activeNodeMap = nodeMap && Object.keys(nodeMap).length ? nodeMap : nodes;
   const selectedBounds = getSelectedBounds(selectedIds, activeNodeMap);
-
-  const toLocal = (clientX, clientY) => {
-    const rect = containerRef.current?.getBoundingClientRect();
-    const x = (clientX - (rect?.left || 0) - pan.x) / zoom;
-    const y = (clientY - (rect?.top || 0) - pan.y) / zoom;
-    return { x, y };
-  };
 
   const startDrag = (e) => {
     if (!selectedIds?.length || !selectedBounds) return;
@@ -135,18 +107,6 @@ export default function CanvasHost({
     }
 
     const tool = useToolStore.getState().tool;
-    const isBackground = e.target === e.currentTarget;
-
-    // Panning: middle/right click, or space + left click.
-    if (enablePanZoom && (e.button === 1 || e.button === 2 || (spacePressed && e.button === 0))) {
-      panRef.current = {
-        startX: e.clientX,
-        startY: e.clientY,
-        panStart: { ...pan },
-      };
-      setIsPanning(true);
-      return;
-    }
 
     const { x: localX, y: localY } = toLocal(e.clientX, e.clientY);
 
@@ -316,16 +276,6 @@ export default function CanvasHost({
   };
 
   const onMouseMove = (e) => {
-    if (panRef.current) {
-      const dx = e.clientX - panRef.current.startX;
-      const dy = e.clientY - panRef.current.startY;
-      setPan({
-        x: panRef.current.panStart.x + dx,
-        y: panRef.current.panStart.y + dy,
-      });
-      return;
-    }
-
     if (creationRef.current) {
       const { x: localX, y: localY } = toLocal(e.clientX, e.clientY);
       const { id, startX, startY, type, points } = creationRef.current;
@@ -466,8 +416,6 @@ export default function CanvasHost({
     dragRef.current = null;
     resizeRef.current = null;
     rotateRef.current = null;
-    panRef.current = null;
-    setIsPanning(false);
     if (creationRef.current) {
       creationRef.current = null;
       useToolStore.getState().setTool("select");
@@ -475,10 +423,7 @@ export default function CanvasHost({
     clearGuides();
   };
 
-  const onMouseLeave = () => {
-    panRef.current = null;
-    setIsPanning(false);
-  };
+  const onMouseLeave = () => {};
 
   const handleDrop = (e) => {
     const transferId = e.dataTransfer?.getData("application/x-component-id");
@@ -525,12 +470,7 @@ export default function CanvasHost({
     clearDraggingComponent();
   };
 
-  const cursorClass =
-    enablePanZoom && isPanning
-      ? "cursor-grabbing"
-      : enablePanZoom && spacePressed
-        ? "cursor-grab"
-        : "cursor-default";
+  const cursorClass = enablePanZoom && isPanning ? "cursor-grabbing" : "cursor-default";
 
   const renderedChildren = useMemo(() => children, [children]);
 
@@ -542,13 +482,6 @@ export default function CanvasHost({
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseLeave}
-      onWheel={(e) => {
-        if (!enablePanZoom) return;
-        e.preventDefault();
-        const factor = e.deltaY > 0 ? 0.95 : 1.05;
-        const nextZoom = clampZoom(zoom * factor);
-        setZoom(nextZoom);
-      }}
       onDragOver={(e) => {
         if (draggingComponentId || (e.dataTransfer && e.dataTransfer.types.includes("application/x-component-id"))) {
           e.preventDefault();
@@ -556,19 +489,15 @@ export default function CanvasHost({
       }}
       onDrop={handleDrop}
     >
-      {showRulers && <CanvasRulers />}
-      {showGrid && <CanvasGrid size={gridSize * 4} />}
+      {showRulers && (
+        <>
+          <RulerHorizontal pan={pan} zoom={zoom} />
+          <RulerVertical pan={pan} zoom={zoom} />
+        </>
+      )}
+      {showGrid && <AdaptiveGrid zoom={zoom} />}
 
-      <div
-        id="dropple-canvas-content"
-        className="absolute inset-0"
-        style={{
-          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-          transformOrigin: "0 0",
-        }}
-      >
-        {renderedChildren}
-      </div>
+      <InfinitePlane>{renderedChildren}</InfinitePlane>
 
       <CanvasOverlays
         nodeMap={activeNodeMap}

@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "batch:generate": "node scripts/generateTemplates.js",
-    "batch:generate:save": "node scripts/generateTemplates.js save"
+    "batch:generate:save": "node scripts/generateTemplates.js save",
+    "packs:fetch": "node scripts/fetchPexelsPacks.js"
   },
   "dependencies": {
     "@stackframe/stack": "^2.8.54",

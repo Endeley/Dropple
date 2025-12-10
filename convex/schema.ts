@@ -91,6 +91,20 @@ export default defineSchema({
     favoriteCount: v.optional(v.number()),
     searchClicks: v.optional(v.number()),
     score: v.optional(v.number()),
+    assets: v.optional(
+      v.array(
+        v.object({
+          id: v.string(),
+          type: v.string(),
+          url: v.string(),
+          prompt: v.optional(v.string()),
+          source: v.optional(v.string()),
+          license: v.optional(v.string()),
+          width: v.optional(v.number()),
+          height: v.optional(v.number()),
+        }),
+      ),
+    ),
   })
     .index("by_user", ["userId"])
     .index("by_mode", ["mode"])

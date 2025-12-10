@@ -4,6 +4,7 @@ import { buildCodeBlueprint } from "@/lib/buildCodeBlueprint";
 import { generateProjectFiles } from "@/lib/generateProjectFiles";
 import { createZip } from "@/lib/createZip";
 import { validateDroppleTemplate } from "@/lib/droppleTemplateSpec";
+import { normalizeAssets } from "@/lib/normalizeAssets";
 
 export async function POST(req) {
   const { workspace } = await req.json();
@@ -12,6 +13,10 @@ export async function POST(req) {
   }
 
   if (workspace.currentTemplate) {
+    workspace.currentTemplate = {
+      ...workspace.currentTemplate,
+      assets: normalizeAssets(workspace.currentTemplate.assets || []),
+    };
     const { valid, errors } = validateDroppleTemplate(workspace.currentTemplate);
     if (!valid) {
       return Response.json({ error: "Invalid template", details: errors }, { status: 400 });

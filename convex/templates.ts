@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
+import { normalizeAssets } from "../lib/normalizeAssets";
 
 const layerSchema = v.object({
   id: v.string(),
@@ -34,6 +35,7 @@ export const saveTemplate = mutation({
     creatorAvatar: v.optional(v.string()),
     license: v.optional(v.string()),
     price: v.optional(v.number()),
+    assets: v.optional(v.array(v.any())),
   },
   handler: async ({ db, auth, storage }, args) => {
     const identity = await auth.getUserIdentity();
@@ -70,6 +72,9 @@ export const saveTemplate = mutation({
       }
     }
 
+    const normalizedAssets = normalizeAssets(args.templateData?.assets || args.assets || []);
+    const templateData = { ...(args.templateData || {}), assets: normalizedAssets };
+
     if (args.id) {
       const existing = await db.get(args.id);
       if (!existing) throw new Error("Template not found");
@@ -88,7 +93,8 @@ export const saveTemplate = mutation({
         category: args.category,
         tags: args.tags ?? [],
         authorId: args.authorId ?? userId,
-        templateData: args.templateData,
+        templateData,
+        assets: normalizedAssets,
         thumbnail: args.thumbnail ?? existing.thumbnail,
         thumbnailUrl: thumbnailUrl ?? existing.thumbnailUrl,
         templateJsonUrl: templateJsonUrl ?? existing.templateJsonUrl,
@@ -113,7 +119,8 @@ export const saveTemplate = mutation({
       tags: args.tags ?? [],
       authorId: args.authorId ?? userId,
       userId,
-      templateData: args.templateData,
+      templateData,
+      assets: normalizedAssets,
       thumbnail: args.thumbnail ?? undefined,
       thumbnailUrl,
       templateJsonUrl,
@@ -131,10 +138,10 @@ export const saveTemplate = mutation({
       createdAt: now,
       updatedAt: now,
       publishedAt: makePublished ? now : undefined,
-      width: args.templateData?.width ?? 1080,
-      height: args.templateData?.height ?? 1080,
-      layers: normalizeLayers(args.templateData?.nodes || []),
-      price: args.price ?? args.templateData?.price,
+      width: templateData?.width ?? 1080,
+      height: templateData?.height ?? 1080,
+      layers: normalizeLayers(templateData?.nodes || []),
+      price: args.price ?? templateData?.price,
       purchases: 0,
       insertCount: 0,
       viewCount: 0,
@@ -226,12 +233,15 @@ export const createTemplate = mutation({
     isPublished: v.optional(v.boolean()),
     price: v.optional(v.number()),
     license: v.optional(v.string()),
+    assets: v.optional(v.array(v.any())),
   },
   handler: async ({ db, auth }, args) => {
     const identity = await auth.getUserIdentity();
     const userId = identity?.subject ?? "system";
     const now = Date.now();
-    const templateData = args.templateData || {};
+    const templateDataRaw = args.templateData || {};
+    const normalizedAssets = normalizeAssets(templateDataRaw.assets || args.assets || []);
+    const templateData = { ...templateDataRaw, assets: normalizedAssets };
     return await db.insert("templates", {
       name: args.name,
       mode: args.mode,
@@ -242,6 +252,7 @@ export const createTemplate = mutation({
       authorId: userId,
       userId,
       templateData,
+      assets: normalizedAssets,
       thumbnail: args.thumbnail,
       thumbnailUrl: args.thumbnailUrl,
       templateJsonUrl: templateData.templateJsonUrl,
@@ -338,7 +349,16 @@ export const updateTemplate = mutation({
     const userId = identity?.subject ?? "system";
     const existing = await db.get(id);
     if (!existing) throw new Error("Template not found");
-    await db.patch(id, { ...data, userId, updatedAt: Date.now() });
+    const templateDataRaw = data?.templateData || data;
+    const normalizedAssets = normalizeAssets(templateDataRaw?.assets || data?.assets || existing.assets || []);
+    const patch: any = {
+      ...data,
+      templateData: templateDataRaw ? { ...templateDataRaw, assets: normalizedAssets } : data?.templateData,
+      assets: normalizedAssets,
+      userId,
+      updatedAt: Date.now(),
+    };
+    await db.patch(id, patch);
     return id;
   },
 });

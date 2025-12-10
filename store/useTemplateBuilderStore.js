@@ -5,6 +5,7 @@ import { deepClone as cloneDeep } from "@/lib/deepClone";
 import { motionThemeMap } from "@/lib/motionThemes";
 import { applyMotionThemeToLayers } from "@/lib/applyMotionTheme";
 import { componentToNodes } from "@/lib/componentToNodes";
+import { normalizeAssets } from "@/lib/normalizeAssets";
 
 const defaultAutoLayout = {
   enabled: false,
@@ -1214,7 +1215,9 @@ export const useTemplateBuilderStore = create((set, get) => {
         console.error("Error parsing template JSON", err, text);
         return;
       }
-      const tpl = data.template;
+      const tpl = data.template
+        ? { ...data.template, assets: normalizeAssets(data.template.assets || []) }
+        : data.template;
 
       if (!tpl) {
         console.error("Template not found or empty response:", templateId);
@@ -1729,9 +1732,10 @@ export const useTemplateBuilderStore = create((set, get) => {
   loadTemplateFromObject: (tpl) =>
     set((state) => {
       if (!tpl) return state;
+      const normalizedTpl = { ...tpl, assets: normalizeAssets(tpl.assets || []) };
       try {
         const { validateDroppleTemplate } = require("@/lib/droppleTemplateSpec");
-        const validation = validateDroppleTemplate(tpl);
+        const validation = validateDroppleTemplate(normalizedTpl);
         if (!validation.valid) {
           console.error("Template validation failed", validation.errors);
           return state;
@@ -1739,11 +1743,11 @@ export const useTemplateBuilderStore = create((set, get) => {
       } catch (err) {
         console.warn("Template validation skipped", err?.message || err);
       }
-      const newId = tpl.id || tpl._id || crypto.randomUUID();
-      const layers = tpl.layers || tpl.nodes || [];
+      const newId = normalizedTpl.id || normalizedTpl._id || crypto.randomUUID();
+      const layers = normalizedTpl.layers || normalizedTpl.nodes || [];
       const page = {
         id: "page_1",
-        name: tpl.name || "Page 1",
+        name: normalizedTpl.name || "Page 1",
         artboards: [],
         layers,
       };
@@ -1751,15 +1755,15 @@ export const useTemplateBuilderStore = create((set, get) => {
         currentTemplate: {
           ...state.currentTemplate,
           id: newId,
-          name: tpl.name || "AI Template",
-          description: tpl.description || "",
-          mode: tpl.mode || "uiux",
-          width: tpl.width || state.currentTemplate.width || 1440,
-          height: tpl.height || state.currentTemplate.height || 1024,
+          name: normalizedTpl.name || "AI Template",
+          description: normalizedTpl.description || "",
+          mode: normalizedTpl.mode || "uiux",
+          width: normalizedTpl.width || state.currentTemplate.width || 1440,
+          height: normalizedTpl.height || state.currentTemplate.height || 1024,
           layers,
-          tags: tpl.tags || [],
-          thumbnail: tpl.thumbnail || "",
-          pageTransitions: tpl.pageTransitions || state.currentTemplate.pageTransitions || {},
+          tags: normalizedTpl.tags || [],
+          thumbnail: normalizedTpl.thumbnail || "",
+          pageTransitions: normalizedTpl.pageTransitions || state.currentTemplate.pageTransitions || {},
         },
         pages: [page],
         activePageId: page.id,

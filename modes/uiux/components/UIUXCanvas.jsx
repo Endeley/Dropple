@@ -6,9 +6,6 @@ import { useSelectionStore } from "@/zustand/selectionStore";
 import { usePageStore } from "@/zustand/pageStore";
 import { useEffect } from "react";
 import DevicePreviewBar from "@/components/template-builder/DevicePreviewBar";
-import { usePageStore } from "@/zustand/pageStore";
-import { useNodeTreeStore } from "@/zustand/nodeTreeStore";
-import { useSelectionStore } from "@/zustand/selectionStore";
 
 export default function UIUXCanvas() {
   const nodes = useNodeTreeStore((s) => s.nodes);
@@ -24,7 +21,52 @@ export default function UIUXCanvas() {
   const setCurrentBreakpoint = usePageStore((s) => s.setCurrentBreakpoint);
   const attachFrameToPage = usePageStore((s) => s.attachFrameToPage);
   const addNode = useNodeTreeStore((s) => s.addNode);
-  const setSelectedManual = useSelectionStore((s) => s.setSelectedManual);
+
+  // Find a free slot for a new frame so it doesn't stack on existing ones.
+  const findNextFramePosition = (width, height) => {
+    const framesOnPage = rootIds
+      .map((id) => nodes[id])
+      .filter((n) => n?.type === "frame" && (!currentPageId || n.pageId === currentPageId));
+
+    const margin = 120; // space between frames
+    const startX = 120;
+    const startY = 120;
+    const maxWidth = Math.max(width, ...(framesOnPage.map((f) => f.width)));
+    const maxHeight = Math.max(height, ...(framesOnPage.map((f) => f.height)));
+    const stepX = maxWidth + margin;
+    const stepY = maxHeight + margin;
+
+    const overlaps = (candidate) =>
+      framesOnPage.some((f) => {
+        const expanded = {
+          x1: f.x - margin / 2,
+          y1: f.y - margin / 2,
+          x2: f.x + f.width + margin / 2,
+          y2: f.y + f.height + margin / 2,
+        };
+        return !(
+          candidate.x + candidate.width <= expanded.x1 ||
+          candidate.x >= expanded.x2 ||
+          candidate.y + candidate.height <= expanded.y1 ||
+          candidate.y >= expanded.y2
+        );
+      });
+
+    // Walk a grid until a non-overlapping slot is found.
+    for (let row = 0; row < 50; row++) {
+      for (let col = 0; col < 50; col++) {
+        const candidate = {
+          x: startX + col * stepX,
+          y: startY + row * stepY,
+          width,
+          height,
+        };
+        if (!overlaps(candidate)) return { x: candidate.x, y: candidate.y };
+      }
+    }
+    // Fallback: place at origin if somehow full.
+    return { x: startX, y: startY };
+  };
 
   const addFramePreset = (presetId) => {
     const presets = {
@@ -36,12 +78,13 @@ export default function UIUXCanvas() {
     const preset = presets[presetId];
     if (!preset) return;
     const id = crypto.randomUUID();
+    const { x, y } = findNextFramePosition(preset.width, preset.height);
     addNode({
       id,
       type: "frame",
       name: `${presetId} frame`,
-      x: 120,
-      y: 120,
+      x,
+      y,
       width: preset.width,
       height: preset.height,
       children: [],
@@ -85,8 +128,8 @@ export default function UIUXCanvas() {
           return (
             <div
               key={frame.id}
-              className={`absolute rounded-xl bg-white shadow-[0_18px_45px_-32px_rgba(15,23,42,0.35)] border transition ${
-                isSelected ? "border-violet-500 shadow-lg shadow-violet-500/10" : "border-neutral-200"
+              className={`absolute rounded-xl border transition ${
+                isSelected ? "border-violet-500 shadow-[0_12px_32px_-16px_rgba(99,102,241,0.35)]" : "border-neutral-300/80"
               }`}
               style={{
                 left: frame.x,

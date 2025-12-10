@@ -27,8 +27,9 @@ export default function TransformControls({ bounds, onResizeStart }) {
           key={h}
           data-handle={h}
           className="absolute w-3 h-3 bg-white rounded-sm border border-fuchsia-400 pointer-events-auto"
-          style={handleStyle(h, bounds)}
+          style={{ ...handleStyle(h, bounds), cursor: handleCursor(h) }}
           onMouseDown={(e) => {
+            e.preventDefault();
             e.stopPropagation();
             onResizeStart?.(e, h);
           }}
@@ -62,4 +63,18 @@ function handleStyle(handle, bounds) {
     left: { left: -4, top: bounds.height / 2 - 4 },
   };
   return map[handle];
+}
+
+function handleCursor(handle) {
+  const map = {
+    "top-left": "nwse-resize",
+    "top-right": "nesw-resize",
+    "bottom-right": "nwse-resize",
+    "bottom-left": "nesw-resize",
+    top: "ns-resize",
+    bottom: "ns-resize",
+    left: "ew-resize",
+    right: "ew-resize",
+  };
+  return map[handle] || "default";
 }

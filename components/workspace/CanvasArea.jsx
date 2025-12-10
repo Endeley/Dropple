@@ -3,7 +3,7 @@
 export default function CanvasArea({ children, onDropAsset }) {
   return (
     <div
-      className="w-full h-full relative flex items-center justify-center overflow-hidden"
+      className="w-full h-full relative flex overflow-hidden"
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();

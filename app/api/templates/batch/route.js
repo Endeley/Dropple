@@ -3,6 +3,7 @@
 import { assembleTemplate } from "@/lib/templateAssembler";
 import { convertBlueprintToDroppleTemplate } from "@/lib/convertBlueprintToDroppleTemplate";
 import { validateDroppleTemplate } from "@/lib/droppleTemplateSpec";
+import { normalizeAssets } from "@/lib/normalizeAssets";
 import { convexClient } from "@/lib/convex/client";
 import { api } from "@/convex/_generated/api";
 import { defaultTemplateBriefs } from "@/lib/defaultTemplateBriefs";
@@ -38,6 +39,7 @@ export async function POST(req) {
         ...tpl,
         category: brief.category || tpl.category || "",
         tags: brief.tags || tpl.tags || [],
+        assets: normalizeAssets(tpl.assets || tpl.images || []),
       };
       const { valid, errors } = validateDroppleTemplate(template);
       if (!valid) {

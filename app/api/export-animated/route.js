@@ -2,6 +2,7 @@
 
 import { chromium } from "playwright";
 import { validateDroppleTemplate } from "@/lib/droppleTemplateSpec";
+import { normalizeAssets } from "@/lib/normalizeAssets";
 
 /**
  * Render a template to a short WebM/MP4 (WebM by default).
@@ -9,7 +10,10 @@ import { validateDroppleTemplate } from "@/lib/droppleTemplateSpec";
  */
 export async function POST(req) {
   try {
-    const { template, durationMs = 4000, width = 1080, height = 1080, format = "webm" } = await req.json();
+    const { template: rawTemplate, durationMs = 4000, width = 1080, height = 1080, format = "webm" } = await req.json();
+    const template = rawTemplate
+      ? { ...rawTemplate, assets: normalizeAssets(rawTemplate.assets || []) }
+      : rawTemplate;
     const { valid, errors } = validateDroppleTemplate(template || {});
     if (!valid) {
       return Response.json({ error: "Invalid template", details: errors }, { status: 400 });
