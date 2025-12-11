@@ -90,9 +90,6 @@ export default function UIUXCanvas() {
       height: preset.height,
       children: [],
       pageId: currentPageId,
-      fill: "#f8fafc",
-      stroke: "#cbd5e1",
-      strokeWidth: 1,
     });
     attachFrameToPage(currentPageId, id);
     setSelectedManual([id]);

@@ -81,9 +81,6 @@ const withDefaults = (node = {}) => {
     base.fill = "#f8fafc";
     if (base.stroke == null) base.stroke = "#cbd5e1";
     if (base.strokeWidth == null) base.strokeWidth = 1;
-    if (base.backgroundGradient == null) {
-      base.backgroundGradient = "linear-gradient(135deg, #eef2ff, #e0f2fe)";
-    }
     if (base.scroll == null) base.scroll = { overflowX: "visible", overflowY: "visible" };
   }
 
@@ -563,7 +560,7 @@ export const useNodeTreeStore = create((set, get) => ({
       if (parent && spatialChanged) {
         mergedBase.constraintOffsets = computeConstraintOffsets(mergedBase, parent);
       }
-      const merged = withDefaults(mergedBase);
+      const merged = mergedBase;
       const nodes = { ...state.nodes, [id]: merged };
       let nextNodes = nodes;
       if (merged.layout?.enabled) {
@@ -690,7 +687,7 @@ export const useNodeTreeStore = create((set, get) => ({
       const nextRootIds = new Set(state.rootIds);
       rootIds.forEach((rid) => nextRootIds.add(rid));
       Object.entries(nodesMap).forEach(([id, node]) => {
-        nodes[id] = { ...node };
+        nodes[id] = withDefaults({ ...node });
       });
       return { nodes, rootIds: Array.from(nextRootIds) };
     }),

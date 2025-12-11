@@ -298,7 +298,13 @@ export default function UIUXProperties() {
               <div className={labelClass}>Background Gradient</div>
               <GradientPicker
                 value={selection?.backgroundGradient || ""}
-                onChange={(val) => updateNode(selection.id, { backgroundGradient: val || null })}
+                onChange={(val) =>
+                  updateNode(selection.id, {
+                    backgroundGradient: val || null,
+                    // When a gradient is picked, clear solid fill override so gradient shows.
+                    fill: val ? selection?.fill : selection?.fill,
+                  })
+                }
               />
             </div>
           </>
@@ -314,7 +320,13 @@ export default function UIUXProperties() {
                 type="color"
                 className="w-full h-10 border border-neutral-200 rounded-md"
                 value={selection?.fill || "#f8fafc"}
-                onChange={(e) => updateNode(selection.id, { fill: e.target.value })}
+                onChange={(e) =>
+                  updateNode(selection.id, {
+                    fill: e.target.value,
+                    // Reset gradient/image when choosing a solid color so it actually shows.
+                    backgroundGradient: null,
+                  })
+                }
               />
             </div>
             <div>

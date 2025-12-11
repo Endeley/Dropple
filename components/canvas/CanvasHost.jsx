@@ -133,16 +133,18 @@ export default function CanvasHost({
       if (tool === "rectangle" || tool === "frame") {
         const id = crypto.randomUUID();
         const parent = tool === "frame" ? null : findParentFrame(localX, localY);
+        const isFrame = tool === "frame";
         addNode({
           id,
-          type: tool === "rectangle" ? NODE_TYPES.RECT : NODE_TYPES.FRAME,
-          name: tool === "rectangle" ? "Rectangle" : "Frame",
+          type: isFrame ? NODE_TYPES.FRAME : NODE_TYPES.RECT,
+          name: isFrame ? "Frame" : "Rectangle",
           x: localX,
           y: localY,
           width: 1,
           height: 1,
           rotation: 0,
-          fill: tool === "frame" ? "#ffffff" : "#4a4a4a",
+          // Leave frame fill undefined so node defaults supply a visible background.
+          fill: isFrame ? undefined : "#4a4a4a",
           parent,
           children: [],
         });
