@@ -49,6 +49,22 @@ const spacingTokens = {
   xl: 24,
 };
 
+const computeConstraintOffsets = (child, parent) => {
+  if (!parent || !child) {
+    return { left: 0, right: 0, top: 0, bottom: 0 };
+  }
+  const left = (child.x ?? 0) - (parent.x ?? 0);
+  const top = (child.y ?? 0) - (parent.y ?? 0);
+  const right = (parent.x ?? 0) + (parent.width ?? 0) - ((child.x ?? 0) + (child.width ?? 0));
+  const bottom = (parent.y ?? 0) + (parent.height ?? 0) - ((child.y ?? 0) + (child.height ?? 0));
+  return {
+    left: Number.isFinite(left) ? left : 0,
+    right: Number.isFinite(right) ? right : 0,
+    top: Number.isFinite(top) ? top : 0,
+    bottom: Number.isFinite(bottom) ? bottom : 0,
+  };
+};
+
 const withDefaults = (node = {}) => {
   const base = {
     constraints: { ...defaultConstraints, ...(node.constraints || {}) },
@@ -65,7 +81,9 @@ const withDefaults = (node = {}) => {
     base.fill = "#f8fafc";
     if (base.stroke == null) base.stroke = "#cbd5e1";
     if (base.strokeWidth == null) base.strokeWidth = 1;
-    if (base.backgroundGradient == null) base.backgroundGradient = null;
+    if (base.backgroundGradient == null) {
+      base.backgroundGradient = "linear-gradient(135deg, #eef2ff, #e0f2fe)";
+    }
     if (base.scroll == null) base.scroll = { overflowX: "visible", overflowY: "visible" };
   }
 
@@ -126,6 +144,9 @@ const withDefaults = (node = {}) => {
   if (base.order == null) base.order = 0;
   if (base.slot === undefined) base.slot = null;
   if (base.slotName === undefined) base.slotName = null;
+  if (!base.constraintOffsets) {
+    base.constraintOffsets = { left: 0, right: 0, top: 0, bottom: 0 };
+  }
 
   // Default constraints for all nodes (except frames already have defaults above)
   if (!base.constraints) {
@@ -395,12 +416,30 @@ export const useNodeTreeStore = create((set, get) => ({
       return { nodes };
     }),
 
+  recomputeConstraintOffsetsForParent: (parentId) =>
+    set((state) => {
+      if (!parentId) return state;
+      const parent = state.nodes[parentId];
+      if (!parent) return state;
+      const nodes = { ...state.nodes };
+      Object.values(nodes).forEach((child) => {
+        if (!child || child.parent !== parentId) return;
+        nodes[child.id] = {
+          ...child,
+          constraintOffsets: computeConstraintOffsets(child, parent),
+        };
+      });
+      return { nodes };
+    }),
+
   setTree: (nodes = {}, rootIds = []) => set({ nodes, rootIds }),
 
-  createComponent: (rootId) =>
+  createComponent: (rootId) => {
+    let createdId = null;
     set((state) => {
       const master = collectSubtree(state.nodes, rootId);
       const compId = crypto.randomUUID();
+      createdId = compId;
       useComponentStore.getState().addComponent({
         id: compId,
         rootId,
@@ -408,13 +447,17 @@ export const useNodeTreeStore = create((set, get) => ({
         rootIds: [rootId],
       });
       return state;
-    }),
+    });
+    return createdId;
+  },
 
-  createInstance: (componentId, x = 0, y = 0) =>
+  createInstance: (componentId, x = 0, y = 0) => {
+    let createdId = null;
     set((state) => {
       const comp = useComponentStore.getState().getComponent(componentId);
       if (!comp) return state;
       const instanceId = crypto.randomUUID();
+      createdId = instanceId;
       const masterRoot = comp.nodes?.[comp.rootId];
       const width = masterRoot?.width || 100;
       const height = masterRoot?.height || 100;
@@ -434,7 +477,9 @@ export const useNodeTreeStore = create((set, get) => ({
         nodes: { ...state.nodes, [instanceId]: node },
         rootIds: [...state.rootIds, instanceId],
       };
-    }),
+    });
+    return createdId;
+  },
 
   addNode: (node, parentId = null, index = null) =>
     set((state) => {
@@ -453,6 +498,7 @@ export const useNodeTreeStore = create((set, get) => ({
         }
         nodes[targetParent] = { ...parent, children };
         nextRootIds.delete(node.id);
+        normalized.constraintOffsets = computeConstraintOffsets(normalized, parent);
       } else if (!targetParent) {
         nextRootIds.add(node.id);
       }
@@ -488,7 +534,11 @@ export const useNodeTreeStore = create((set, get) => ({
         const parent = nodes[newParentId];
         const children = Array.from(new Set([...(parent.children || []), id]));
         nodes[newParentId] = { ...parent, children };
-        nodes[id] = { ...nodes[id], parent: newParentId };
+        nodes[id] = {
+          ...nodes[id],
+          parent: newParentId,
+          constraintOffsets: computeConstraintOffsets(nodes[id], parent),
+        };
       } else {
         nodes[id] = { ...nodes[id], parent: null };
         nextRootIds.add(id);
@@ -500,7 +550,20 @@ export const useNodeTreeStore = create((set, get) => ({
   updateNode: (id, updates) =>
     set((state) => {
       if (!state.nodes[id]) return state;
-      const merged = withDefaults({ ...state.nodes[id], ...updates });
+      const current = state.nodes[id];
+      const parent = current.parent ? state.nodes[current.parent] : null;
+      const mergedBase = { ...current, ...updates };
+      // Recalculate offsets only when spatial fields change or parent supplied.
+      const spatialChanged =
+        updates.parent !== undefined ||
+        updates.x !== undefined ||
+        updates.y !== undefined ||
+        updates.width !== undefined ||
+        updates.height !== undefined;
+      if (parent && spatialChanged) {
+        mergedBase.constraintOffsets = computeConstraintOffsets(mergedBase, parent);
+      }
+      const merged = withDefaults(mergedBase);
       const nodes = { ...state.nodes, [id]: merged };
       let nextNodes = nodes;
       if (merged.layout?.enabled) {

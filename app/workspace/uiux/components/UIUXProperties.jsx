@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 import { useSelectionStore } from "@/zustand/selectionStore";
-import { useNodeTreeStore } from "@/zustand/nodeTreeStore";
 import { Section } from "@/components/properties/Section";
 import { useTextEditStore } from "@/zustand/textEditStore";
 import { SpanTypographyPanel } from "@/components/properties/typography/SpanTypographyPanel";
@@ -11,6 +10,8 @@ import { usePrototypeStore } from "@/zustand/prototypeStore";
 import { usePageStore } from "@/zustand/pageStore";
 import ConstraintsWidget from "@/components/ui/ConstraintsWidget";
 import { useComponentStore } from "@/zustand/componentStore";
+import GradientPicker from "@/components/workspace/GradientPicker";
+import { useNodeTreeStore } from "@/zustand/nodeTreeStore";
 
 const labelClass = "text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500";
 const inputClass =
@@ -71,6 +72,8 @@ export default function UIUXProperties() {
     [nodes],
   );
   const components = useComponentStore((s) => s.components);
+  const createInstance = useNodeTreeStore((s) => s.createInstance);
+  const createComponent = useNodeTreeStore((s) => s.createComponent);
   const hasTextSelection =
     selection?.type === "richtext" &&
     textEditingId === selection?.id &&
@@ -91,12 +94,46 @@ export default function UIUXProperties() {
             <div className="text-sm font-semibold text-neutral-900">{selectionType}</div>
             <span className="text-xs text-neutral-500">{selectedIds.length ? `${selectedIds.length} selected` : ""}</span>
           </div>
+          {selection?.slot ? (
+            <div className="inline-flex items-center gap-2 rounded-full bg-violet-50 text-violet-700 border border-violet-200 px-3 py-1 text-[11px] font-semibold">
+              Slot: {selection.slotName || selection.slot}
+            </div>
+          ) : null}
           <input
             className={inputClass}
             placeholder={selection?.name || "Layer name"}
             defaultValue={selection?.name}
             onBlur={(e) => selection && updateNode(selection.id, { name: e.target.value })}
           />
+          {selection ? (
+            <div className="flex items-center gap-2">
+              <button
+                className={miniButton}
+                onClick={() => {
+                  const existing = Object.values(components || {}).find((c) => c.rootId === selection.id)?.id;
+                  const compId = existing || createComponent(selection.id);
+                  if (compId) {
+                    useComponentStore.getState().setDraggingComponent?.(compId);
+                  }
+                }}
+              >
+                Make Component
+              </button>
+              <button
+                className={miniButton}
+                onClick={() => {
+                  const existing = Object.values(components || {}).find((c) => c.rootId === selection.id)?.id;
+                  const compId = existing || createComponent(selection.id);
+                  if (compId) {
+                    const instId = createInstance(compId, (selection.x || 0) + 40, (selection.y || 0) + 40);
+                    if (instId) useSelectionStore.getState().setSelectedManual([instId]);
+                  }
+                }}
+              >
+                Insert Instance
+              </button>
+            </div>
+          ) : null}
         </div>
         {selection ? (
           <div className="grid grid-cols-2 gap-2 mt-2">
@@ -259,61 +296,10 @@ export default function UIUXProperties() {
             </div>
             <div className="mt-2">
               <div className={labelClass}>Background Gradient</div>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <div className="text-[10px] uppercase text-neutral-500">Color 1</div>
-                  <input
-                    type="color"
-                    className="w-full h-10 border border-neutral-200 rounded-md"
-                    value={selection?.gradientColor1 || "#ff8a00"}
-                    onChange={(e) =>
-                      updateNode(selection.id, {
-                        gradientColor1: e.target.value,
-                        backgroundGradient: buildLinearGradient(e.target.value, selection?.gradientColor2 || "#e52e71", selection?.gradientAngle || 90),
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <div className="text-[10px] uppercase text-neutral-500">Color 2</div>
-                  <input
-                    type="color"
-                    className="w-full h-10 border border-neutral-200 rounded-md"
-                    value={selection?.gradientColor2 || "#e52e71"}
-                    onChange={(e) =>
-                      updateNode(selection.id, {
-                        gradientColor2: e.target.value,
-                        backgroundGradient: buildLinearGradient(selection?.gradientColor1 || "#ff8a00", e.target.value, selection?.gradientAngle || 90),
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <div className="text-[10px] uppercase text-neutral-500">Angle</div>
-                  <input
-                    className={inputClass}
-                    type="number"
-                    min="0"
-                    max="360"
-                    value={selection?.gradientAngle ?? 90}
-                    onChange={(e) => {
-                      const angle = parseFloat(e.target.value || "90");
-                      updateNode(selection.id, {
-                        gradientAngle: angle,
-                        backgroundGradient: buildLinearGradient(selection?.gradientColor1 || "#ff8a00", selection?.gradientColor2 || "#e52e71", angle),
-                      });
-                    }}
-                  />
-                </div>
-              </div>
-              <div className="mt-2">
-                <input
-                  className={inputClass}
-                  placeholder="Custom: linear-gradient(90deg, #ff00cc, #3333ff)"
-                  value={selection?.backgroundGradient || ""}
-                  onChange={(e) => updateNode(selection.id, { backgroundGradient: e.target.value })}
-                />
-              </div>
+              <GradientPicker
+                value={selection?.backgroundGradient || ""}
+                onChange={(val) => updateNode(selection.id, { backgroundGradient: val || null })}
+              />
             </div>
           </>
         ) : null}
@@ -369,11 +355,9 @@ export default function UIUXProperties() {
             </div>
             <div>
               <div className={labelClass}>Gradient</div>
-              <input
-                className={inputClass}
-                placeholder="linear-gradient(90deg, #ff00cc, #3333ff)"
+              <GradientPicker
                 value={selection?.backgroundGradient || ""}
-                onChange={(e) => updateNode(selection.id, { backgroundGradient: e.target.value })}
+                onChange={(val) => updateNode(selection.id, { backgroundGradient: val || null })}
               />
             </div>
           </div>
@@ -540,7 +524,71 @@ export default function UIUXProperties() {
             </div>
           </Section>
 
-          <Section title="Box Model" defaultOpen={false}>
+        <Section title="Box Model" defaultOpen={false}>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={selection?.box?.shadow?.enabled || false}
+                onChange={(e) =>
+                  updateNode(selection.id, {
+                    box: {
+                      ...(selection.box || {}),
+                      shadow: { ...(selection.box?.shadow || {}), enabled: e.target.checked },
+                    },
+                  })
+                }
+              />
+              <span className="text-neutral-700">Shadow</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={(selection?.box?.outline?.width ?? 0) > 0}
+                onChange={(e) =>
+                  updateNode(selection.id, {
+                    box: {
+                      ...(selection.box || {}),
+                      outline: {
+                        ...(selection.box?.outline || {}),
+                        width: e.target.checked ? selection.box?.outline?.width || 1 : 0,
+                      },
+                    },
+                  })
+                }
+              />
+              <span className="text-neutral-700">Outline</span>
+            </label>
+          </div>
+          <div className="grid grid-cols-4 gap-2 mb-2">
+            {[
+              { key: "radiusTopLeft", label: "TL" },
+              { key: "radiusTopRight", label: "TR" },
+              { key: "radiusBottomRight", label: "BR" },
+              { key: "radiusBottomLeft", label: "BL" },
+            ].map((corner) => (
+              <div key={corner.key}>
+                <div className={labelClass}>{corner.label}</div>
+                <input
+                  className={inputClass}
+                  type="number"
+                  min="0"
+                  value={selection?.box?.border?.[corner.key] ?? selection?.box?.border?.radius ?? 0}
+                  onChange={(e) =>
+                    updateNode(selection.id, {
+                      box: {
+                        ...(selection.box || {}),
+                        border: {
+                          ...(selection.box?.border || {}),
+                          [corner.key]: parseInt(e.target.value || "0", 10),
+                        },
+                      },
+                    })
+                  }
+                />
+              </div>
+            ))}
+          </div>
             <div className="mt-2">
               <div className={labelClass}>Margin</div>
               <div className="grid grid-cols-4 gap-2">
@@ -1550,6 +1598,39 @@ export default function UIUXProperties() {
 
       {isComponentInstance && selection && (
         <Section title="Component Overrides" defaultOpen>
+          <div className="flex items-center gap-2 mb-2">
+            <select
+              className={inputClass}
+              value={selection.componentId || ""}
+              onChange={(e) => {
+                const compId = e.target.value;
+                if (!compId) return;
+                updateNode(selection.id, {
+                  componentId: compId,
+                  nodeOverrides: {},
+                  propOverrides: {},
+                });
+              }}
+            >
+              <option value="">Swap component…</option>
+              {Object.values(components || {}).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name || c.id}
+                </option>
+              ))}
+            </select>
+            <button
+              className={miniButton}
+              onClick={() => {
+                const cloneId = createInstance(selection.componentId, (selection.x || 0) + 40, (selection.y || 0) + 40);
+                if (cloneId) {
+                  useSelectionStore.getState().setSelectedManual([cloneId]);
+                }
+              }}
+            >
+              Duplicate Instance
+            </button>
+          </div>
           <ComponentInstancePanel node={selection} />
           {(() => {
             const master = components?.[selection.componentId];
@@ -1582,6 +1663,15 @@ export default function UIUXProperties() {
                         placeholder={slot.text || "Override text"}
                         value={selection.nodeOverrides?.[`${slot.id}.text`] || ""}
                         onChange={(e) => setOverride(slot.id, "text", e.target.value)}
+                      />
+                    ) : null}
+                    {slot.slot === "text" ? (
+                      <input
+                        className={inputClass}
+                        type="color"
+                        value={selection.nodeOverrides?.[`${slot.id}.fill`] || slot.fill || "#ffffff"}
+                        onChange={(e) => setOverride(slot.id, "fill", e.target.value)}
+                        title="Text color"
                       />
                     ) : null}
                     {slot.slot === "image" || slot.slot === "icon" ? (

@@ -52,9 +52,14 @@ export default function CanvasHost({
   const clearHighlight = useSnappingStore((s) => s.clearHighlight);
   const setDropIndicator = useSnappingStore((s) => s.setDropIndicator);
   const clearDropIndicator = useSnappingStore((s) => s.clearDropIndicator);
+  const dropIndicator = useSnappingStore((s) => s.dropIndicator);
+  const setSpacingPreview = useSnappingStore((s) => s.setSpacingPreview);
+  const clearSpacingPreview = useSnappingStore((s) => s.clearSpacingPreview);
   const draggingComponentId = useComponentStore((s) => s.draggingComponentId);
   const clearDraggingComponent = useComponentStore((s) => s.clearDraggingComponent);
   const pushHistory = useUndoStore((s) => s.push);
+  const createInstance = useNodeTreeStore((s) => s.createInstance);
+  const recomputeConstraintOffsetsForParent = useNodeTreeStore((s) => s.recomputeConstraintOffsetsForParent);
   const containerRef = useRef(null);
   const { pan, isPanning } = useCanvasPan(containerRef);
   const { zoom } = useCanvasZoom(containerRef);
@@ -424,10 +429,31 @@ export default function CanvasHost({
           updateNode(hoveredContainer.id, {
             autoLayout: { ...(hoveredContainer.autoLayout || {}), spacing: nextSpacing },
           });
+          const pad = hoveredContainer.autoLayout?.padding || { top: 0, right: 0, bottom: 0, left: 0 };
+          const lineY = vertical
+            ? (dropIndicator?.y ?? hoveredContainer.y + (hoveredContainer.height || 0) / 2)
+            : hoveredContainer.y + pad.top;
+          const lineX = vertical
+            ? hoveredContainer.x + pad.left
+            : (dropIndicator?.x ?? hoveredContainer.x + (hoveredContainer.width || 0) / 2);
+          const lineX2 = hoveredContainer.x + (hoveredContainer.width || 0) - pad.right;
+          const lineY2 = hoveredContainer.y + (hoveredContainer.height || 0) - pad.bottom;
+          setSpacingPreview({
+            parentId: hoveredContainer.id,
+            spacing: nextSpacing,
+            x: lineX,
+            y: lineY,
+            x2: vertical ? lineX2 : lineX,
+            y2: vertical ? lineY : lineY2,
+            vertical,
+          });
+        } else {
+          clearSpacingPreview();
         }
       } else {
         clearHighlight();
         clearDropIndicator();
+        clearSpacingPreview();
       }
       const snapPoints = getSnapPoints(nodes, selectedIds);
       const guides = [];
@@ -460,6 +486,7 @@ export default function CanvasHost({
   };
 
   const onMouseUp = () => {
+    const resizedId = resizeRef.current?.nodeId;
     if (dragRef.current) {
       const lastPos = dragRef.current.lastPos;
       if (lastPos) {
@@ -495,11 +522,15 @@ export default function CanvasHost({
     }
     clearHighlight();
     clearDropIndicator();
+    clearSpacingPreview();
     resizeRef.current = null;
     rotateRef.current = null;
     if (creationRef.current) {
       creationRef.current = null;
       useToolStore.getState().setTool("select");
+    }
+    if (resizedId) {
+      applyConstraintsForParent(resizedId);
     }
     clearGuides();
   };
@@ -507,6 +538,7 @@ export default function CanvasHost({
   const onMouseLeave = () => {
     clearHighlight();
     clearDropIndicator();
+    clearSpacingPreview();
   };
 
   // Hit-test any node at point (local coordinates).
@@ -542,16 +574,16 @@ export default function CanvasHost({
     let targetIndex = children.length;
     const gap = parent.autoLayout?.spacing || 0;
     const pad = parent.autoLayout?.padding || { top: 0, right: 0, bottom: 0, left: 0 };
-    let lineX = vertical ? parent.x : parent.x + pad.left;
-    let lineY = vertical ? parent.y + pad.top : parent.y;
+    let lineX = parent.x + pad.left;
+    let lineY = parent.y + pad.top;
 
     for (let i = 0; i < children.length; i++) {
       const c = children[i];
-      const mid = vertical ? c.y + c.height / 2 : c.x + c.width / 2;
-      if ((vertical && localY < mid) || (!vertical && localX < mid)) {
+      const beforeEdge = vertical ? c.y - gap / 2 : c.x - gap / 2;
+      if ((vertical && localY < beforeEdge) || (!vertical && localX < beforeEdge)) {
         targetIndex = i;
-        lineX = vertical ? parent.x + pad.left : c.x - gap / 2;
-        lineY = vertical ? c.y - gap / 2 : parent.y + pad.top;
+        lineX = vertical ? parent.x + pad.left : Math.max(parent.x + pad.left, beforeEdge);
+        lineY = vertical ? Math.max(parent.y + pad.top, beforeEdge) : parent.y + pad.top;
         break;
       }
     }
@@ -566,7 +598,76 @@ export default function CanvasHost({
       lineY = vertical ? last.y + last.height + gap / 2 : parent.y + pad.top;
     }
 
+    // Clamp line to padding box.
+    const minX = parent.x + pad.left;
+    const maxX = parent.x + (parent.width || 0) - pad.right;
+    const minY = parent.y + pad.top;
+    const maxY = parent.y + (parent.height || 0) - pad.bottom;
+    lineX = Math.min(Math.max(lineX, minX), maxX);
+    lineY = Math.min(Math.max(lineY, minY), maxY);
+
     return { parentId: parent.id, index: targetIndex, x: lineX, y: lineY };
+  };
+
+  const applyConstraintsForParent = (parentId) => {
+    const allNodes = useNodeTreeStore.getState().nodes;
+    const parent = allNodes[parentId];
+    if (!parent) return;
+    Object.values(allNodes).forEach((child) => {
+      if (!child || child.parent !== parentId) return;
+      const c = child.constraints || {};
+      const offs = child.constraintOffsets || { left: 0, right: 0, top: 0, bottom: 0 };
+      let nextX = child.x ?? 0;
+      let nextY = child.y ?? 0;
+      let nextW = child.width ?? 0;
+      let nextH = child.height ?? 0;
+
+      switch (c.horizontal) {
+        case "left-right":
+          nextX = parent.x + offs.left;
+          nextW = (parent.width ?? 0) - offs.left - offs.right;
+          break;
+        case "stretch":
+          nextX = parent.x;
+          nextW = parent.width ?? nextW;
+          break;
+        case "center":
+          nextX = parent.x + (parent.width ?? 0) / 2 - nextW / 2;
+          break;
+        case "right":
+          nextX = parent.x + (parent.width ?? 0) - nextW - offs.right;
+          break;
+        default:
+          nextX = parent.x + offs.left;
+      }
+
+      switch (c.vertical) {
+        case "top-bottom":
+          nextY = parent.y + offs.top;
+          nextH = (parent.height ?? 0) - offs.top - offs.bottom;
+          break;
+        case "stretch":
+          nextY = parent.y;
+          nextH = parent.height ?? nextH;
+          break;
+        case "center":
+          nextY = parent.y + (parent.height ?? 0) / 2 - nextH / 2;
+          break;
+        case "bottom":
+          nextY = parent.y + (parent.height ?? 0) - nextH - offs.bottom;
+          break;
+        default:
+          nextY = parent.y + offs.top;
+      }
+
+      updateNode(child.id, {
+        x: nextX,
+        y: nextY,
+        width: nextW,
+        height: nextH,
+      });
+    });
+    recomputeConstraintOffsetsForParent(parentId);
   };
 
   const handleDrop = (e) => {
@@ -591,26 +692,27 @@ export default function CanvasHost({
       if (hit) targetId = hit.id;
     }
 
-    if (!targetId) {
-      clearDraggingComponent();
-      return;
-    }
-
-    const before = {
-      kind: "tree",
-      before: {
-        nodes: JSON.parse(JSON.stringify(nodes)),
-        rootIds: [...rootIds],
-        components: JSON.parse(JSON.stringify(useComponentStore.getState().components)),
-      },
-    };
-    updateNode(targetId, { componentId: compId, variantId: null, propOverrides: {}, nodeOverrides: {} });
-    const after = {
+    const snapshotBefore = {
       nodes: JSON.parse(JSON.stringify(useNodeTreeStore.getState().nodes)),
       rootIds: [...useNodeTreeStore.getState().rootIds],
       components: JSON.parse(JSON.stringify(useComponentStore.getState().components)),
     };
-    pushHistory({ kind: "tree", before: before.before, after });
+
+    if (!targetId) {
+      const newId = createInstance(compId, localX, localY);
+      if (newId) {
+        useSelectionStore.getState().setSelectedManual([newId]);
+      }
+    } else {
+      updateNode(targetId, { componentId: compId, variantId: null, propOverrides: {}, nodeOverrides: {} });
+    }
+
+    const snapshotAfter = {
+      nodes: JSON.parse(JSON.stringify(useNodeTreeStore.getState().nodes)),
+      rootIds: [...useNodeTreeStore.getState().rootIds],
+      components: JSON.parse(JSON.stringify(useComponentStore.getState().components)),
+    };
+    pushHistory({ kind: "tree", before: snapshotBefore, after: snapshotAfter });
     clearDraggingComponent();
   };
 

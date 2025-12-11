@@ -16,6 +16,13 @@ export const useComponentStore = create((set, get) => ({
       if (!state.components[id]) return state;
       return { components: { ...state.components, [id]: { ...state.components[id], ...updates } } };
     }),
+  removeComponent: (id) =>
+    set((state) => {
+      if (!state.components[id]) return state;
+      const next = { ...state.components };
+      delete next[id];
+      return { components: next };
+    }),
   setDraggingComponent: (id) => set({ draggingComponentId: id }),
   clearDraggingComponent: () => set({ draggingComponentId: null }),
   addVariant: (id, variant) =>

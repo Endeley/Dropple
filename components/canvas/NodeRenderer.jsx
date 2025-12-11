@@ -346,6 +346,7 @@ export default function NodeRenderer({ onNodePointerDown }) {
   const endSelection = useTextEditStore((s) => s.endSelection);
   const highlightTarget = useSnappingStore((s) => s.highlightTarget);
   const dropIndicator = useSnappingStore((s) => s.dropIndicator);
+  const spacingPreview = useSnappingStore((s) => s.spacingPreview);
   const pendingStyle = useTextEditStore((s) => s.pendingStyle);
   const setPendingStyle = useTextEditStore((s) => s.setPendingStyle);
   const setTool = useToolStore((s) => s.setTool);
@@ -559,7 +560,25 @@ export default function NodeRenderer({ onNodePointerDown }) {
           };
           let childContent = null;
           if (rnode.type === "rect" || rnode.type === "shape") {
-            childContent = <div style={{ background: resolveValue(rnode.fill) || "#666", width: "100%", height: "100%" }} />;
+            childContent = (
+              <div
+                style={{
+                  backgroundColor: resolveValue(rnode.fill) || "#666",
+                  backgroundImage:
+                    (typeof rnode.backgroundGradient === "string" && rnode.backgroundGradient.trim().length
+                      ? rnode.backgroundGradient
+                      : null) ||
+                    (typeof rnode.backgroundImage === "string" && rnode.backgroundImage.trim().length
+                      ? `url(${rnode.backgroundImage})`
+                      : undefined),
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  backgroundRepeat: "no-repeat",
+                  width: "100%",
+                  height: "100%",
+                }}
+              />
+            );
           } else if (rnode.type === "ellipse") {
             childContent = (
               <svg width="100%" height="100%" viewBox={`0 0 ${rnode.width || 1} ${rnode.height || 1}`} className="overflow-visible">
@@ -699,13 +718,12 @@ export default function NodeRenderer({ onNodePointerDown }) {
           ? `url(${node.backgroundImage})`
           : null;
 
-        // Order of precedence: gradient > image > color.
-        style.background = gradient || bgImage || frameFill;
-        if (bgImage && !gradient) {
-          style.backgroundSize = node.backgroundSize || "cover";
-          style.backgroundPosition = "center";
-          style.backgroundRepeat = "no-repeat";
-        }
+        // Order of precedence: gradient > image > color but keep base color as fallback.
+        style.backgroundColor = frameFill;
+        style.backgroundImage = gradient || bgImage || undefined;
+        style.backgroundSize = node.backgroundSize || "cover";
+        style.backgroundPosition = "center";
+        style.backgroundRepeat = "no-repeat";
 
         style.borderStyle = node.strokeWidth ? "solid" : "none";
         style.borderColor = node.stroke ? resolveValue(node.stroke) : "#cbd5e1";
@@ -729,12 +747,11 @@ export default function NodeRenderer({ onNodePointerDown }) {
             ? `url(${node.backgroundImage})`
             : null;
 
-        style.background = gradient || bgImage || shapeFill;
-        if (bgImage && !gradient) {
-          style.backgroundSize = "cover";
-          style.backgroundPosition = "center";
-          style.backgroundRepeat = "no-repeat";
-        }
+        style.backgroundColor = shapeFill;
+        style.backgroundImage = gradient || bgImage || undefined;
+        style.backgroundSize = "cover";
+        style.backgroundPosition = "center";
+        style.backgroundRepeat = "no-repeat";
         style.borderRadius = node.radius ?? node.borderRadius ?? 0;
         style.padding = node.padding ?? 0;
         style.overflow = "hidden";
@@ -991,10 +1008,42 @@ export default function NodeRenderer({ onNodePointerDown }) {
               node.autoLayout.direction === "horizontal"
                 ? 0
                 : (dropIndicator.y || 0) - safe(node.y),
-            width: node.autoLayout.direction === "horizontal" ? 2 : "100%",
-            height: node.autoLayout.direction === "horizontal" ? "100%" : 2,
+            width: node.autoLayout.direction === "horizontal" ? 3 : "100%",
+            height: node.autoLayout.direction === "horizontal" ? "100%" : 3,
+            boxShadow: "0 0 0 2px rgba(59,130,246,0.35)",
           }}
         />
+      )}
+      {spacingPreview?.parentId === id && (
+        <>
+          {(() => {
+            const x1 = spacingPreview.x ?? 0;
+            const y1 = spacingPreview.y ?? 0;
+            const x2 = spacingPreview.x2 ?? x1;
+            const y2 = spacingPreview.y2 ?? y1;
+            return (
+              <div
+                className="absolute bg-blue-500/40 pointer-events-none"
+                style={{
+                  left: Math.min(x1, x2) - safe(node.x),
+                  top: Math.min(y1, y2) - safe(node.y),
+                  width: spacingPreview.vertical ? Math.max(2, Math.abs(x2 - x1)) : 3,
+                  height: spacingPreview.vertical ? 3 : Math.max(2, Math.abs(y2 - y1)),
+                  boxShadow: "0 0 0 1px rgba(59,130,246,0.25)",
+                }}
+              />
+            );
+          })()}
+          <div
+            className="absolute px-2 py-1 text-[10px] rounded-full bg-blue-500 text-white pointer-events-none shadow-sm"
+            style={{
+              left: (spacingPreview.x || 0) - safe(node.x) - 20,
+              top: (spacingPreview.y || 0) - safe(node.y) - 10,
+            }}
+          >
+            gap {Math.round(spacingPreview.spacing || 0)}
+          </div>
+        </>
       )}
       {content}
       {orderedChildren.map((child) => renderNode(child.id))}

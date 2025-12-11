@@ -1,8 +1,9 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+const cn = (...classes) => classes.filter(Boolean).join(" ");
 
 export default function ConstraintsWidget({ node, updateNode }) {
+  if (!node || !updateNode) return null;
   const c = node.constraints || {};
 
   const setHorizontal = (value) =>
