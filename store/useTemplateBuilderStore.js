@@ -1319,6 +1319,14 @@ export const useTemplateBuilderStore = create((set, get) => {
       ...layer,
     };
 
+    // Ensure frames get a visible starting background when created via tools.
+    if (layerWithDefaults.type === "frame") {
+      if (layerWithDefaults.fill == null) layerWithDefaults.fill = "#f1f5f9";
+      if (layerWithDefaults.stroke == null) layerWithDefaults.stroke = "#cbd5e1";
+      if (layerWithDefaults.strokeWidth == null) layerWithDefaults.strokeWidth = 1;
+      if (layerWithDefaults.backgroundGradient === undefined) layerWithDefaults.backgroundGradient = null;
+    }
+
     const page = getActivePage();
     let layers = [...(page?.layers || []), layerWithDefaults];
 
@@ -2177,6 +2185,11 @@ export const useTemplateBuilderStore = create((set, get) => {
       y: 200,
       width: 300,
       height: 300,
+      fill: "#d1d5db",
+      backgroundColor: "#d1d5db",
+      stroke: "#94a3b8",
+      strokeWidth: 1,
+      backgroundGradient: null,
       children: [],
       autoLayout: {
         enabled: true,

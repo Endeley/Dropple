@@ -26,6 +26,7 @@ export const usePageStore = create((set, get) => ({
   currentPageId: defaultPage.id,
   viewportWidth: 1440,
   currentBreakpointId: "desktop",
+  workspaceMode: "design", // design | layout | template
 
   addPage: (page) =>
     set((state) => {
@@ -46,6 +47,7 @@ export const usePageStore = create((set, get) => ({
     }),
 
   setCurrentPage: (id) => set({ currentPageId: id }),
+  setWorkspaceMode: (mode) => set({ workspaceMode: mode || "design" }),
   setCurrentBreakpoint: (id) => {
     const state = get();
     const page = state.pages.find((p) => p.id === state.currentPageId);

@@ -1,985 +1,139 @@
-/* eslint-disable @next/next/no-img-element */
 'use client';
 
+import FrameRenderer from './FrameRenderer';
+import { resolveAsset } from '@/lib/assets/resolveAsset';
+import { resolveValue } from '@/lib/tokens/resolveValue';
 import { useNodeTreeStore } from '@/zustand/nodeTreeStore';
 import { useSelectionStore } from '@/zustand/selectionStore';
-import { useTextEditStore } from '@/zustand/textEditStore';
-import { computeLayout } from '@/lib/text/layoutEngine';
-import { backspace, forwardDelete, insertChar } from '@/lib/text/applyEdit';
-import { applyStyleToRange } from '@/lib/text/applyStyleToRange';
-import { useEffect, useMemo, useRef } from 'react';
-import { usePrototypeStore } from '@/zustand/prototypeStore';
-import { resolveAsset } from '@/lib/assets/resolveAsset';
-import { useCollaborationStore } from '@/zustand/collaborationStore';
-import { captureAfterAndPush, captureBefore } from '@/zustand/undoStore';
-import { useToolStore } from '@/zustand/toolStore';
-import { useVectorEditStore } from '@/zustand/vectorEditStore';
-import { resolveValue } from '@/lib/tokens/resolveValue';
-import { useComponentStore } from '@/zustand/componentStore';
-import { measureResolvedBounds, resolveInstance } from '@/lib/components/resolveInstance';
-import { useSnappingStore } from '@/zustand/snappingStore';
-
-const autoAlignToCSS = (value) => {
-    switch (value) {
-        case 'start':
-            return 'flex-start';
-        case 'center':
-            return 'center';
-        case 'end':
-            return 'flex-end';
-        case 'stretch':
-            return 'stretch';
-        default:
-            return 'flex-start';
-    }
-};
-
-function RichTextNode({ node, editingId, caretIndex, selectionStart, selectionEnd, isSelecting, startEditing, beginSelection, updateSelection, endSelection, pendingStyle, setPendingStyle, setCaret, updateNode }) {
-    const maxWidth = node.autoWidth ? Infinity : node.width || 200;
-    const layout = useMemo(() => computeLayout(node.spans || [], maxWidth), [node.spans, maxWidth]);
-    const charMap = layout.charMap;
-
-    const getCaretFromClick = (offsetX, offsetY) => {
-        if (!charMap.length) return 0;
-        let closest = 0;
-        let minDist = Infinity;
-        charMap.forEach((c, idx) => {
-            const inY = offsetY >= c.y && offsetY <= c.y + c.height;
-            const dx = Math.abs(offsetX - c.x);
-            const dy = inY ? 0 : Math.min(Math.abs(offsetY - c.y), Math.abs(offsetY - (c.y + c.height)));
-            const dist = dx + dy;
-            if (dist < minDist) {
-                minDist = dist;
-                closest = idx;
-            }
-        });
-        return closest;
-    };
-
-    const handleMouseDown = (e) => {
-        if (editingId !== node.id) {
-            startEditing(node.id, charMap.length);
-        }
-        const idx = getCaretFromClick(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-        beginSelection(idx);
-        e.stopPropagation();
-    };
-
-    const handleMouseMove = (e) => {
-        if (editingId !== node.id || !isSelecting) return;
-        const idx = getCaretFromClick(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-        updateSelection(idx);
-    };
-
-    const handleMouseUp = () => {
-        if (editingId === node.id) endSelection();
-    };
-
-    const selStart = Math.min(selectionStart ?? 0, selectionEnd ?? 0);
-    const selEnd = Math.max(selectionStart ?? 0, selectionEnd ?? 0);
-
-    const selectionBlocks =
-        editingId === node.id && selectionStart !== null && selectionEnd !== null
-            ? charMap.slice(selStart, selEnd + 1).map((c, i) => (
-                  <div
-                      key={i}
-                      style={{
-                          position: 'absolute',
-                          left: c.x,
-                          top: c.y,
-                          width: c.width,
-                          height: c.height,
-                          background: 'rgba(80, 150, 255, 0.25)',
-                          pointerEvents: 'none',
-                      }}
-                  />
-              ))
-            : null;
-
-    const caretChar = charMap[Math.min(caretIndex, Math.max(charMap.length - 1, 0))] || {
-        x: 0,
-        y: 0,
-        height: layout.height || 20,
-    };
-
-    const editorRef = useRef(null);
-    useEffect(() => {
-        if (editingId === node.id && editorRef.current) {
-            editorRef.current.focus();
-        }
-    }, [editingId, node.id]);
-
-    const handleKeyDown = (e) => {
-        if (editingId !== node.id) return;
-        const spansCopy = (node.spans || []).map((s) => ({ ...s }));
-        const selection = selectionStart !== null && selectionEnd !== null ? { start: selectionStart, end: selectionEnd } : { start: caretIndex, end: caretIndex };
-        const hasSelectionRange = selectionStart !== null && selectionEnd !== null && selectionStart !== selectionEnd;
-
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
-            e.preventDefault();
-            if (hasSelectionRange) {
-                captureBefore(node, caretIndex, selectionStart, selectionEnd);
-                const newSpans = applyStyleToRange(spansCopy, selectionStart, selectionEnd, { fontWeight: 700 });
-                const nextLayout = computeLayout(newSpans, maxWidth);
-                updateNode(node.id, { spans: newSpans, height: nextLayout.height });
-                setCaret(Math.max(selectionStart, selectionEnd));
-                captureAfterAndPush(node, Math.max(selectionStart, selectionEnd), selectionStart, selectionEnd, 'format');
-            } else {
-                setPendingStyle({ fontWeight: 700 });
-            }
-            return;
-        }
-
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') {
-            e.preventDefault();
-            if (hasSelectionRange) {
-                captureBefore(node, caretIndex, selectionStart, selectionEnd);
-                const newSpans = applyStyleToRange(spansCopy, selectionStart, selectionEnd, { italic: true });
-                const nextLayout = computeLayout(newSpans, maxWidth);
-                updateNode(node.id, { spans: newSpans, height: nextLayout.height });
-                setCaret(Math.max(selectionStart, selectionEnd));
-                captureAfterAndPush(node, Math.max(selectionStart, selectionEnd), selectionStart, selectionEnd, 'format');
-            } else {
-                setPendingStyle({ italic: true });
-            }
-            return;
-        }
-
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'u') {
-            e.preventDefault();
-            if (hasSelectionRange) {
-                captureBefore(node, caretIndex, selectionStart, selectionEnd);
-                const newSpans = applyStyleToRange(spansCopy, selectionStart, selectionEnd, { underline: true });
-                const nextLayout = computeLayout(newSpans, maxWidth);
-                updateNode(node.id, { spans: newSpans, height: nextLayout.height });
-                setCaret(Math.max(selectionStart, selectionEnd));
-                captureAfterAndPush(node, Math.max(selectionStart, selectionEnd), selectionStart, selectionEnd, 'format');
-            } else {
-                setPendingStyle({ underline: true });
-            }
-            return;
-        }
-
-        if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
-            e.preventDefault();
-            captureBefore(node, caretIndex, selectionStart, selectionEnd);
-            const styleToApply = selection && selection.start !== selection.end ? {} : pendingStyle || {};
-            const { spans: newSpans, newCaret } = insertChar(spansCopy, caretIndex, selection, e.key, styleToApply);
-            const nextLayout = computeLayout(newSpans, maxWidth);
-            updateNode(node.id, { spans: newSpans, height: nextLayout.height });
-            setCaret(newCaret);
-            captureAfterAndPush(node, newCaret, newCaret, newCaret, 'text-insert');
-            return;
-        }
-
-        if (e.key === 'Backspace') {
-            e.preventDefault();
-            captureBefore(node, caretIndex, selectionStart, selectionEnd);
-            const { spans: newSpans, newCaret } = backspace(spansCopy, caretIndex, selection);
-            const nextLayout = computeLayout(newSpans, maxWidth);
-            updateNode(node.id, { spans: newSpans, height: nextLayout.height });
-            setCaret(newCaret);
-            captureAfterAndPush(node, newCaret, newCaret, newCaret, 'text-delete');
-            return;
-        }
-
-        if (e.key === 'Delete') {
-            e.preventDefault();
-            captureBefore(node, caretIndex, selectionStart, selectionEnd);
-            const { spans: newSpans, newCaret } = forwardDelete(spansCopy, caretIndex, selection);
-            const nextLayout = computeLayout(newSpans, maxWidth);
-            updateNode(node.id, { spans: newSpans, height: nextLayout.height });
-            setCaret(newCaret);
-            captureAfterAndPush(node, newCaret, newCaret, newCaret, 'text-delete');
-        }
-    };
-
-    const lineElems = layout.lines.map((line, idx) => (
-        <div key={idx} style={{ height: line.lineHeight || 'auto', lineHeight: `${line.lineHeight}px` }}>
-            {line.runs.map((run, i) => (
-                <span
-                    key={`${idx}-${i}`}
-                    style={{
-                        fontFamily: run.style.fontFamily || 'Inter',
-                        fontSize: run.style.fontSize || 16,
-                        fontWeight: run.style.fontWeight || 400,
-                        color: resolveValue(run.style.color) || '#fff',
-                        letterSpacing: run.style.letterSpacing || 0,
-                        fontStyle: run.style.italic ? 'italic' : 'normal',
-                        textDecoration: run.style.underline ? 'underline' : 'none',
-                        whiteSpace: 'pre',
-                    }}>
-                    {run.text}
-                </span>
-            ))}
-        </div>
-    ));
-
-    return (
-        <div
-            style={{
-                width: node.autoWidth ? 'fit-content' : '100%',
-                height: node.autoHeight ? 'auto' : '100%',
-                color: resolveValue(node.fill) || '#fff',
-                position: 'relative',
-            }}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onDoubleClick={(e) => {
-                startEditing(node.id, charMap.length);
-                e.stopPropagation();
-            }}
-            onKeyDown={handleKeyDown}
-            tabIndex={0}
-            ref={editorRef}>
-            {selectionBlocks}
-            <div>{lineElems}</div>
-            {editingId === node.id && (
-                <div
-                    style={{
-                        position: 'absolute',
-                        left: caretChar.x,
-                        top: caretChar.y,
-                        width: 2,
-                        height: caretChar.height || 18,
-                        background: '#4efcff',
-                    }}
-                />
-            )}
-        </div>
-    );
-}
-
-const toPathD = (segments = []) => {
-    if (!segments.length) return '';
-    return segments
-        .map((seg, idx) => {
-            if (seg.type === 'move' || idx === 0) return `M ${seg.x} ${seg.y}`;
-            if (seg.type === 'curve') return `C ${seg.cx1 ?? seg.x} ${seg.cy1 ?? seg.y} ${seg.cx2 ?? seg.x} ${seg.cy2 ?? seg.y} ${seg.x} ${seg.y}`;
-            return `L ${seg.x} ${seg.y}`;
-        })
-        .join(' ');
-};
-
-const measureTextLines = (spans = [], maxWidth = Infinity) => {
-    const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-    const ctx = canvas ? canvas.getContext('2d') : null;
-    const lines = [];
-    if (!ctx) {
-        return { lines: [{ spans }], height: spans.reduce((h, s) => Math.max(h, s.fontSize || 16), 0) };
-    }
-
-    let currentLine = [];
-    let currentWidth = 0;
-    let lineHeight = 0;
-    const appendWord = (word, style) => {
-        ctx.font = `${style.fontWeight || 400} ${style.italic ? 'italic ' : ''}${style.fontSize || 16}px ${style.fontFamily || 'Inter'}`;
-        const metrics = ctx.measureText(word);
-        const wordWidth = metrics.width;
-        const lh = (style.fontSize || 16) * (style.lineHeight || 1.4);
-        return { wordWidth, lh };
-    };
-
-    spans.forEach((span) => {
-        const words = span.text?.split(/(\s+)/) || [];
-        words.forEach((word) => {
-            const { wordWidth, lh } = appendWord(word, span);
-            if (currentWidth + wordWidth > maxWidth && currentLine.length > 0) {
-                lines.push({ spans: currentLine, lineHeight: lineHeight || lh });
-                currentLine = [];
-                currentWidth = 0;
-                lineHeight = 0;
-            }
-            currentLine.push({ ...span, text: word, width: wordWidth });
-            currentWidth += wordWidth;
-            lineHeight = Math.max(lineHeight, lh);
-        });
-    });
-
-    if (currentLine.length) {
-        lines.push({ spans: currentLine, lineHeight });
-    }
-
-    const totalHeight = lines.reduce((sum, l) => sum + (l.lineHeight || 0), 0);
-    return { lines, height: totalHeight };
-};
+import { NODE_TYPES } from '@/lib/nodeTypes';
+import Image from 'next/image';
 
 export default function NodeRenderer({ onNodePointerDown }) {
     const nodes = useNodeTreeStore((s) => s.nodes);
-    const updateNode = useNodeTreeStore((s) => s.updateNode);
     const rootIds = useNodeTreeStore((s) => s.rootIds);
     const setSelectedManual = useSelectionStore((s) => s.setSelectedManual);
-    const tool = useToolStore((s) => s.tool);
-    const editingPathId = useVectorEditStore((s) => s.editingPathId);
-    const setEditingPath = useVectorEditStore((s) => s.setEditingPath);
-    const vectorSelection = useVectorEditStore((s) => s.selected);
-    const setVectorSelection = useVectorEditStore((s) => s.setSelectedHandle);
-    const editingId = useTextEditStore((s) => s.editingId);
-    const caretIndex = useTextEditStore((s) => s.caretIndex);
-    const selectionStart = useTextEditStore((s) => s.selectionStart);
-    const selectionEnd = useTextEditStore((s) => s.selectionEnd);
-    const isSelecting = useTextEditStore((s) => s.isSelecting);
-    const startEditing = useTextEditStore((s) => s.startEditing);
-    const setCaret = useTextEditStore((s) => s.setCaretIndex);
-    const beginSelection = useTextEditStore((s) => s.beginSelection);
-    const updateSelection = useTextEditStore((s) => s.updateSelection);
-    const endSelection = useTextEditStore((s) => s.endSelection);
-    const highlightTarget = useSnappingStore((s) => s.highlightTarget);
-    const dropIndicator = useSnappingStore((s) => s.dropIndicator);
-    const spacingPreview = useSnappingStore((s) => s.spacingPreview);
-    const pendingStyle = useTextEditStore((s) => s.pendingStyle);
-    const setPendingStyle = useTextEditStore((s) => s.setPendingStyle);
-    const setTool = useToolStore((s) => s.setTool);
-    const vectorDragRef = useRef(null);
-    const getComponent = useComponentStore((s) => s.getComponent);
-    const triggerInteractions = usePrototypeStore((s) => s.triggerInteractions);
-    const presence = useCollaborationStore((s) => s.presence);
-
-    const buildTransform = (node) => {
-        const t3d = node.transform3d || {};
-        const transforms = [];
-        if (t3d.translateZ) transforms.push(`translateZ(${t3d.translateZ}px)`);
-        if (t3d.rotateX) transforms.push(`rotateX(${t3d.rotateX}deg)`);
-        if (t3d.rotateY) transforms.push(`rotateY(${t3d.rotateY}deg)`);
-        const rotateZ = (t3d.rotateZ ?? 0) + (node.rotation || 0);
-        if (rotateZ) transforms.push(`rotateZ(${rotateZ}deg)`);
-        return transforms.join(' ');
-    };
-
-    const build3DStyle = (node) => {
-        const t3d = node.transform3d || {};
-        const style = {};
-        const transformStr = buildTransform(node);
-        if (transformStr) style.transform = transformStr;
-        if (t3d.perspective) style.perspective = `${t3d.perspective}px`;
-        if (t3d.perspectiveOrigin) {
-            const { x = 0.5, y = 0.5 } = t3d.perspectiveOrigin;
-            style.perspectiveOrigin = `${x * 100}% ${y * 100}%`;
-        }
-        if (t3d.transformStyle) style.transformStyle = t3d.transformStyle;
-        return style;
-    };
-
-    const recomputePathBounds = (segments = []) => {
-        const xs = [];
-        const ys = [];
-        segments.forEach((s) => {
-            xs.push(s.x);
-            ys.push(s.y);
-            if (s.cx1 !== undefined) xs.push(s.cx1);
-            if (s.cx2 !== undefined) xs.push(s.cx2);
-            if (s.cy1 !== undefined) ys.push(s.cy1);
-            if (s.cy2 !== undefined) ys.push(s.cy2);
-        });
-        const minX = Math.min(...xs);
-        const maxX = Math.max(...xs);
-        const minY = Math.min(...ys);
-        const maxY = Math.max(...ys);
-        return { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
-    };
-
-    const onVectorDrag = useCallback(
-        (e) => {
-            const drag = vectorDragRef.current;
-            if (!drag) return;
-            const { nodeId, handle, anchorIndex, startX, startY, initialSegments } = drag;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            const node = nodes[nodeId];
-            if (!node) return;
-            const segs = JSON.parse(JSON.stringify(initialSegments));
-            const seg = segs[anchorIndex];
-            if (!seg) return;
-            if (handle === 'anchor') {
-                seg.x += dx;
-                seg.y += dy;
-                if (seg.cx1 !== undefined && seg.cy1 !== undefined) {
-                    seg.cx1 += dx;
-                    seg.cy1 += dy;
-                }
-                if (seg.cx2 !== undefined && seg.cy2 !== undefined) {
-                    seg.cx2 += dx;
-                    seg.cy2 += dy;
-                }
-            } else if (handle === 'cx1') {
-                seg.cx1 += dx;
-                seg.cy1 += dy;
-            } else if (handle === 'cx2') {
-                seg.cx2 += dx;
-                seg.cy2 += dy;
-            }
-            const bounds = recomputePathBounds(segs);
-            updateNode(nodeId, {
-                segments: segs,
-                x: bounds.x,
-                y: bounds.y,
-                width: bounds.width,
-                height: bounds.height,
-            });
-        },
-        [nodes, updateNode]
-    );
-
-    const endVectorDrag = useCallback(() => {
-        vectorDragRef.current = null;
-        window.removeEventListener('mousemove', onVectorDrag);
-    }, [onVectorDrag]);
-
-    const startVectorDrag = useCallback(
-        (e, node, anchorIndex, handle = 'anchor') => {
-            e.stopPropagation();
-            setEditingPath(node.id);
-            setVectorSelection({ anchorIndex, handleType: handle });
-            vectorDragRef.current = {
-                nodeId: node.id,
-                handle,
-                anchorIndex,
-                startX: e.clientX,
-                startY: e.clientY,
-                initialSegments: JSON.parse(JSON.stringify(node.segments || [])),
-            };
-            const upHandler = () => {
-                endVectorDrag();
-                window.removeEventListener('mouseup', upHandler);
-            };
-            window.addEventListener('mousemove', onVectorDrag);
-            window.addEventListener('mouseup', upHandler);
-        },
-        [endVectorDrag, onVectorDrag, setEditingPath, setVectorSelection]
-    );
-
-    useEffect(() => {
-        return () => {
-            window.removeEventListener('mousemove', onVectorDrag);
-            window.removeEventListener('mouseup', endVectorDrag);
-        };
-    }, [onVectorDrag, endVectorDrag]);
-
-    const safe = (v, fallback = 0) => (Number.isFinite(v) ? v : fallback);
 
     const renderNode = (id) => {
         const node = nodes[id];
         if (!node) return null;
 
-        const x1 = node.x1 ?? node.x ?? 0;
-        const y1 = node.y1 ?? node.y ?? 0;
-        const x2 = node.x2 ?? x1;
-        const y2 = node.y2 ?? y1;
-        const style = {
+        const baseStyle = {
             position: 'absolute',
-            left: safe(node.x),
-            top: safe(node.y),
-            width: safe(node.width ?? Math.max(1, Math.abs(x2 - x1)), 1),
-            height: safe(node.height ?? Math.max(1, Math.abs(y2 - y1)), 1),
-            opacity: safe(node.opacity ?? 1, 1),
+            left: node.x ?? 0,
+            top: node.y ?? 0,
+            width: Math.max(1, node.width ?? 1),
+            height: Math.max(1, node.height ?? 1),
+            opacity: node.opacity ?? 1,
             pointerEvents: node.locked ? 'none' : 'auto',
-            display: node.hidden ? 'none' : 'block',
-            ...build3DStyle(node),
         };
-        // Apply box model if present
-        if (node.box) {
-            style.marginTop = node.box.margin?.top ?? style.marginTop;
-            style.marginRight = node.box.margin?.right ?? style.marginRight;
-            style.marginBottom = node.box.margin?.bottom ?? style.marginBottom;
-            style.marginLeft = node.box.margin?.left ?? style.marginLeft;
-            style.borderWidth = node.box.border?.width ?? style.borderWidth;
-            style.borderColor = node.box.border?.color ?? style.borderColor;
-            style.borderStyle = node.box.border?.style ?? style.borderStyle;
-            const tl = node.box.border?.radiusTopLeft;
-            const tr = node.box.border?.radiusTopRight;
-            const br = node.box.border?.radiusBottomRight;
-            const bl = node.box.border?.radiusBottomLeft;
-            if ([tl, tr, br, bl].some((v) => v != null)) {
-                style.borderRadius = `${tl ?? 0}px ${tr ?? tl ?? 0}px ${br ?? tl ?? 0}px ${bl ?? tl ?? 0}px`;
-            } else {
-                style.borderRadius = node.box.border?.radius ?? style.borderRadius ?? node.borderRadius ?? 0;
-            }
-            if (node.box.shadow?.enabled) {
-                const s = node.box.shadow;
-                style.boxShadow = `${s.x || 0}px ${s.y || 0}px ${s.blur || 0}px ${s.spread || 0}px ${s.color || 'rgba(0,0,0,0.2)'}`;
-            }
-            style.opacity = node.box.opacity ?? style.opacity;
-            if (node.box.outline) {
-                const ow = node.box.outline.width ?? 0;
-                if (ow > 0) {
-                    style.outline = `${ow}px ${node.box.outline.style || 'solid'} ${node.box.outline.color || 'rgba(0,0,0,0.2)'}`;
-                    style.outlineOffset = node.box.outline.offset ?? 0;
-                }
-            }
+
+        const children = (node.children || []).map((cid) => renderNode(cid));
+
+        /* ==================================================
+         * 🟦 FRAME — delegate rendering (SINGLE SOURCE)
+         * ================================================== */
+        if (node.type === NODE_TYPES.FRAME) {
+            return (
+                <FrameRenderer
+                    key={id}
+                    node={node}
+                    style={baseStyle}
+                    onPointerDown={(e) => {
+                        setSelectedManual([id]);
+                        onNodePointerDown?.(e, id);
+                    }}>
+                    {children}
+                </FrameRenderer>
+            );
         }
 
-        let content = null;
-        switch (node.type) {
-            case 'component-instance': {
-                const component = getComponent(node.componentId);
-                const resolved = resolveInstance(component, node, getComponent);
-                const bounds = measureResolvedBounds(resolved.nodes, resolved.rootIds);
-                const containerStyle = {
-                    position: 'absolute',
-                    left: safe(node.x),
-                    top: safe(node.y),
-                    width: safe(node.width ?? bounds.width, 1),
-                    height: safe(node.height ?? bounds.height, 1),
-                    opacity: safe(node.opacity ?? 1, 1),
-                    pointerEvents: node.locked ? 'none' : 'auto',
-                    display: node.hidden ? 'none' : 'block',
-                    ...build3DStyle(node),
-                };
+        /* ==================================================
+         * ⬜ SHAPE / RECT
+         * ================================================== */
+        if (node.type === NODE_TYPES.SHAPE || node.type === NODE_TYPES.RECT) {
+            return (
+                <div
+                    key={id}
+                    style={{
+                        ...baseStyle,
+                        backgroundColor: resolveValue(node.fill) || '#ffffff',
+                        borderRadius: node.radius ?? node.borderRadius ?? 0,
+                    }}
+                    onMouseDown={(e) => {
+                        setSelectedManual([id]);
+                        onNodePointerDown?.(e, id);
+                    }}>
+                    {children}
+                </div>
+            );
+        }
 
-                const renderResolved = (rid) => {
-                    const rnode = resolved.nodes[rid];
-                    if (!rnode) return null;
-                    const localStyle = {
-                        position: 'absolute',
-                        left: safe(rnode.x),
-                        top: safe(rnode.y),
-                        width: safe(rnode.width, 1),
-                        height: safe(rnode.height, 1),
-                        pointerEvents: 'none',
-                        ...build3DStyle(rnode),
-                    };
-                    let childContent = null;
-                    if (rnode.type === 'rect' || rnode.type === 'shape') {
-                        childContent = (
-                            <div
-                                style={{
-                                    backgroundColor: resolveValue(rnode.fill) || '#666',
-                                    backgroundImage:
-                                        (typeof rnode.backgroundGradient === 'string' && rnode.backgroundGradient.trim().length ? rnode.backgroundGradient : null) || (typeof rnode.backgroundImage === 'string' && rnode.backgroundImage.trim().length ? `url(${rnode.backgroundImage})` : undefined),
-                                    backgroundSize: 'cover',
-                                    backgroundPosition: 'center',
-                                    backgroundRepeat: 'no-repeat',
-                                    width: '100%',
-                                    height: '100%',
-                                }}
-                            />
-                        );
-                    } else if (rnode.type === 'ellipse') {
-                        childContent = (
-                            <svg width='100%' height='100%' viewBox={`0 0 ${rnode.width || 1} ${rnode.height || 1}`} className='overflow-visible'>
-                                <ellipse cx={(rnode.width || 1) / 2} cy={(rnode.height || 1) / 2} rx={(rnode.width || 1) / 2} ry={(rnode.height || 1) / 2} fill={resolveValue(rnode.fill) || 'transparent'} stroke={resolveValue(rnode.stroke) || '#000'} strokeWidth={rnode.strokeWidth || 1} />
-                            </svg>
-                        );
-                    } else if (rnode.type === 'line') {
-                        const x1 = (rnode.x1 ?? 0) - (rnode.x ?? 0);
-                        const y1 = (rnode.y1 ?? 0) - (rnode.y ?? 0);
-                        const x2 = (rnode.x2 ?? 0) - (rnode.x ?? 0);
-                        const y2 = (rnode.y2 ?? 0) - (rnode.y ?? 0);
-                        const w = rnode.width || Math.abs(x2 - x1) || 1;
-                        const h = rnode.height || Math.abs(y2 - y1) || 1;
-                        childContent = (
-                            <svg width='100%' height='100%' viewBox={`0 0 ${w} ${h}`} className='overflow-visible'>
-                                <line
-                                    x1={x1}
-                                    y1={y1}
-                                    x2={x2}
-                                    y2={y2}
-                                    stroke={resolveValue(rnode.stroke) || '#000'}
-                                    strokeWidth={rnode.strokeWidth || 2}
-                                    strokeLinecap={rnode.strokeLinecap || 'round'}
-                                    strokeLinejoin={rnode.strokeLinejoin || 'round'}
-                                    strokeDasharray={rnode.strokeDasharray || undefined}
-                                />
-                            </svg>
-                        );
-                    } else if (rnode.type === 'polygon') {
-                        const pts = rnode.points || [];
-                        if (pts.length) {
-                            const minX = Math.min(...pts.map((p) => p.x));
-                            const minY = Math.min(...pts.map((p) => p.y));
-                            const normalized = pts.map((p) => `${p.x - minX},${p.y - minY}`).join(' ');
-                            childContent = (
-                                <svg width='100%' height='100%' viewBox={`0 0 ${rnode.width || 1} ${rnode.height || 1}`} className='overflow-visible'>
-                                    <polygon
-                                        points={normalized}
-                                        fill={resolveValue(rnode.fill) || 'transparent'}
-                                        stroke={resolveValue(rnode.stroke) || '#000'}
-                                        strokeWidth={rnode.strokeWidth || 1}
-                                        strokeLinejoin={rnode.strokeLinejoin || 'round'}
-                                        strokeLinecap={rnode.strokeLinecap || 'round'}
-                                        strokeDasharray={rnode.strokeDasharray || undefined}
-                                    />
-                                </svg>
-                            );
-                        }
-                    } else if (rnode.type === 'path') {
-                        const segs = rnode.segments || [];
-                        if (segs.length) {
-                            const xs = segs.map((s) => s.x);
-                            const ys = segs.map((s) => s.y);
-                            const minX = Math.min(...xs);
-                            const minY = Math.min(...ys);
-                            const normalized = segs.map((s) => ({ ...s, x: s.x - minX, y: s.y - minY }));
-                            childContent = (
-                                <svg width='100%' height='100%' viewBox={`0 0 ${rnode.width || 1} ${rnode.height || 1}`} className='overflow-visible'>
-                                    <path
-                                        d={toPathD(normalized) + (rnode.closed ? ' Z' : '')}
-                                        stroke={resolveValue(rnode.stroke) || '#000'}
-                                        strokeWidth={rnode.strokeWidth || 2}
-                                        fill={resolveValue(rnode.fill) || 'transparent'}
-                                        strokeLinejoin={rnode.strokeLinejoin || 'round'}
-                                        strokeLinecap={rnode.strokeLinecap || 'round'}
-                                        strokeDasharray={rnode.strokeDasharray || undefined}
-                                    />
-                                </svg>
-                            );
-                        }
-                    } else if (rnode.type === 'image') {
-                        childContent = (
-                            <img
-                                src={rnode.src}
-                                alt={rnode.name || ''}
-                                className='w-full h-full'
-                                style={{
-                                    objectFit: rnode.objectFit || 'cover',
-                                    borderRadius: rnode.borderRadius ? `${rnode.borderRadius}px` : undefined,
-                                    opacity: rnode.opacity ?? 1,
-                                    filter: rnode.blur ? `blur(${rnode.blur}px)` : undefined,
-                                    backgroundColor: rnode.tint || undefined,
-                                    pointerEvents: 'none',
-                                }}
-                            />
-                        );
-                    } else if (rnode.type === 'text') {
-                        childContent = (
-                            <div
-                                style={{
-                                    color: resolveValue(rnode.fill) || '#fff',
-                                    fontSize: rnode.fontSize || 16,
-                                    lineHeight: 1.3,
-                                }}>
-                                {rnode.text || rnode.name}
-                            </div>
-                        );
-                    }
-                    return (
-                        <div key={rid} style={localStyle}>
-                            {childContent}
-                            {(rnode.children || []).map((cid) => renderResolved(cid))}
-                        </div>
-                    );
-                };
-
-                content = (
-                    <div
-                        style={containerStyle}
-                        onMouseDown={(e) => {
-                            setSelectedManual([id]);
-                            onNodePointerDown?.(e, id);
-                        }}>
-                        {(resolved.rootIds || []).map((rid) => renderResolved(rid))}
-                    </div>
-                );
-                break;
-            }
-            case 'frame': {
-                // FRAME BACKGROUND SYSTEM
-                const frameFill = typeof node.fill === 'string' && node.fill.trim().length ? resolveValue(node.fill) : '#f8fafc';
-                const bgImage =
-                    typeof node.backgroundImage === 'string' && node.backgroundImage.trim().length
-                        ? `url(${node.backgroundImage})`
-                        : null;
-                const gradient =
-                    typeof node.backgroundGradient === 'string' && node.backgroundGradient.trim().length
-                        ? resolveValue(node.backgroundGradient) || node.backgroundGradient
-                        : null;
-                const backgroundColor =
-                    typeof node.backgroundColor === 'string' && node.backgroundColor.trim().length
-                        ? resolveValue(node.backgroundColor) || node.backgroundColor
-                        : null;
-
-                // Priority: image > gradient > explicit background color > fill > fallback.
-                const background = bgImage || gradient || backgroundColor || frameFill;
-
-                style.backgroundColor = background && background.startsWith('url(') ? undefined : background;
-                style.backgroundImage = bgImage || gradient || undefined;
-                style.backgroundSize = node.backgroundSize || 'cover';
-                style.backgroundPosition = 'center';
-                style.backgroundRepeat = 'no-repeat';
-
-                style.borderStyle = node.strokeWidth ? 'solid' : 'none';
-                style.borderColor = node.stroke ? resolveValue(node.stroke) : '#cbd5e1';
-                style.borderWidth = node.strokeWidth || 1;
-                style.borderRadius = node.borderRadius || 0;
-                style.overflowX = node.scroll?.overflowX || 'visible';
-                style.overflowY = node.scroll?.overflowY || 'visible';
-                content = null;
-                break;
-            }
-            case 'rect':
-            case 'shape': {
-                const shapeFill = typeof node.fill === 'string' && node.fill.trim().length ? node.fill : '#f8fafc';
-                const gradient = typeof node.backgroundGradient === 'string' && node.backgroundGradient.trim().length ? node.backgroundGradient : null;
-                const bgImage = typeof node.backgroundImage === 'string' && node.backgroundImage.trim().length ? `url(${node.backgroundImage})` : null;
-
-                style.backgroundColor = shapeFill;
-                style.backgroundImage = gradient || bgImage || undefined;
-                style.backgroundSize = 'cover';
-                style.backgroundPosition = 'center';
-                style.backgroundRepeat = 'no-repeat';
-                style.borderRadius = node.radius ?? node.borderRadius ?? 0;
-                style.padding = node.padding ?? 0;
-                style.overflow = 'hidden';
-                if (node.autoLayout?.enabled) {
-                    style.display = 'flex';
-                    style.flexDirection = node.autoLayout?.direction === 'horizontal' ? 'row' : 'column';
-                    style.gap = node.autoLayout?.spacing ?? 0;
-                    style.alignItems = autoAlignToCSS(node.autoLayout?.align);
-                    const justifyMap = {
-                        start: 'flex-start',
-                        center: 'center',
-                        end: 'flex-end',
-                        'space-between': 'space-between',
-                    };
-                    style.justifyContent = justifyMap[node.autoLayout?.justify] || 'flex-start';
-                    if (node.autoLayout?.padding) {
-                        style.paddingTop = node.autoLayout.padding.top ?? 0;
-                        style.paddingRight = node.autoLayout.padding.right ?? 0;
-                        style.paddingBottom = node.autoLayout.padding.bottom ?? 0;
-                        style.paddingLeft = node.autoLayout.padding.left ?? 0;
-                    }
-                }
-                style.borderStyle = node.strokeWidth ? 'solid' : 'none';
-                style.borderColor = node.stroke ? resolveValue(node.stroke) : '#cbd5e1';
-                style.borderWidth = node.strokeWidth || 0;
-                style.overflowX = node.scroll?.overflowX || 'visible';
-                style.overflowY = node.scroll?.overflowY || 'visible';
-                content = null;
-                break;
-            }
-            case 'ellipse': {
-                const w = node.width || 1;
-                const h = node.height || 1;
-                content = (
-                    <svg width='100%' height='100%' viewBox={`0 0 ${w} ${h}`} className='overflow-visible'>
-                        <ellipse cx={w / 2} cy={h / 2} rx={w / 2} ry={h / 2} fill={resolveValue(node.fill) || 'transparent'} stroke={resolveValue(node.stroke) || '#000'} strokeWidth={node.strokeWidth || 1} />
-                    </svg>
-                );
-                break;
-            }
-            case 'line': {
-                const x1 = (node.x1 ?? 0) - (node.x ?? 0);
-                const y1 = (node.y1 ?? 0) - (node.y ?? 0);
-                const x2 = (node.x2 ?? 0) - (node.x ?? 0);
-                const y2 = (node.y2 ?? 0) - (node.y ?? 0);
-                const w = node.width || Math.abs(x2 - x1) || 1;
-                const h = node.height || Math.abs(y2 - y1) || 1;
-                content = (
-                    <svg width='100%' height='100%' viewBox={`0 0 ${w} ${h}`} className='overflow-visible'>
-                        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={resolveValue(node.stroke) || '#000'} strokeWidth={node.strokeWidth || 2} strokeLinecap='round' />
-                    </svg>
-                );
-                break;
-            }
-            case 'polygon': {
-                const pts = node.points || [];
-                if (!pts.length) break;
-                const minX = Math.min(...pts.map((p) => p.x));
-                const minY = Math.min(...pts.map((p) => p.y));
-                const normalized = pts.map((p) => `${p.x - minX},${p.y - minY}`).join(' ');
-                const w = node.width || Math.max(...pts.map((p) => p.x)) - minX || 1;
-                const h = node.height || Math.max(...pts.map((p) => p.y)) - minY || 1;
-                content = (
-                    <svg width='100%' height='100%' viewBox={`0 0 ${w} ${h}`} className='overflow-visible'>
-                        <polygon points={normalized} fill={resolveValue(node.fill) || 'transparent'} stroke={resolveValue(node.stroke) || '#000'} strokeWidth={node.strokeWidth || 1} />
-                    </svg>
-                );
-                break;
-            }
-            case 'path': {
-                const segments = node.segments || [];
-                if (!segments.length) break;
-                const xs = segments.map((s) => s.x);
-                const ys = segments.map((s) => s.y);
-                const minX = Math.min(...xs);
-                const minY = Math.min(...ys);
-                const normalized = segments.map((s) => ({ ...s, x: s.x - minX, y: s.y - minY }));
-                const w = node.width || Math.max(...xs) - minX || 1;
-                const h = node.height || Math.max(...ys) - minY || 1;
-                const showVector = tool === 'vector-edit' && editingPathId === node.id;
-                const anchors = showVector
-                    ? segments.map((s, idx) => {
-                          const nx = s.x - minX;
-                          const ny = s.y - minY;
-                          return (
-                              <g key={idx}>
-                                  {s.cx1 !== undefined && s.cy1 !== undefined && (
-                                      <>
-                                          <line x1={s.cx1 - minX} y1={s.cy1 - minY} x2={nx} y2={ny} stroke='#9ca3af' strokeDasharray='2 2' />
-                                          <circle cx={s.cx1 - minX} cy={s.cy1 - minY} r={3} fill='#f3f4f6' stroke='#6b7280' onMouseDown={(e) => startVectorDrag(e, node, idx, 'cx1')} />
-                                      </>
-                                  )}
-                                  {s.cx2 !== undefined && s.cy2 !== undefined && (
-                                      <>
-                                          <line x1={s.cx2 - minX} y1={s.cy2 - minY} x2={nx} y2={ny} stroke='#9ca3af' strokeDasharray='2 2' />
-                                          <circle cx={s.cx2 - minX} cy={s.cy2 - minY} r={3} fill='#f3f4f6' stroke='#6b7280' onMouseDown={(e) => startVectorDrag(e, node, idx, 'cx2')} />
-                                      </>
-                                  )}
-                                  <circle cx={nx} cy={ny} r={4} fill='#fff' stroke={vectorSelection?.anchorIndex === idx && vectorSelection?.handleType === 'anchor' ? '#7c3aed' : '#111827'} onMouseDown={(e) => startVectorDrag(e, node, idx, 'anchor')} />
-                              </g>
-                          );
-                      })
-                    : null;
-                content = (
-                    <svg
-                        width='100%'
-                        height='100%'
-                        viewBox={`0 0 ${w} ${h}`}
-                        className='overflow-visible'
-                        onDoubleClick={(e) => {
-                            setTool('vector-edit');
-                            setEditingPath(node.id);
-                            e.stopPropagation();
-                        }}>
-                        <path d={toPathD(normalized) + (node.closed ? ' Z' : '')} stroke={resolveValue(node.stroke) || '#000'} strokeWidth={node.strokeWidth || 2} fill={resolveValue(node.fill) || 'transparent'} strokeLinecap='round' strokeLinejoin='round' />
-                        {anchors}
-                    </svg>
-                );
-                break;
-            }
-            case 'image':
-                content = <img src={resolveAsset(node.assetId) || node.src} alt={node.name || ''} className='w-full h-full object-cover' style={{ pointerEvents: 'none' }} />;
-                break;
-            case 'text':
-                content = (
-                    <div
+        /* ==================================================
+         * 🖼 IMAGE
+         * ================================================== */
+        if (node.type === NODE_TYPES.IMAGE) {
+            const src = resolveAsset(node.assetId) || node.src;
+            return (
+                <div
+                    key={id}
+                    style={baseStyle}
+                    onMouseDown={(e) => {
+                        setSelectedManual([id]);
+                        onNodePointerDown?.(e, id);
+                    }}>
+                    <Image
+                        src={src}
+                        alt={node.name || ''}
                         style={{
-                            color: resolveValue(node.fill) || '#fff',
-                            fontSize: node.fontSize || 16,
-                            lineHeight: 1.3,
-                        }}>
-                        {node.text || node.name}
-                    </div>
-                );
-                break;
-            case 'richtext':
-                content = (
-                    <RichTextNode
-                        node={node}
-                        editingId={editingId}
-                        caretIndex={caretIndex}
-                        selectionStart={selectionStart}
-                        selectionEnd={selectionEnd}
-                        isSelecting={isSelecting}
-                        startEditing={startEditing}
-                        beginSelection={beginSelection}
-                        updateSelection={updateSelection}
-                        endSelection={endSelection}
-                        pendingStyle={pendingStyle}
-                        setPendingStyle={setPendingStyle}
-                        setCaret={setCaret}
-                        updateNode={updateNode}
+                            width: '100%',
+                            height: '100%',
+                            objectFit: node.objectFit || 'cover',
+                            pointerEvents: 'none',
+                        }}
                     />
-                );
-                break;
-            default:
-                content = <div className='bg-neutral-700 w-full h-full' />;
+                    {children}
+                </div>
+            );
         }
 
-        // Render children in order if auto-layout container
-        const childIds = (node.children || []).map((cid) => nodes[cid]).filter(Boolean);
-        const orderedChildren = node.autoLayout?.enabled || node.type === 'frame' || node.type === 'shape' ? childIds.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) : childIds;
+        /* ==================================================
+         * 📝 TEXT (legacy/simple text nodes)
+         * ================================================== */
+        if (node.type === NODE_TYPES.TEXT) {
+            return (
+                <div
+                    key={id}
+                    style={{
+                        ...baseStyle,
+                        color: resolveValue(node.fill) || '#111',
+                        fontSize: node.fontSize || 16,
+                        lineHeight: node.lineHeight || 1.3,
+                    }}
+                    onMouseDown={(e) => {
+                        setSelectedManual([id]);
+                        onNodePointerDown?.(e, id);
+                    }}>
+                    {node.text || node.name}
+                    {children}
+                </div>
+            );
+        }
 
+        /* ==================================================
+         * 🧱 FALLBACK (unknown node types)
+         * ================================================== */
         return (
             <div
                 key={id}
-                style={style}
+                style={baseStyle}
                 onMouseDown={(e) => {
                     setSelectedManual([id]);
                     onNodePointerDown?.(e, id);
-                }}
-                onClick={() => triggerInteractions(id, 'onClick')}>
-                {highlightTarget === id && (
-                    <div
-                        className='absolute inset-0 pointer-events-none'
-                        style={{
-                            border: '2px solid #3b82f6',
-                            boxShadow: '0 0 0 4px rgba(59,130,246,0.3)',
-                            borderRadius: style.borderRadius || 4,
-                        }}
-                    />
-                )}
-                {dropIndicator?.parentId === id && node.autoLayout?.enabled && (
-                    <div
-                        className='absolute bg-blue-500 pointer-events-none'
-                        style={{
-                            left: node.autoLayout.direction === 'horizontal' ? (dropIndicator.x || 0) - safe(node.x) : 0,
-                            top: node.autoLayout.direction === 'horizontal' ? 0 : (dropIndicator.y || 0) - safe(node.y),
-                            width: node.autoLayout.direction === 'horizontal' ? 3 : '100%',
-                            height: node.autoLayout.direction === 'horizontal' ? '100%' : 3,
-                            boxShadow: '0 0 0 2px rgba(59,130,246,0.35)',
-                        }}
-                    />
-                )}
-                {spacingPreview?.parentId === id && (
-                    <>
-                        {(() => {
-                            const x1 = spacingPreview.x ?? 0;
-                            const y1 = spacingPreview.y ?? 0;
-                            const x2 = spacingPreview.x2 ?? x1;
-                            const y2 = spacingPreview.y2 ?? y1;
-                            return (
-                                <div
-                                    className='absolute bg-blue-500/40 pointer-events-none'
-                                    style={{
-                                        left: Math.min(x1, x2) - safe(node.x),
-                                        top: Math.min(y1, y2) - safe(node.y),
-                                        width: spacingPreview.vertical ? Math.max(2, Math.abs(x2 - x1)) : 3,
-                                        height: spacingPreview.vertical ? 3 : Math.max(2, Math.abs(y2 - y1)),
-                                        boxShadow: '0 0 0 1px rgba(59,130,246,0.25)',
-                                    }}
-                                />
-                            );
-                        })()}
-                        <div
-                            className='absolute px-2 py-1 text-[10px] rounded-full bg-blue-500 text-white pointer-events-none shadow-sm'
-                            style={{
-                                left: (spacingPreview.x || 0) - safe(node.x) - 20,
-                                top: (spacingPreview.y || 0) - safe(node.y) - 10,
-                            }}>
-                            gap {Math.round(spacingPreview.spacing || 0)}
-                        </div>
-                    </>
-                )}
-                {content}
-                {orderedChildren.map((child) => renderNode(child.id))}
+                }}>
+                {children}
             </div>
         );
     };
 
-    return (
-        <>
-            {rootIds.map((id) => renderNode(id))}
-            {/* Presence cursors */}
-            {Object.entries(presence || {}).map(([userId, p]) => {
-                if (!p?.cursor) return null;
-                const color = p.color || '#7c3aed';
-                return (
-                    <div
-                        key={userId}
-                        className='pointer-events-none absolute'
-                        style={{
-                            left: p.cursor.x,
-                            top: p.cursor.y,
-                            transform: 'translate(-50%, -50%)',
-                            zIndex: 9999,
-                        }}>
-                        <div
-                            style={{
-                                width: 8,
-                                height: 8,
-                                background: color,
-                                borderRadius: '50%',
-                                boxShadow: `0 0 0 2px #fff`,
-                            }}
-                        />
-                        <div className='text-[10px] px-1 py-0.5 rounded bg-white border border-neutral-200 shadow-sm mt-1' style={{ color }}>
-                            {p.name || userId}
-                        </div>
-                    </div>
-                );
-            })}
-        </>
-    );
+    return <>{rootIds.map((id) => renderNode(id))}</>;
 }
