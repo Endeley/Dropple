@@ -2,48 +2,74 @@
 
 import { create } from 'zustand';
 import { applyConstraints } from '@/lib/canvas-core/constraints/applyConstraints';
+import { useSelectionStore } from '@/zustand/selectionStore';
 
 /* =========================
-   HELPERS
+   HELPERS (PURE)
 ========================= */
+
+const normalizeConstraints = (constraints = {}) => {
+    const h = constraints.horizontal;
+    const v = constraints.vertical;
+
+    return {
+        horizontal: h === 'stretch' ? 'left-right' : (h ?? 'left'),
+        vertical: v === 'stretch' ? 'top-bottom' : (v ?? 'top'),
+    };
+};
 
 const computeConstraintOffsets = (child, parent) => {
     if (!child || !parent) {
         return { left: 0, right: 0, top: 0, bottom: 0 };
     }
 
+    const cx = child.x ?? 0;
+    const cy = child.y ?? 0;
+    const cw = Math.max(1, child.width ?? 1);
+    const ch = Math.max(1, child.height ?? 1);
+
+    const px = parent.x ?? 0;
+    const py = parent.y ?? 0;
+    const pw = parent.width ?? 0;
+    const ph = parent.height ?? 0;
+
     return {
-        left: (child.x ?? 0) - (parent.x ?? 0),
-        top: (child.y ?? 0) - (parent.y ?? 0),
-        right: (parent.x ?? 0) + (parent.width ?? 0) - ((child.x ?? 0) + (child.width ?? 0)),
-        bottom: (parent.y ?? 0) + (parent.height ?? 0) - ((child.y ?? 0) + (child.height ?? 0)),
+        left: cx - px,
+        top: cy - py,
+        right: px + pw - (cx + cw),
+        bottom: py + ph - (cy + ch),
     };
 };
 
-const defaultConstraints = {
+const DEFAULT_CONSTRAINTS = {
     horizontal: 'left',
     vertical: 'top',
 };
 
-const defaultConstraintOffsets = {
+const DEFAULT_OFFSETS = {
     left: 0,
     right: 0,
     top: 0,
     bottom: 0,
 };
 
-const withDefaults = (node) => ({
-    ...node,
-    constraints: {
-        ...defaultConstraints,
-        ...(node.constraints || {}),
-    },
-    constraintOffsets: {
-        ...defaultConstraintOffsets,
-        ...(node.constraintOffsets || {}),
-    },
-    children: node.children || [],
-});
+const withDefaults = (node) => {
+    const normalizedConstraints = normalizeConstraints(node.constraints);
+
+    return {
+        ...node,
+        constraints: {
+            ...DEFAULT_CONSTRAINTS,
+            ...normalizedConstraints,
+        },
+        constraintOffsets: {
+            ...DEFAULT_OFFSETS,
+            ...(node.constraintOffsets || {}),
+        },
+        breakpoints: node.breakpoints || [],
+        children: node.children || [],
+    };
+};
 
 /* =========================
    STORE
@@ -66,7 +92,9 @@ export const useNodeTreeStore = create((set, get) => ({
     addNode: (node, parentId = null) =>
         set((state) => {
             const normalized = withDefaults(node);
-            const nodes = { ...state.nodes, [node.id]: normalized };
+            const nodes = { ...state.nodes };
+
+            nodes[node.id] = normalized;
 
             if (parentId && nodes[parentId]) {
                 const parent = nodes[parentId];
@@ -91,16 +119,26 @@ export const useNodeTreeStore = create((set, get) => ({
             const current = state.nodes[id];
             if (!current) return state;
 
-            const next = { ...current, ...updates };
+            const normalizedConstraints = updates.constraints ? normalizeConstraints(updates.constraints) : current.constraints;
 
-            // 🔥 CRITICAL: constraints changed → recompute offsets
-            const constraintsChanged = updates.constraints && JSON.stringify(updates.constraints) !== JSON.stringify(current.constraints);
+            const next = {
+                ...current,
+                ...updates,
+                constraints: normalizedConstraints,
+                width: Math.max(1, updates.width ?? current.width ?? 1),
+                height: Math.max(1, updates.height ?? current.height ?? 1),
+            };
+
+            const constraintsChanged = updates.constraints && JSON.stringify(normalizedConstraints) !== JSON.stringify(current.constraints);
 
             if (constraintsChanged && current.parent) {
                 const parent = state.nodes[current.parent];
                 if (parent) {
                     next.constraintOffsets = computeConstraintOffsets(next, parent);
                 }
+
+                /* 🔹 MULTI-SELECT CONSTRAINT BLENDING HOOK */
+                useSelectionStore.getState().updateBlendedConstraints();
             }
 
             return {
@@ -166,7 +204,7 @@ export const useNodeTreeStore = create((set, get) => ({
             const nodes = { ...state.nodes };
 
             Object.values(nodes).forEach((child) => {
-                if (child?.parent !== parentId) return;
+                if (!child || child.parent !== parentId) return;
 
                 nodes[child.id] = {
                     ...child,
@@ -178,8 +216,8 @@ export const useNodeTreeStore = create((set, get) => ({
         }),
 
     /**
-     * Applies constraints to all children of a parent
-     * (called when parent resizes)
+     * 🔒 ONLY place constraints are applied
+     * Called after parent resize (mouse up)
      */
     applyConstraintsForParent: (parentId) => {
         const { nodes } = get();
@@ -190,7 +228,7 @@ export const useNodeTreeStore = create((set, get) => ({
             get().updateNode(childId, updates);
         });
 
-        // refresh offsets after layout
+        // refresh offsets after final layout
         get().recomputeConstraintOffsetsForParent(parentId);
     },
 

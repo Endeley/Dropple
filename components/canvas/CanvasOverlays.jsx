@@ -5,14 +5,17 @@ import SelectionOverlay from './SelectionOverlay';
 import GuideRenderer from './GuideRenderer';
 import GhostNodes from './GhostNodes';
 import ConstraintGuides from './overlays/ConstraintGuides';
+import BreakpointPins from './overlays/BreakpointPins';
 
-export default function CanvasOverlays({ nodeMap = {}, previewNodes, selectionBox, startResize, startRotate, pan, zoom }) {
+export default function CanvasOverlays({ nodeMap = {}, previewNodes, selectionBox, startResize, startRotate, pan, zoom, bounds = null }) {
     const previewParent = previewNodes?.__parent || null;
     const previewChildren = previewNodes?.nodes || null;
 
     return (
         <div className='absolute inset-0 pointer-events-none z-50'>
             {/* World-space overlays */}
+            <BreakpointPins bounds={bounds} />
+
             <div
                 className='absolute inset-0'
                 style={{

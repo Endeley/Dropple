@@ -92,12 +92,12 @@ function GuideLine({ x1, y1, x2, y2, label }) {
 
     return (
         <>
-            <svg className='absolute inset-0 pointer-events-none' style={{ overflow: 'visible' }}>
-                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke='#3b82f6' strokeDasharray='4 4' strokeWidth='1' />
+            <svg className='absolute inset-0 pointer-events-none overflow-visible'>
+                <line x1={x1} y1={y1} x2={x2} y2={y2} className='constraint-guide-line' />
             </svg>
 
             <div
-                className='absolute text-[10px] px-1 rounded bg-blue-600 text-white pointer-events-none'
+                className='constraint-guide-label'
                 style={{
                     left: labelX + (isHorizontal ? 0 : 6),
                     top: labelY + (isHorizontal ? -14 : 0),

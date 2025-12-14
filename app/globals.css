@@ -1,12 +1,20 @@
 @import "tailwindcss";
 
+/* =========================
+   Root + base
+========================= */
+
 :root {
   --background: #ffffff;
   --foreground: #0f172a;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --constraint-accent: 37, 99, 235;
 }
 
 body {
@@ -15,9 +23,9 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* =========================================
+/* =========================
    Ghost Nodes (Constraint Preview)
-========================================= */
+========================= */
 
 .ghost-node {
   position: absolute;
@@ -25,8 +33,10 @@ body {
 
   border: 1px dashed rgba(59, 130, 246, 0.7);
   background: rgba(59, 130, 246, 0.12);
+  border-radius: 2px;
 
-  /* 🔥 THE ANIMATION */
+  animation: ghostFadeIn 120ms ease-out;
+
   transition:
     left 120ms cubic-bezier(0.4, 0, 0.2, 1),
     top 120ms cubic-bezier(0.4, 0, 0.2, 1),
@@ -36,16 +46,67 @@ body {
   will-change: left, top, width, height;
 }
 
-.constraint-guide {
-  stroke: rgba(59, 130, 246, 0.7);
-  stroke-dasharray: 4 4;
+@keyframes ghostFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* =========================
+   Constraint Preview Guides
+========================= */
+
+.constraint-guide-line {
+  stroke: #3b82f6;
   stroke-width: 1;
+  stroke-dasharray: 4 4;
+
+  animation: guideFadeIn 120ms ease-out;
 }
 
+.constraint-guide-label {
+  position: absolute;
+  font-size: 10px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: #2563eb;
+  color: white;
+  pointer-events: none;
 
-:root {
-  --constraint-accent: 37, 99, 235;
+  animation: guideLabelFade 120ms ease-out;
 }
+
+@keyframes guideFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes guideLabelFade {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* =========================
+   Constraint Pin Pulse
+========================= */
 
 @keyframes constraint-pulse {
   0% {
@@ -64,32 +125,47 @@ body {
   }
 }
 
-/* ----------------------------------
-   Ghost constraint preview nodes
----------------------------------- */
-.ghost-node {
-  position: absolute;
-  pointer-events: none;
-  border: 1px dashed rgba(59, 130, 246, 0.6);
-  background: rgba(59, 130, 246, 0.08);
-
-  /* animation */
-  animation: ghostFadeIn 120ms ease-out;
-  transition:
-    left 120ms ease-out,
-    top 120ms ease-out,
-    width 120ms ease-out,
-    height 120ms ease-out;
+.constraint-pulse {
+  animation: constraint-pulse 300ms ease-out;
 }
 
-@keyframes ghostFadeIn {
-  from {
-    opacity: 0;
-    transform: scale(0.98);
-  }
+/* =========================
+   Ghost Nodes – Constraint Feel
+   (USED BY GhostNodes.jsx)
+========================= */
 
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+/* default */
+.ghost-left-top {
+  /* transform-origin: 0% 0%; */
+  
+}
+
+/* anchored */
+.ghost-right {
+  transform-origin: 100% 50%;
+}
+
+.ghost-bottom {
+  transform-origin: 50% 100%;
+}
+
+.ghost-h-center,
+.ghost-v-center {
+  transform-origin: 50% 50%;
+}
+
+/* stretch */
+.ghost-h-stretch {
+  transform-origin: 50% 50%;
+  filter: saturate(1.1);
+}
+
+.ghost-v-stretch {
+  transform-origin: 50% 50%;
+  filter: saturate(1.1);
+}
+
+.ghost-both-stretch {
+  transform-origin: 50% 50%;
+  filter: saturate(1.2);
 }

@@ -3,6 +3,7 @@
 import { useNodeTreeStore } from '@/zustand/nodeTreeStore';
 import { useSelectionStore } from '@/zustand/selectionStore';
 import { useState } from 'react';
+import { blendConstraints } from '@/lib/canvas-core/constraints/blendConstraints';
 
 const PIN_SIZE = 10;
 
@@ -14,82 +15,112 @@ export default function ConstraintPins({ bounds }) {
 
     const [pulseKey, setPulseKey] = useState(0);
 
-    // 🔒 STRICT guards (no crashes, ever)
+    /* -------------------------------------------------
+       GUARDS (ABSOLUTELY SAFE)
+    ------------------------------------------------- */
     if (!bounds) return null;
-    if (selectedIds.length !== 1) return null;
+    if (!selectedIds.length) return null;
 
-    const node = nodes[selectedIds[0]];
-    if (!node || !node.parent) return null;
+    const selectedNodes = selectedIds
+        .map((id) => nodes[id])
+        .filter(Boolean)
+        .filter((n) => n.parent);
 
-    const constraints = node.constraints || {};
-    const pinState = getPinState(constraints);
+    if (!selectedNodes.length) return null;
 
-    const isHStretch = constraints.horizontal === 'left-right';
-    const isVStretch = constraints.vertical === 'top-bottom';
+    // All selected nodes must share the same parent (Figma rule)
+    const parentId = selectedNodes[0].parent;
+    if (!selectedNodes.every((n) => n.parent === parentId)) return null;
 
-    /* ---------------- SETTERS ---------------- */
+    /* -------------------------------------------------
+       BLENDED CONSTRAINT STATE
+    ------------------------------------------------- */
+    const blended = blendConstraints(selectedNodes);
 
-   const setHorizontal = (clicked) => {
-       const current = constraints.horizontal ?? 'left';
-       const next = nextHorizontal(current, clicked);
+    const pinState = {
+        left: blended.horizontal === 'left' || blended.horizontal === 'left-right',
+        right: blended.horizontal === 'right' || blended.horizontal === 'left-right',
+        hCenter: blended.horizontal === 'center',
 
-       updateNode(node.id, {
-           constraints: { ...constraints, horizontal: next },
-           width: Math.max(1, node.width ?? 1),
-           height: Math.max(1, node.height ?? 1),
-       });
+        top: blended.vertical === 'top' || blended.vertical === 'top-bottom',
+        bottom: blended.vertical === 'bottom' || blended.vertical === 'top-bottom',
+        vCenter: blended.vertical === 'center',
 
-       // ✅ recompute using ID (correct)
-       recomputeOffsets(node.id);
+        hMixed: blended.horizontal === 'mixed',
+        vMixed: blended.vertical === 'mixed',
+    };
 
-       if (next === 'left-right' && current !== 'left-right') {
-           setPulseKey((k) => k + 1);
-       }
-   };
+    const isHStretch = blended.horizontal === 'left-right';
+    const isVStretch = blended.vertical === 'top-bottom';
 
+    /* -------------------------------------------------
+       SETTERS (BULK APPLY)
+    ------------------------------------------------- */
+    const setHorizontal = (clicked) => {
+        selectedNodes.forEach((node) => {
+            const current = node.constraints?.horizontal ?? 'left';
+            const next = nextHorizontal(current, clicked);
 
-   const setVertical = (clicked) => {
-       const current = constraints.vertical ?? 'top';
-       const next = nextVertical(current, clicked);
+            updateNode(node.id, {
+                constraints: {
+                    ...node.constraints,
+                    horizontal: next,
+                },
+                width: Math.max(1, node.width ?? 1),
+                height: Math.max(1, node.height ?? 1),
+            });
 
-       updateNode(node.id, {
-           constraints: { ...constraints, vertical: next },
-           width: Math.max(1, node.width ?? 1),
-           height: Math.max(1, node.height ?? 1),
-       });
+            recomputeOffsets(node.id);
+        });
 
-       recomputeOffsets(node.id);
+        setPulseKey((k) => k + 1);
+    };
 
-       if (next === 'top-bottom' && current !== 'top-bottom') {
-           setPulseKey((k) => k + 1);
-       }
-   };
+    const setVertical = (clicked) => {
+        selectedNodes.forEach((node) => {
+            const current = node.constraints?.vertical ?? 'top';
+            const next = nextVertical(current, clicked);
 
+            updateNode(node.id, {
+                constraints: {
+                    ...node.constraints,
+                    vertical: next,
+                },
+                width: Math.max(1, node.width ?? 1),
+                height: Math.max(1, node.height ?? 1),
+            });
+
+            recomputeOffsets(node.id);
+        });
+
+        setPulseKey((k) => k + 1);
+    };
 
     const { x, y, width, height } = bounds;
 
     return (
         <>
             {/* -------- HORIZONTAL -------- */}
-            <Pin key={`h-left-${pulseKey}`} x={x} y={y + height / 2} active={pinState.left} pulse={isHStretch} tooltip='Left' onClick={() => setHorizontal('left')} />
+            <Pin key={`h-left-${pulseKey}`} x={x} y={y + height / 2} active={pinState.left} mixed={pinState.hMixed} pulse={isHStretch} tooltip={pinState.hMixed ? 'Mixed' : 'Left'} onClick={() => setHorizontal('left')} />
 
-            <Pin key='h-center' x={x + width / 2} y={y + height / 2} active={pinState.hCenter} tooltip='Center horizontally' onClick={() => setHorizontal('center')} />
+            <Pin key='h-center' x={x + width / 2} y={y + height / 2} active={pinState.hCenter} mixed={pinState.hMixed} tooltip='Center horizontally' onClick={() => setHorizontal('center')} />
 
-            <Pin key={`h-right-${pulseKey}`} x={x + width} y={y + height / 2} active={pinState.right} pulse={isHStretch} tooltip={isHStretch ? 'Stretch horizontally' : 'Right'} onClick={() => setHorizontal('right')} />
+            <Pin key={`h-right-${pulseKey}`} x={x + width} y={y + height / 2} active={pinState.right} mixed={pinState.hMixed} pulse={isHStretch} tooltip={isHStretch ? 'Stretch horizontally' : 'Right'} onClick={() => setHorizontal('right')} />
 
             {/* -------- VERTICAL -------- */}
-            <Pin key={`v-top-${pulseKey}`} x={x + width / 2} y={y} active={pinState.top} pulse={isVStretch} tooltip='Top' onClick={() => setVertical('top')} />
+            <Pin key={`v-top-${pulseKey}`} x={x + width / 2} y={y} active={pinState.top} mixed={pinState.vMixed} pulse={isVStretch} tooltip={pinState.vMixed ? 'Mixed' : 'Top'} onClick={() => setVertical('top')} />
 
-            <Pin key='v-center' x={x + width / 2} y={y + height / 2} active={pinState.vCenter} tooltip='Center vertically' onClick={() => setVertical('center')} />
+            <Pin key='v-center' x={x + width / 2} y={y + height / 2} active={pinState.vCenter} mixed={pinState.vMixed} tooltip='Center vertically' onClick={() => setVertical('center')} />
 
-            <Pin key={`v-bottom-${pulseKey}`} x={x + width / 2} y={y + height} active={pinState.bottom} pulse={isVStretch} tooltip={isVStretch ? 'Stretch vertically' : 'Bottom'} onClick={() => setVertical('bottom')} />
+            <Pin key={`v-bottom-${pulseKey}`} x={x + width / 2} y={y + height} active={pinState.bottom} mixed={pinState.vMixed} pulse={isVStretch} tooltip={isVStretch ? 'Stretch vertically' : 'Bottom'} onClick={() => setVertical('bottom')} />
         </>
     );
 }
 
-/* ---------------------------------- */
-
-function Pin({ x, y, active, pulse, tooltip, onClick }) {
+/* -------------------------------------------------
+   PIN
+------------------------------------------------- */
+function Pin({ x, y, active, mixed, pulse, tooltip, onClick }) {
     return (
         <div
             className='absolute pointer-events-auto group'
@@ -105,9 +136,12 @@ function Pin({ x, y, active, pulse, tooltip, onClick }) {
                 onClick();
             }}>
             <div
-                className={`w-full h-full rounded-full border ${pulse ? 'constraint-pulse' : ''}`}
+                className={`w-full h-full rounded-full border
+                    ${pulse ? 'constraint-pulse' : ''}
+                    ${mixed ? 'border-dashed bg-neutral-300' : ''}
+                `}
                 style={{
-                    background: active ? '#2563eb' : '#e5e7eb',
+                    background: active && !mixed ? '#2563eb' : undefined,
                     borderColor: '#94a3b8',
                 }}
             />
@@ -124,22 +158,9 @@ function PinTooltip({ label }) {
     );
 }
 
-/* ---------------------------------- */
-
-function getPinState(constraints) {
-    const h = constraints?.horizontal ?? 'left';
-    const v = constraints?.vertical ?? 'top';
-
-    return {
-        left: h === 'left' || h === 'left-right',
-        right: h === 'right' || h === 'left-right',
-        hCenter: h === 'center',
-        top: v === 'top' || v === 'top-bottom',
-        bottom: v === 'bottom' || v === 'top-bottom',
-        vCenter: v === 'center',
-    };
-}
-
+/* -------------------------------------------------
+   HELPERS
+------------------------------------------------- */
 function nextHorizontal(current, clicked) {
     if (clicked === 'center') return 'center';
     if (current === 'left-right') return clicked;
