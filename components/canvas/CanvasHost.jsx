@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { computeConstraintPreview } from '@/lib/canvas-core/constraints/computeConstraintPreview';
 
 import AdaptiveGrid from './AdaptiveGrid';
 import InfinitePlane from './InfinitePlane';
@@ -33,6 +34,7 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
 
     const selectedIds = useSelectionStore((s) => s.selectedIds);
     const clearSelection = useSelectionStore((s) => s.deselectAll);
+    const [previewNodes, setPreviewNodes] = useState(null);
 
     const nodes = useNodeTreeStore((s) => s.nodes);
     const updateNode = useNodeTreeStore((s) => s.updateNode);
@@ -184,6 +186,8 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
                 }
                 updateNode(id, { rotation });
             });
+            setPreviewNodes(null);
+
             return;
         }
 
@@ -206,7 +210,12 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
             });
 
             // 🔥 LIVE CONSTRAINT PREVIEW
+            const preview = computeConstraintPreview(next, nodes);
 
+            setPreviewNodes({
+                __parent: next, // the resizing parent frame
+                nodes: preview, // ghost children
+            });
             return;
         }
 
@@ -263,6 +272,7 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
                 applyConstraintsForParent(parentId);
             }
         }
+        setPreviewNodes(null);
     };
 
     /* ---------------------------------------------
@@ -284,7 +294,7 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
 
             <InfinitePlane>{children}</InfinitePlane>
 
-            <CanvasOverlays nodeMap={activeNodeMap} selectionBox={selectionBox} startResize={startResize} startRotate={startRotate} pan={pan} zoom={zoom} />
+            <CanvasOverlays nodeMap={activeNodeMap} previewNodes={previewNodes} selectionBox={selectionBox} startResize={startResize} startRotate={startRotate} pan={pan} zoom={zoom} />
         </div>
     );
 }

@@ -2,73 +2,160 @@
 
 import { useNodeTreeStore } from '@/zustand/nodeTreeStore';
 import { useSelectionStore } from '@/zustand/selectionStore';
+import { useState } from 'react';
 
-const PIN_SIZE = 8;
+const PIN_SIZE = 10;
 
-export default function ConstraintPins({ nodeMap }) {
+export default function ConstraintPins({ bounds }) {
     const selectedIds = useSelectionStore((s) => s.selectedIds);
+    const nodes = useNodeTreeStore((s) => s.nodes);
     const updateNode = useNodeTreeStore((s) => s.updateNode);
+    const recomputeOffsets = useNodeTreeStore((s) => s.recomputeConstraintOffsetsForNode);
 
+    const [pulseKey, setPulseKey] = useState(0);
+
+    // 🔒 STRICT guards (no crashes, ever)
+    if (!bounds) return null;
     if (selectedIds.length !== 1) return null;
 
-    const node = nodeMap[selectedIds[0]];
+    const node = nodes[selectedIds[0]];
     if (!node || !node.parent) return null;
 
-    const parent = nodeMap[node.parent];
-    if (!parent) return null;
+    const constraints = node.constraints || {};
+    const pinState = getPinState(constraints);
 
-    const c = node.constraints || { horizontal: 'left', vertical: 'top' };
+    const isHStretch = constraints.horizontal === 'left-right';
+    const isVStretch = constraints.vertical === 'top-bottom';
 
-    const centerX = node.x + node.width / 2;
-    const centerY = node.y + node.height / 2;
+    /* ---------------- SETTERS ---------------- */
 
-    const setH = (value) =>
-        updateNode(node.id, {
-            constraints: { ...c, horizontal: value },
-        });
+   const setHorizontal = (clicked) => {
+       const current = constraints.horizontal ?? 'left';
+       const next = nextHorizontal(current, clicked);
 
-    const setV = (value) =>
-        updateNode(node.id, {
-            constraints: { ...c, vertical: value },
-        });
+       updateNode(node.id, {
+           constraints: { ...constraints, horizontal: next },
+           width: Math.max(1, node.width ?? 1),
+           height: Math.max(1, node.height ?? 1),
+       });
+
+       // ✅ recompute using ID (correct)
+       recomputeOffsets(node.id);
+
+       if (next === 'left-right' && current !== 'left-right') {
+           setPulseKey((k) => k + 1);
+       }
+   };
+
+
+   const setVertical = (clicked) => {
+       const current = constraints.vertical ?? 'top';
+       const next = nextVertical(current, clicked);
+
+       updateNode(node.id, {
+           constraints: { ...constraints, vertical: next },
+           width: Math.max(1, node.width ?? 1),
+           height: Math.max(1, node.height ?? 1),
+       });
+
+       recomputeOffsets(node.id);
+
+       if (next === 'top-bottom' && current !== 'top-bottom') {
+           setPulseKey((k) => k + 1);
+       }
+   };
+
+
+    const { x, y, width, height } = bounds;
 
     return (
         <>
-            {/* HORIZONTAL PINS */}
-            <Pin x={node.x - PIN_SIZE * 1.5} y={centerY} active={c.horizontal === 'left'} onClick={() => setH('left')} />
+            {/* -------- HORIZONTAL -------- */}
+            <Pin key={`h-left-${pulseKey}`} x={x} y={y + height / 2} active={pinState.left} pulse={isHStretch} tooltip='Left' onClick={() => setHorizontal('left')} />
 
-            <Pin x={centerX - PIN_SIZE / 2} y={node.y - PIN_SIZE * 1.5} active={c.horizontal === 'center'} onClick={() => setH('center')} />
+            <Pin key='h-center' x={x + width / 2} y={y + height / 2} active={pinState.hCenter} tooltip='Center horizontally' onClick={() => setHorizontal('center')} />
 
-            <Pin x={node.x + node.width + PIN_SIZE * 0.5} y={centerY} active={c.horizontal === 'right'} onClick={() => setH('right')} />
+            <Pin key={`h-right-${pulseKey}`} x={x + width} y={y + height / 2} active={pinState.right} pulse={isHStretch} tooltip={isHStretch ? 'Stretch horizontally' : 'Right'} onClick={() => setHorizontal('right')} />
 
-            {/* VERTICAL PINS */}
-            <Pin x={centerX} y={node.y - PIN_SIZE * 1.5} active={c.vertical === 'top'} onClick={() => setV('top')} />
+            {/* -------- VERTICAL -------- */}
+            <Pin key={`v-top-${pulseKey}`} x={x + width / 2} y={y} active={pinState.top} pulse={isVStretch} tooltip='Top' onClick={() => setVertical('top')} />
 
-            <Pin x={centerX} y={centerY} active={c.vertical === 'center'} onClick={() => setV('center')} />
+            <Pin key='v-center' x={x + width / 2} y={y + height / 2} active={pinState.vCenter} tooltip='Center vertically' onClick={() => setVertical('center')} />
 
-            <Pin x={centerX} y={node.y + node.height + PIN_SIZE * 0.5} active={c.vertical === 'bottom'} onClick={() => setV('bottom')} />
+            <Pin key={`v-bottom-${pulseKey}`} x={x + width / 2} y={y + height} active={pinState.bottom} pulse={isVStretch} tooltip={isVStretch ? 'Stretch vertically' : 'Bottom'} onClick={() => setVertical('bottom')} />
         </>
     );
 }
 
-/* ---------------- PIN ---------------- */
+/* ---------------------------------- */
 
-function Pin({ x, y, active, onClick }) {
+function Pin({ x, y, active, pulse, tooltip, onClick }) {
     return (
         <div
-            onMouseDown={(e) => {
-                e.stopPropagation();
-                onClick();
-            }}
-            className={`absolute rounded-full cursor-pointer ${active ? 'bg-blue-500' : 'bg-neutral-300'}`}
+            className='absolute pointer-events-auto group'
             style={{
+                left: x - PIN_SIZE / 2,
+                top: y - PIN_SIZE / 2,
                 width: PIN_SIZE,
                 height: PIN_SIZE,
-                left: x,
-                top: y,
-                transform: 'translate(-50%, -50%)',
-                pointerEvents: 'auto',
             }}
-        />
+            onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClick();
+            }}>
+            <div
+                className={`w-full h-full rounded-full border ${pulse ? 'constraint-pulse' : ''}`}
+                style={{
+                    background: active ? '#2563eb' : '#e5e7eb',
+                    borderColor: '#94a3b8',
+                }}
+            />
+            <PinTooltip label={tooltip} />
+        </div>
     );
+}
+
+function PinTooltip({ label }) {
+    return (
+        <div className='absolute left-1/2 -top-7 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none'>
+            <div className='px-2 py-1 rounded text-[10px] bg-neutral-900 text-white whitespace-nowrap shadow'>{label}</div>
+        </div>
+    );
+}
+
+/* ---------------------------------- */
+
+function getPinState(constraints) {
+    const h = constraints?.horizontal ?? 'left';
+    const v = constraints?.vertical ?? 'top';
+
+    return {
+        left: h === 'left' || h === 'left-right',
+        right: h === 'right' || h === 'left-right',
+        hCenter: h === 'center',
+        top: v === 'top' || v === 'top-bottom',
+        bottom: v === 'bottom' || v === 'top-bottom',
+        vCenter: v === 'center',
+    };
+}
+
+function nextHorizontal(current, clicked) {
+    if (clicked === 'center') return 'center';
+    if (current === 'left-right') return clicked;
+
+    if ((current === 'left' && clicked === 'right') || (current === 'right' && clicked === 'left')) {
+        return 'left-right';
+    }
+    return clicked;
+}
+
+function nextVertical(current, clicked) {
+    if (clicked === 'center') return 'center';
+    if (current === 'top-bottom') return clicked;
+
+    if ((current === 'top' && clicked === 'bottom') || (current === 'bottom' && clicked === 'top')) {
+        return 'top-bottom';
+    }
+    return clicked;
 }
