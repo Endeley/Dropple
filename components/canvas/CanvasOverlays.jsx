@@ -6,6 +6,7 @@ import GuideRenderer from './GuideRenderer';
 import GhostNodes from './GhostNodes';
 import ConstraintGuides from './overlays/ConstraintGuides';
 import BreakpointPins from './overlays/BreakpointPins';
+import ConstraintPins from './overlays/ConstraintPins';
 
 export default function CanvasOverlays({ nodeMap = {}, previewNodes, selectionBox, startResize, startRotate, pan, zoom, bounds = null }) {
     const previewParent = previewNodes?.__parent || null;
@@ -24,6 +25,8 @@ export default function CanvasOverlays({ nodeMap = {}, previewNodes, selectionBo
                 }}>
                 {/* 👻 Ghost children (constraint preview) */}
                 <GhostNodes previewNodes={previewChildren || {}} />
+
+                {bounds && <ConstraintPins bounds={bounds} />}
 
                 {/* 📏 Constraint explanation lines */}
                 {previewParent && previewChildren && <ConstraintGuides parent={previewParent} previewNodes={previewChildren} />}

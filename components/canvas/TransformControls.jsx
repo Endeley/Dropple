@@ -1,5 +1,17 @@
 'use client';
 
+/**
+ * TransformControls
+ * ------------------
+ * Pure UI component.
+ * - Renders resize & rotate handles
+ * - Emits handle identity ONLY
+ * - Contains NO layout or constraint logic
+ *
+ * Resize semantics (edge vs corner) are
+ * resolved by the canvas engine.
+ */
+
 export default function TransformControls({ bounds, onResizeStart, onRotateStart }) {
     if (!bounds) return null;
 
@@ -21,7 +33,7 @@ export default function TransformControls({ bounds, onResizeStart, onRotateStart
             {['top-left', 'top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left'].map((handle) => (
                 <div
                     key={handle}
-                    data-handle={handle}
+                    data-resize-handle={handle}
                     className='absolute w-3 h-3 bg-white rounded-sm border border-fuchsia-400 pointer-events-auto'
                     style={{
                         ...handleStyle(handle, bounds),
@@ -37,7 +49,7 @@ export default function TransformControls({ bounds, onResizeStart, onRotateStart
 
             {/* Rotate handle */}
             <div
-                data-handle='rotate'
+                data-rotate-handle
                 className='absolute w-4 h-4 bg-yellow-300 rounded-full border border-yellow-500 pointer-events-auto cursor-grab'
                 style={{
                     left: bounds.width / 2 - 8,
@@ -53,6 +65,10 @@ export default function TransformControls({ bounds, onResizeStart, onRotateStart
     );
 }
 
+/* ---------------------------------------------
+   Handle positioning
+--------------------------------------------- */
+
 function handleStyle(handle, bounds) {
     const map = {
         'top-left': { left: -4, top: -4 },
@@ -66,6 +82,10 @@ function handleStyle(handle, bounds) {
     };
     return map[handle];
 }
+
+/* ---------------------------------------------
+   Cursor semantics
+--------------------------------------------- */
 
 function handleCursor(handle) {
     const map = {

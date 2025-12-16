@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 import { computeConstraintPreview } from '@/lib/canvas-core/constraints/computeConstraintPreview';
 
 import AdaptiveGrid from './AdaptiveGrid';
@@ -13,10 +13,11 @@ import { useSelectionStore } from '@/zustand/selectionStore';
 import { useNodeTreeStore } from '@/zustand/nodeTreeStore';
 import { useToolStore } from '@/zustand/toolStore';
 import { useSnappingStore } from '@/zustand/snappingStore';
+import { useConstraintPreviewStore } from '@/zustand/constraintPreviewStore';
 import { useCanvasState } from '@/lib/canvas-core/canvasState';
 
 import { getSelectedBounds } from '@/lib/canvas-core/selection';
-import { applyResize, calculateAngle } from '@/lib/canvas-core/transforms';
+import { applyResize, calculateAngle, getResizeMode } from '@/lib/canvas-core/transforms';
 import { getSnapPoints, snapValue } from '@/lib/canvas-core/snapping';
 
 import useCanvasPan from './interactions/useCanvasPan';
@@ -24,13 +25,6 @@ import useCanvasZoom from './interactions/useCanvasZoom';
 import { useCanvasTransforms } from './interactions/useCanvasTransforms';
 
 import { NODE_TYPES } from '@/lib/nodeTypes';
-
-/* ---------------------------------------------
-   Resize handle groups
---------------------------------------------- */
-
-const EDGE_HANDLES = ['left', 'right', 'top', 'bottom'];
-const CORNER_HANDLES = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
 
 /* ---------------------------------------------
    CanvasHost
@@ -41,13 +35,16 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
 
     const selectedIds = useSelectionStore((s) => s.selectedIds);
     const clearSelection = useSelectionStore((s) => s.deselectAll);
-    const [previewNodes, setPreviewNodes] = useState(null);
 
     const nodes = useNodeTreeStore((s) => s.nodes);
     const updateNode = useNodeTreeStore((s) => s.updateNode);
     const addNode = useNodeTreeStore((s) => s.addNode);
     const applyConstraintsForParent = useNodeTreeStore((s) => s.applyConstraintsForParent);
     const recomputeConstraintOffsetsForNode = useNodeTreeStore((s) => s.recomputeConstraintOffsetsForNode);
+
+    const previewNodes = useConstraintPreviewStore((s) => s.previewNodes);
+    const setPreviewNodes = useConstraintPreviewStore((s) => s.setPreviewNodes);
+    const clearPreview = useConstraintPreviewStore((s) => s.clearPreview);
 
     const snapToGrid = useToolStore((s) => s.snapToGrid);
     const gridSize = useToolStore((s) => s.gridSize);
@@ -75,7 +72,6 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
     /* ---------- DERIVED ---------- */
 
     const activeNodeMap = nodeMap && Object.keys(nodeMap).length ? nodeMap : nodes;
-
     const selectedBounds = getSelectedBounds(selectedIds, activeNodeMap);
 
     /* ---------------------------------------------
@@ -110,21 +106,13 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
             if (!selectedBounds) return;
             e.stopPropagation();
 
-            const resizeMode = EDGE_HANDLES.includes(handle) ? 'constraint' : 'scale';
-
             resizeRef.current = {
                 startX: e.clientX,
                 startY: e.clientY,
                 handle,
-                resizeMode,
+                resizeMode: getResizeMode(handle),
                 nodeId: selectedIds[0],
                 initialNode: nodes[selectedIds[0]],
-                initialChildren: selectedIds[0]
-                    ? nodes[selectedIds[0]].children?.map((cid) => ({
-                          id: cid,
-                          ...nodes[cid],
-                      }))
-                    : [],
             };
         },
         [selectedBounds, selectedIds, nodes]
@@ -145,54 +133,12 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
     };
 
     /* ---------------------------------------------
-       MOUSE DOWN
-    --------------------------------------------- */
-
-    const onMouseDown = (e) => {
-        const tool = useToolStore.getState().tool;
-        const { x: localX, y: localY } = toLocal(e.clientX, e.clientY);
-
-        if (tool === 'frame') {
-            const id = crypto.randomUUID();
-
-            addNode({
-                id,
-                type: NODE_TYPES.FRAME,
-                name: 'Frame',
-                x: localX,
-                y: localY,
-                width: 1,
-                height: 1,
-                background: { type: 'color', value: '#d1d5db' },
-                children: [],
-            });
-
-            useSelectionStore.getState().setSelectedManual([id]);
-
-            creationRef.current = {
-                id,
-                startX: localX,
-                startY: localY,
-            };
-            return;
-        }
-
-        if (e.target === e.currentTarget) {
-            clearSelection();
-            return;
-        }
-
-        startDrag(e);
-    };
-
-    /* ---------------------------------------------
        MOUSE MOVE
     --------------------------------------------- */
 
     const onMouseMove = (e) => {
-        /* ---- RESIZE ---- */
         if (resizeRef.current) {
-            const { startX, startY, handle, nodeId, initialNode, resizeMode, initialChildren } = resizeRef.current;
+            const { startX, startY, handle, nodeId, initialNode, resizeMode } = resizeRef.current;
 
             const dx = (e.clientX - startX) / zoom;
             const dy = (e.clientY - startY) / zoom;
@@ -208,20 +154,19 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
             });
 
             if (resizeMode === 'constraint') {
-                const preview = computeConstraintPreview(next, nodes);
                 setPreviewNodes({
                     __parent: next,
-                    nodes: preview,
+                    nodes: computeConstraintPreview(next, nodes),
                 });
             } else {
-                setPreviewNodes(null);
+                clearPreview();
             }
 
             return;
         }
 
         /* ---- DRAG ---- */
-        if (dragRef.current) {
+        if (dragRef.current && resizeRef.current?.resizeMode !== 'constraint') {
             const { startX, startY, initialPositions } = dragRef.current;
 
             const dx = (e.clientX - startX) / zoom;
@@ -250,7 +195,7 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
 
             setGuides(guides);
         }
-    };
+    };;
 
     /* ---------------------------------------------
        MOUSE UP
@@ -265,6 +210,7 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
         creationRef.current = null;
 
         clearGuides();
+        clearPreview();
 
         if (resizeData) {
             const { nodeId, resizeMode } = resizeData;
@@ -280,8 +226,6 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
                 });
             }
         }
-
-        setPreviewNodes(null);
     };
 
     /* ---------------------------------------------
@@ -291,7 +235,7 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
     const cursorClass = enablePanZoom && isPanning ? 'cursor-grabbing' : 'cursor-default';
 
     return (
-        <div ref={containerRef} className={`relative w-full h-full overflow-hidden bg-[#f4f5f7] ${cursorClass}`} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp}>
+        <div ref={containerRef} className={`relative w-full h-full overflow-hidden bg-[#f4f5f7] ${cursorClass}`} onMouseDown={startDrag} onMouseMove={onMouseMove} onMouseUp={onMouseUp}>
             {showRulers && (
                 <>
                     <RulerHorizontal pan={pan} zoom={zoom} />
@@ -303,7 +247,7 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
 
             <InfinitePlane>{children}</InfinitePlane>
 
-            <CanvasOverlays nodeMap={activeNodeMap} previewNodes={previewNodes} selectionBox={selectionBox} startResize={startResize} startRotate={() => {}} pan={pan} zoom={zoom} bounds={selectedBounds} />
+            <CanvasOverlays nodeMap={activeNodeMap} previewNodes={previewNodes} selectionBox={selectionBox} startResize={startResize} startRotate={startRotate} pan={pan} zoom={zoom} bounds={selectedBounds} />
         </div>
     );
 }
