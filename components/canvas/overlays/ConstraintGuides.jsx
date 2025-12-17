@@ -1,9 +1,24 @@
 'use client';
 
-export default function ConstraintGuides({ parent, previewNodes }) {
-    if (!parent || !previewNodes) return null;
+/**
+ * ConstraintGuides
+ * ----------------
+ * Pure visual overlay that renders distance
+ * guides between a parent and its preview children.
+ *
+ * - No engine logic
+ * - No store access
+ * - Receives computed geometry only
+ */
 
-    if (!previewNodes.nodes || typeof previewNodes.nodes !== 'object') return null;
+export default function ConstraintGuides({ parent, previewNodes }) {
+    if (!parent || !previewNodes || typeof previewNodes !== 'object') {
+        return null;
+    }
+
+    const children = Object.values(previewNodes).filter(Boolean);
+
+    if (!children.length) return null;
 
     return (
         <>
@@ -14,10 +29,12 @@ export default function ConstraintGuides({ parent, previewNodes }) {
     );
 }
 
-/* ------------------------------------------------ */
+/* ------------------------------------------------
+   Distance computation (visual only)
+------------------------------------------------ */
 
 function DistanceLines({ parent, child }) {
-    const lines = [];
+    if (!parent || !child) return null;
 
     const px = parent.x;
     const py = parent.y;
@@ -28,6 +45,12 @@ function DistanceLines({ parent, child }) {
     const cy = child.y;
     const cw = child.width;
     const ch = child.height;
+
+    if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pw) || !Number.isFinite(ph) || !Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(cw) || !Number.isFinite(ch)) {
+        return null;
+    }
+
+    const lines = [];
 
     // LEFT
     if (cx > px) {
@@ -73,16 +96,20 @@ function DistanceLines({ parent, child }) {
         });
     }
 
+    if (!lines.length) return null;
+
     return (
         <>
-            {lines.map((l, i) => (
-                <GuideLine key={i} {...l} />
+            {lines.map((line, i) => (
+                <GuideLine key={i} {...line} />
             ))}
         </>
     );
 }
 
-/* ------------------------------------------------ */
+/* ------------------------------------------------
+   Individual guide line
+------------------------------------------------ */
 
 function GuideLine({ x1, y1, x2, y2, label }) {
     const isHorizontal = y1 === y2;

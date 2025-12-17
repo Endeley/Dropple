@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { applyConstraints } from '@/lib/canvas-core/constraints/applyConstraints';
-import { useSelectionStore } from '@/zustand/selectionStore';
+import { computeAutoLayoutSize } from '@/lib/canvas-core/layout/computeAutoLayoutSize';
 
 /* =========================
    HELPERS (PURE)
@@ -58,14 +58,38 @@ const withDefaults = (node) => {
 
     return {
         ...node,
+
+        layout: node.layout ?? 'free',
+
+        sizeX: node.sizeX ?? 'fixed',
+        sizeY: node.sizeY ?? 'fixed',
+
+        flexGrow: node.flexGrow ?? 1,
+        alignSelf: node.alignSelf ?? 'auto',
+
+        autoLayout: {
+            direction: node.autoLayout?.direction ?? 'column',
+            gap: node.autoLayout?.gap ?? 8,
+            padding: node.autoLayout?.padding ?? 8,
+            justify: node.autoLayout?.justify ?? 'start',
+            align: node.autoLayout?.align ?? 'start',
+        },
+
         constraints: {
             ...DEFAULT_CONSTRAINTS,
             ...normalizedConstraints,
         },
+
         constraintOffsets: {
             ...DEFAULT_OFFSETS,
             ...(node.constraintOffsets || {}),
         },
+
+        minWidth: node.minWidth ?? 1,
+        maxWidth: node.maxWidth ?? Infinity,
+        minHeight: node.minHeight ?? 1,
+        maxHeight: node.maxHeight ?? Infinity,
+
         breakpoints: node.breakpoints || [],
         children: node.children || [],
     };
@@ -76,12 +100,8 @@ const withDefaults = (node) => {
 ========================= */
 
 export const useNodeTreeStore = create((set, get) => ({
-    /* ---------------- STATE ---------------- */
-
     nodes: {},
     rootIds: [],
-
-    /* ---------------- TREE ---------------- */
 
     setTree: (nodes = {}, rootIds = []) =>
         set(() => ({
@@ -98,7 +118,6 @@ export const useNodeTreeStore = create((set, get) => ({
 
             if (parentId && nodes[parentId]) {
                 const parent = nodes[parentId];
-
                 nodes[parentId] = {
                     ...parent,
                     children: [...parent.children, node.id],
@@ -119,94 +138,35 @@ export const useNodeTreeStore = create((set, get) => ({
             const current = state.nodes[id];
             if (!current) return state;
 
-            const normalizedConstraints = updates.constraints ? normalizeConstraints(updates.constraints) : current.constraints;
-
             const next = {
                 ...current,
                 ...updates,
-                constraints: normalizedConstraints,
-                width: Math.max(1, updates.width ?? current.width ?? 1),
-                height: Math.max(1, updates.height ?? current.height ?? 1),
+                constraints: updates.constraints ? normalizeConstraints(updates.constraints) : current.constraints,
+                width: Math.max(current.minWidth, Math.min(current.maxWidth, updates.width ?? current.width ?? 1)),
+                height: Math.max(current.minHeight, Math.min(current.maxHeight, updates.height ?? current.height ?? 1)),
             };
 
-            const constraintsChanged = updates.constraints && JSON.stringify(normalizedConstraints) !== JSON.stringify(current.constraints);
-
-            if (constraintsChanged && current.parent) {
+            if (updates.constraints && current.parent) {
                 const parent = state.nodes[current.parent];
                 if (parent) {
                     next.constraintOffsets = computeConstraintOffsets(next, parent);
                 }
-
-                /* 🔹 MULTI-SELECT CONSTRAINT BLENDING HOOK */
-                useSelectionStore.getState().updateBlendedConstraints();
             }
 
-            return {
-                nodes: {
-                    ...state.nodes,
-                    [id]: next,
-                },
-            };
-        }),
-
-    removeNode: (id) =>
-        set((state) => {
-            const nodes = { ...state.nodes };
-
-            const removeRecursively = (nodeId) => {
-                const n = nodes[nodeId];
-                if (!n) return;
-                (n.children || []).forEach(removeRecursively);
-                delete nodes[nodeId];
-            };
-
-            removeRecursively(id);
-
-            return {
-                nodes,
-                rootIds: state.rootIds.filter((rid) => rid !== id),
-            };
-        }),
-
-    /* ---------------- CONSTRAINT LIFECYCLE ---------------- */
-
-    recomputeConstraintOffsetsForNode: (nodeId) =>
-        set((state) => {
-            const node = state.nodes[nodeId];
-            if (!node || !node.parent) return state;
-
-            const parent = state.nodes[node.parent];
-            if (!parent) return state;
-
-            return {
-                nodes: {
-                    ...state.nodes,
-                    [nodeId]: {
-                        ...node,
-                        constraintOffsets: computeConstraintOffsets(
-                            {
-                                ...node,
-                                width: Math.max(1, node.width ?? 1),
-                                height: Math.max(1, node.height ?? 1),
-                            },
-                            parent
-                        ),
-                    },
-                },
-            };
+            return { nodes: { ...state.nodes, [id]: next } };
         }),
 
     recomputeConstraintOffsetsForParent: (parentId) =>
         set((state) => {
             const parent = state.nodes[parentId];
-            if (!parent) return state;
+            if (!parent || !parent.children?.length) return state;
 
             const nodes = { ...state.nodes };
 
-            Object.values(nodes).forEach((child) => {
-                if (!child || child.parent !== parentId) return;
-
-                nodes[child.id] = {
+            parent.children.forEach((cid) => {
+                const child = nodes[cid];
+                if (!child) return;
+                nodes[cid] = {
                     ...child,
                     constraintOffsets: computeConstraintOffsets(child, parent),
                 };
@@ -215,10 +175,6 @@ export const useNodeTreeStore = create((set, get) => ({
             return { nodes };
         }),
 
-    /**
-     * 🔒 ONLY place constraints are applied
-     * Called after parent resize (mouse up)
-     */
     applyConstraintsForParent: (parentId) => {
         const { nodes } = get();
         const parent = nodes[parentId];
@@ -228,11 +184,191 @@ export const useNodeTreeStore = create((set, get) => ({
             get().updateNode(childId, updates);
         });
 
-        // refresh offsets after final layout
         get().recomputeConstraintOffsetsForParent(parentId);
     },
 
-    /* ---------------- CLEAR ---------------- */
+    /* ---------- AUTO-LAYOUT CONTROLS ---------- */
+
+    setSizeMode: (id, axis) =>
+        set((state) => {
+            const node = state.nodes[id];
+            if (!node) return state;
+
+            const cycle = ['fixed', 'fill', 'hug'];
+            const key = axis === 'x' ? 'sizeX' : 'sizeY';
+            const next = cycle[(cycle.indexOf(node[key]) + 1) % cycle.length];
+
+            let nextNode = { ...node, [key]: next };
+
+            if (next === 'hug' && node.layout === 'flex') {
+                const children = node.children.map((cid) => state.nodes[cid]).filter(Boolean);
+                const nextSize = computeAutoLayoutSize(nextNode, children);
+                if (nextSize) nextNode = { ...nextNode, ...nextSize };
+            }
+
+            return { nodes: { ...state.nodes, [id]: nextNode } };
+        }),
+
+    setAutoLayoutJustify: (id, value) =>
+        set((state) => {
+            const node = state.nodes[id];
+            if (!node || node.layout !== 'flex') return state;
+
+            return {
+                nodes: {
+                    ...state.nodes,
+                    [id]: {
+                        ...node,
+                        autoLayout: { ...node.autoLayout, justify: value },
+                    },
+                },
+            };
+        }),
+
+    setAutoLayoutAlign: (id, value) =>
+        set((state) => {
+            const node = state.nodes[id];
+            if (!node || node.layout !== 'flex') return state;
+
+            return {
+                nodes: {
+                    ...state.nodes,
+                    [id]: {
+                        ...node,
+                        autoLayout: { ...node.autoLayout, align: value },
+                    },
+                },
+            };
+        }),
+
+    setAutoLayoutPadding: (id, value) =>
+        set((state) => {
+            const node = state.nodes[id];
+            if (!node || node.layout !== 'flex') return state;
+
+            let nextNode = {
+                ...node,
+                autoLayout: { ...node.autoLayout, padding: Math.max(0, value) },
+            };
+
+            if (node.sizeX === 'hug' || node.sizeY === 'hug') {
+                const children = node.children.map((cid) => state.nodes[cid]).filter(Boolean);
+                const nextSize = computeAutoLayoutSize(nextNode, children);
+                if (nextSize) nextNode = { ...nextNode, ...nextSize };
+            }
+
+            return { nodes: { ...state.nodes, [id]: nextNode } };
+        }),
+
+    setAutoLayoutGap: (id, value) =>
+        set((state) => {
+            const node = state.nodes[id];
+            if (!node || node.layout !== 'flex') return state;
+
+            let nextNode = {
+                ...node,
+                autoLayout: { ...node.autoLayout, gap: Math.max(0, value) },
+            };
+
+            if (node.sizeX === 'hug' || node.sizeY === 'hug') {
+                const children = node.children.map((cid) => state.nodes[cid]).filter(Boolean);
+                const nextSize = computeAutoLayoutSize(nextNode, children);
+                if (nextSize) nextNode = { ...nextNode, ...nextSize };
+            }
+
+            return { nodes: { ...state.nodes, [id]: nextNode } };
+        }),
+    toggleAutoLayout: (id) =>
+        set((state) => {
+            const node = state.nodes[id];
+            if (!node) return state;
+
+            // TURN OFF
+            if (node.layout === 'flex') {
+                return {
+                    nodes: {
+                        ...state.nodes,
+                        [id]: {
+                            ...node,
+                            layout: 'free',
+                        },
+                    },
+                };
+            }
+
+            // TURN ON (initialize defaults safely)
+            return {
+                nodes: {
+                    ...state.nodes,
+                    [id]: {
+                        ...node,
+                        layout: 'flex',
+                        autoLayout: {
+                            direction: node.autoLayout?.direction ?? 'column',
+                            gap: node.autoLayout?.gap ?? 8,
+                            padding: node.autoLayout?.padding ?? 8,
+                            justify: node.autoLayout?.justify ?? 'start',
+                            align: node.autoLayout?.align ?? 'start',
+                        },
+                    },
+                },
+            };
+        }),
+
+    setAutoLayoutDirection: (id, direction) =>
+        set((state) => {
+            const node = state.nodes[id];
+            if (!node || node.layout !== 'flex') return state;
+
+            let nextNode = {
+                ...node,
+                autoLayout: {
+                    ...node.autoLayout,
+                    direction,
+                },
+            };
+
+            // Recompute hug size if needed
+            if (node.sizeX === 'hug' || node.sizeY === 'hug') {
+                const children = node.children.map((cid) => state.nodes[cid]).filter(Boolean);
+
+                const nextSize = computeAutoLayoutSize(nextNode, children);
+                if (nextSize) nextNode = { ...nextNode, ...nextSize };
+            }
+
+            return {
+                nodes: {
+                    ...state.nodes,
+                    [id]: nextNode,
+                },
+            };
+        }),
+
+    setFlexGrow: (id, value) =>
+        set((state) => {
+            const node = state.nodes[id];
+            if (!node) return state;
+
+            return {
+                nodes: {
+                    ...state.nodes,
+                    [id]: { ...node, flexGrow: Math.max(0, value) },
+                },
+            };
+        }),
+
+    setAlignSelf: (id, value) =>
+        set((state) => {
+            const node = state.nodes[id];
+            if (!node) return state;
+
+            return {
+                nodes: {
+                    ...state.nodes,
+                    [id]: { ...node, alignSelf: value },
+                },
+            };
+        }),
 
     clearTree: () => set({ nodes: {}, rootIds: [] }),
 }));

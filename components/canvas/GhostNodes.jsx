@@ -1,27 +1,43 @@
 'use client';
 
+/**
+ * GhostNodes
+ * ----------
+ * Pure visual preview renderer for constraint-based layout.
+ * - Receives computed preview geometry ONLY
+ * - No engine logic
+ * - No store access
+ * - No side effects
+ */
+
 export default function GhostNodes({ previewNodes = {} }) {
     if (!previewNodes || typeof previewNodes !== 'object') return null;
 
     return (
         <>
-            {Object.values(previewNodes).map((n) => {
-                if (!n || !n.__preview) return null;
+            {Object.values(previewNodes).map((node) => {
+                if (!node) return null;
 
-                const h = n.__constraint?.horizontal ?? 'left';
-                const v = n.__constraint?.vertical ?? 'top';
+                const { x, y, width, height, constraints = {} } = node;
 
-                const typeClass = getGhostTypeClass(h, v);
+                if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height)) {
+                    return null;
+                }
+
+                const horizontal = constraints.horizontal ?? 'left';
+                const vertical = constraints.vertical ?? 'top';
+
+                const typeClass = getGhostTypeClass(horizontal, vertical);
 
                 return (
                     <div
-                        key={n.id}
+                        key={node.id}
                         className={`absolute pointer-events-none ghost-node ${typeClass}`}
                         style={{
-                            left: n.x,
-                            top: n.y,
-                            width: n.width,
-                            height: n.height,
+                            left: x,
+                            top: y,
+                            width,
+                            height,
                         }}
                     />
                 );
@@ -30,17 +46,25 @@ export default function GhostNodes({ previewNodes = {} }) {
     );
 }
 
+/* ---------------------------------------------
+   Ghost visual semantics
+--------------------------------------------- */
+
 function getGhostTypeClass(horizontal, vertical) {
     // stretch
     if (horizontal === 'left-right' && vertical === 'top-bottom') return 'ghost-both-stretch';
+
     if (horizontal === 'left-right') return 'ghost-h-stretch';
+
     if (vertical === 'top-bottom') return 'ghost-v-stretch';
 
     // anchored
     if (horizontal === 'right') return 'ghost-right';
+
     if (horizontal === 'center') return 'ghost-h-center';
 
     if (vertical === 'bottom') return 'ghost-bottom';
+
     if (vertical === 'center') return 'ghost-v-center';
 
     return 'ghost-left-top';

@@ -12,12 +12,20 @@
  * resolved by the canvas engine.
  */
 
+import { EDGE_HANDLES, CORNER_HANDLES } from '@/lib/canvas-core/transforms';
+
 export default function TransformControls({ bounds, onResizeStart, onRotateStart }) {
     if (!bounds) return null;
 
     const isFiniteBounds = Number.isFinite(bounds.x) && Number.isFinite(bounds.y) && Number.isFinite(bounds.width) && Number.isFinite(bounds.height);
 
     if (!isFiniteBounds) return null;
+
+    /**
+     * Render order matters visually.
+     * We keep the classic clockwise order.
+     */
+    const HANDLE_ORDER = ['top-left', 'top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left'];
 
     return (
         <div
@@ -30,7 +38,7 @@ export default function TransformControls({ bounds, onResizeStart, onRotateStart
                 height: bounds.height,
             }}>
             {/* Resize handles */}
-            {['top-left', 'top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left'].map((handle) => (
+            {HANDLE_ORDER.map((handle) => (
                 <div
                     key={handle}
                     data-resize-handle={handle}
@@ -74,12 +82,28 @@ function handleStyle(handle, bounds) {
         'top-left': { left: -4, top: -4 },
         top: { left: bounds.width / 2 - 4, top: -4 },
         'top-right': { left: bounds.width - 4, top: -4 },
-        right: { left: bounds.width - 4, top: bounds.height / 2 - 4 },
-        'bottom-right': { left: bounds.width - 4, top: bounds.height - 4 },
-        bottom: { left: bounds.width / 2 - 4, top: bounds.height - 4 },
-        'bottom-left': { left: -4, top: bounds.height - 4 },
-        left: { left: -4, top: bounds.height / 2 - 4 },
+        right: {
+            left: bounds.width - 4,
+            top: bounds.height / 2 - 4,
+        },
+        'bottom-right': {
+            left: bounds.width - 4,
+            top: bounds.height - 4,
+        },
+        bottom: {
+            left: bounds.width / 2 - 4,
+            top: bounds.height - 4,
+        },
+        'bottom-left': {
+            left: -4,
+            top: bounds.height - 4,
+        },
+        left: {
+            left: -4,
+            top: bounds.height / 2 - 4,
+        },
     };
+
     return map[handle];
 }
 
@@ -98,5 +122,6 @@ function handleCursor(handle) {
         left: 'ew-resize',
         right: 'ew-resize',
     };
+
     return map[handle] || 'default';
 }

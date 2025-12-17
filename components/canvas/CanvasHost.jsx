@@ -2,6 +2,8 @@
 
 import { useCallback, useRef } from 'react';
 import { computeConstraintPreview } from '@/lib/canvas-core/constraints/computeConstraintPreview';
+import { computeAutoLayoutPreview } from '@/lib/canvas-core/constraints/computeAutoLayoutPreview';
+import { computeAutoLayoutSize } from '@/lib/canvas-core/layout/computeAutoLayoutSize';
 
 import AdaptiveGrid from './AdaptiveGrid';
 import InfinitePlane from './InfinitePlane';
@@ -26,10 +28,6 @@ import { useCanvasTransforms } from './interactions/useCanvasTransforms';
 
 import { NODE_TYPES } from '@/lib/nodeTypes';
 
-/* ---------------------------------------------
-   CanvasHost
---------------------------------------------- */
-
 export default function CanvasHost({ children, nodeMap = {}, selectionBox = null, enablePanZoom = false }) {
     /* ---------- STORES ---------- */
 
@@ -48,6 +46,7 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
 
     const snapToGrid = useToolStore((s) => s.snapToGrid);
     const gridSize = useToolStore((s) => s.gridSize);
+    const tool = useToolStore((s) => s.tool);
 
     const setGuides = useSnappingStore((s) => s.setGuides);
     const clearGuides = useSnappingStore((s) => s.clearGuides);
@@ -133,10 +132,55 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
     };
 
     /* ---------------------------------------------
+       MOUSE DOWN
+    --------------------------------------------- */
+
+    const onMouseDown = (e) => {
+        const { x: localX, y: localY } = toLocal(e.clientX, e.clientY);
+
+        if (tool === 'frame') {
+            const id = crypto.randomUUID();
+
+            addNode({
+                id,
+                type: NODE_TYPES.FRAME,
+                name: 'Frame',
+                x: localX,
+                y: localY,
+                width: 1,
+                height: 1,
+                children: [],
+            });
+
+            useSelectionStore.getState().setSelectedManual([id]);
+
+            creationRef.current = { id, startX: localX, startY: localY };
+            return;
+        }
+
+        if (e.target === e.currentTarget) {
+            clearSelection();
+            return;
+        }
+
+        startDrag(e);
+    };
+
+    /* ---------------------------------------------
        MOUSE MOVE
     --------------------------------------------- */
 
     const onMouseMove = (e) => {
+        if (rotateRef.current) {
+            const { center, startAngle, initialRotations } = rotateRef.current;
+            const delta = calculateAngle(center, toLocal(e.clientX, e.clientY)) - startAngle;
+
+            selectedIds.forEach((id, i) => {
+                updateNode(id, { rotation: initialRotations[i] + delta });
+            });
+            return;
+        }
+
         if (resizeRef.current) {
             const { startX, startY, handle, nodeId, initialNode, resizeMode } = resizeRef.current;
 
@@ -154,21 +198,23 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
             });
 
             if (resizeMode === 'constraint') {
-                setPreviewNodes({
-                    __parent: next,
-                    nodes: computeConstraintPreview(next, nodes),
-                });
+                const preview =
+                    next.layout === 'flex'
+                        ? computeAutoLayoutPreview(next, nodes)
+                        : {
+                              __parent: next,
+                              nodes: computeConstraintPreview(next, nodes),
+                          };
+
+                setPreviewNodes(preview);
             } else {
                 clearPreview();
             }
-
             return;
         }
 
-        /* ---- DRAG ---- */
-        if (dragRef.current && resizeRef.current?.resizeMode !== 'constraint') {
+        if (dragRef.current) {
             const { startX, startY, initialPositions } = dragRef.current;
-
             const dx = (e.clientX - startX) / zoom;
             const dy = (e.clientY - startY) / zoom;
 
@@ -179,11 +225,8 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
                 let nx = initialPositions[id].x + dx;
                 let ny = initialPositions[id].y + dy;
 
-                const sx = snapValue(nx, snapPoints.x);
-                const sy = snapValue(ny, snapPoints.y);
-
-                if (Math.abs(sx - nx) < 6) nx = sx;
-                if (Math.abs(sy - ny) < 6) ny = sy;
+                nx = snapValue(nx, snapPoints.x);
+                ny = snapValue(ny, snapPoints.y);
 
                 if (snapToGrid) {
                     nx = Math.round(nx / gridSize) * gridSize;
@@ -195,7 +238,7 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
 
             setGuides(guides);
         }
-    };;
+    };
 
     /* ---------------------------------------------
        MOUSE UP
@@ -204,28 +247,36 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
     const onMouseUp = () => {
         const resizeData = resizeRef.current;
 
-        resizeRef.current = null;
         dragRef.current = null;
+        resizeRef.current = null;
         rotateRef.current = null;
         creationRef.current = null;
 
         clearGuides();
         clearPreview();
 
-        if (resizeData) {
-            const { nodeId, resizeMode } = resizeData;
-            const parentId = nodes[nodeId]?.parent;
+        if (!resizeData) return;
 
-            if (resizeMode === 'constraint' && parentId) {
-                applyConstraintsForParent(parentId);
-            }
+        const { nodeId, resizeMode } = resizeData;
+        const node = nodes[nodeId];
 
-            if (resizeMode === 'scale') {
-                nodes[nodeId]?.children?.forEach((cid) => {
-                    recomputeConstraintOffsetsForNode(cid);
-                });
-            }
+        if (resizeMode === 'constraint' && node?.parent) {
+            applyConstraintsForParent(node.parent);
         }
+
+        if (resizeMode === 'scale') {
+            node?.children?.forEach((cid) => {
+                recomputeConstraintOffsetsForNode(cid);
+            });
+        }
+
+      if (node?.layout === 'flex' && (node.sizeX === 'hug' || node.sizeY === 'hug')) {
+          const children = node.children?.map((cid) => nodes[cid]).filter(Boolean);
+
+          const nextSize = computeAutoLayoutSize(node, children);
+          if (nextSize) updateNode(nodeId, nextSize);
+      }
+
     };
 
     /* ---------------------------------------------
@@ -235,7 +286,7 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
     const cursorClass = enablePanZoom && isPanning ? 'cursor-grabbing' : 'cursor-default';
 
     return (
-        <div ref={containerRef} className={`relative w-full h-full overflow-hidden bg-[#f4f5f7] ${cursorClass}`} onMouseDown={startDrag} onMouseMove={onMouseMove} onMouseUp={onMouseUp}>
+        <div ref={containerRef} className={`relative w-full h-full overflow-hidden bg-[#f4f5f7] ${cursorClass}`} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp}>
             {showRulers && (
                 <>
                     <RulerHorizontal pan={pan} zoom={zoom} />
@@ -244,7 +295,6 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
             )}
 
             {showGrid && <AdaptiveGrid zoom={zoom} />}
-
             <InfinitePlane>{children}</InfinitePlane>
 
             <CanvasOverlays nodeMap={activeNodeMap} previewNodes={previewNodes} selectionBox={selectionBox} startResize={startResize} startRotate={startRotate} pan={pan} zoom={zoom} bounds={selectedBounds} />

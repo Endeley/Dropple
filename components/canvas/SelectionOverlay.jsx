@@ -5,7 +5,15 @@ import { useSelectionStore } from '@/zustand/selectionStore';
 import { getSelectedBounds } from '@/lib/canvas-core/selection';
 
 import TransformControls from './TransformControls';
-import ConstraintPins from './overlays/ConstraintPins';
+
+/**
+ * SelectionOverlay
+ * ----------------
+ * Pure selection UI.
+ * - Computes selection bounds
+ * - Renders transform controls
+ * - NO constraint visualization
+ */
 
 export default function SelectionOverlay({ nodeMap = {}, onResizeStart, onRotateStart }) {
     const selectedIds = useSelectionStore((s) => s.selectedIds);
@@ -19,11 +27,8 @@ export default function SelectionOverlay({ nodeMap = {}, onResizeStart, onRotate
 
     return (
         <div className='absolute inset-0 pointer-events-none z-50'>
-            {/* Resize + rotate */}
+            {/* Resize + rotate controls */}
             <TransformControls bounds={bounds} onResizeStart={onResizeStart} onRotateStart={onRotateStart} />
-
-            {/* 📌 Figma-style constraint pins */}
-            <ConstraintPins bounds={bounds} />
         </div>
     );
 }

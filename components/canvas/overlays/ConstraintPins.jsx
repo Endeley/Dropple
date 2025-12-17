@@ -1,91 +1,48 @@
 'use client';
 
-import { useNodeTreeStore } from '@/zustand/nodeTreeStore';
 import { useSelectionStore } from '@/zustand/selectionStore';
-
-const PIN_SIZE = 8;
+import { useNodeTreeStore } from '@/zustand/nodeTreeStore';
 
 export default function ConstraintPins({ bounds }) {
     const selectedIds = useSelectionStore((s) => s.selectedIds);
     const nodes = useNodeTreeStore((s) => s.nodes);
-    const updateNode = useNodeTreeStore((s) => s.updateNode);
+    const setSizeMode = useNodeTreeStore((s) => s.setSizeMode);
 
-    if (selectedIds.length !== 1) return null;
+    if (!bounds || selectedIds.length !== 1) return null;
 
     const node = nodes[selectedIds[0]];
-    if (!node || !node.parent) return null;
+    if (!node) return null;
 
-    const parent = nodes[node.parent];
-    if (!parent) return null;
-
-    const { constraints = {} } = node;
-    const h = constraints.horizontal ?? 'left';
-    const v = constraints.vertical ?? 'top';
-
-    const toggleHorizontal = (side) => {
-        let next = h;
-
-        if (side === 'left') {
-            next = h === 'left' ? 'center' : h === 'right' ? 'left-right' : 'left';
-        }
-
-        if (side === 'right') {
-            next = h === 'right' ? 'center' : h === 'left' ? 'left-right' : 'right';
-        }
-
-        updateNode(node.id, {
-            constraints: { ...constraints, horizontal: next },
-        });
-    };
-
-    const toggleVertical = (side) => {
-        let next = v;
-
-        if (side === 'top') {
-            next = v === 'top' ? 'center' : v === 'bottom' ? 'top-bottom' : 'top';
-        }
-
-        if (side === 'bottom') {
-            next = v === 'bottom' ? 'center' : v === 'top' ? 'top-bottom' : 'bottom';
-        }
-
-        updateNode(node.id, {
-            constraints: { ...constraints, vertical: next },
-        });
-    };
+    const { sizeX = 'fixed', sizeY = 'fixed' } = node;
 
     return (
-        <div className='absolute pointer-events-none' style={bounds}>
-            {/* LEFT */}
-            <Pin active={h === 'left' || h === 'left-right'} style={{ left: -PIN_SIZE, top: bounds.height / 2 - PIN_SIZE / 2 }} onClick={() => toggleHorizontal('left')} />
+        <>
+            {/* Horizontal size */}
+            <Pin x={bounds.x + bounds.width / 2} y={bounds.y - 24} label={sizeX} onClick={() => setSizeMode(node.id, 'x')} />
 
-            {/* RIGHT */}
-            <Pin active={h === 'right' || h === 'left-right'} style={{ right: -PIN_SIZE, top: bounds.height / 2 - PIN_SIZE / 2 }} onClick={() => toggleHorizontal('right')} />
-
-            {/* TOP */}
-            <Pin active={v === 'top' || v === 'top-bottom'} style={{ top: -PIN_SIZE, left: bounds.width / 2 - PIN_SIZE / 2 }} onClick={() => toggleVertical('top')} />
-
-            {/* BOTTOM */}
-            <Pin active={v === 'bottom' || v === 'top-bottom'} style={{ bottom: -PIN_SIZE, left: bounds.width / 2 - PIN_SIZE / 2 }} onClick={() => toggleVertical('bottom')} />
-        </div>
+            {/* Vertical size */}
+            <Pin x={bounds.x - 24} y={bounds.y + bounds.height / 2} label={sizeY} onClick={() => setSizeMode(node.id, 'y')} />
+        </>
     );
 }
 
-function Pin({ active, style, onClick }) {
+/* --------------------------------------------- */
+
+function Pin({ x, y, label, onClick }) {
     return (
         <div
-            className={`absolute rounded-full border cursor-pointer pointer-events-auto
-                ${active ? 'bg-blue-500 border-blue-600' : 'bg-white border-gray-400'}`}
+            className='absolute pointer-events-auto cursor-pointer select-none'
             style={{
-                width: PIN_SIZE,
-                height: PIN_SIZE,
-                ...style,
+                left: x,
+                top: y,
+                transform: 'translate(-50%, -50%)',
             }}
             onMouseDown={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
                 onClick();
-            }}
-        />
+            }}>
+            <div className='px-2 py-1 text-xs rounded bg-black text-white'>{label.toUpperCase()}</div>
+        </div>
     );
 }
