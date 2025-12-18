@@ -1,5 +1,10 @@
 'use client';
+//  test imports temporary
+import { normalizeExportTree } from '@/lib/export/normalizeExportTree';
+import { renderHTML } from '@/lib/export/renderHTML';
+import { useNodeTreeStore } from '@/zustand/nodeTreeStore';
 
+//  test imports temporary
 import { useTemplateBuilderStore } from '@/store/useTemplateBuilderStore';
 
 import SizePanel from './inspector/SizePanel';
@@ -47,13 +52,12 @@ export default function InspectorPanel() {
         <div className='p-2 space-y-6 overflow-y-auto h-full'>
             {/* ---------- HEADER ---------- */}
             <h2 className='font-semibold text-lg'>{title}</h2>
-
             <div className='flex gap-2'>
                 <button className='px-3 py-2 bg-slate-900 text-white rounded hover:bg-slate-800 text-sm' onClick={() => setExportModalOpen(true)}>
                     Export Code
                 </button>
             </div>
-
+     
             {/* ---------- COMPONENT INSTANCE CONTROLS ---------- */}
             {layer.type === 'component-instance' && (
                 <>
@@ -76,25 +80,20 @@ export default function InspectorPanel() {
                     </button>
                 </>
             )}
-
             {/* ==================================================
                 AUTO LAYOUT (MUST COME BEFORE POSITION & SIZE)
             ================================================== */}
             <AutoLayoutPanel node={layer} />
-
             {/* ---------- LAYOUT / POSITION ---------- */}
             <PositionPanel layer={layer} />
             <SizePanel layer={layer} />
             <ConstraintsPanel />
-
             {/* ---------- STYLE ---------- */}
             <StylePicker layer={layer} />
             <MotionPanel layer={layer} />
             <ResponsivePanel layer={layer} />
             <PrototypePanel layer={layer} />
-
             {layer.animations?.length ? <TimelinePanel layer={layer} /> : null}
-
             {/* ---------- TEXT ---------- */}
             {layer.type === 'text' && (
                 <>
@@ -102,10 +101,8 @@ export default function InspectorPanel() {
                     <ColorPanel layer={layer} />
                 </>
             )}
-
             {/* ---------- NON-TEXT COLOR ---------- */}
             {layer.type !== 'text' && <ColorPanel layer={layer} />}
-
             {/* ---------- DECORATION ---------- */}
             <BorderPanel layer={layer} />
             <RadiusPanel layer={layer} />
