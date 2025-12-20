@@ -1,57 +1,62 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
+import { useEffect } from 'react';
+import { useTemplateBuilderStore } from '@/store/useTemplateBuilderStore';
 
 export default function KeyboardShortcuts() {
-  const {
-    selectedLayers,
-    copyLayers,
-    pasteLayers,
-    duplicateSelection,
-    copyStyle,
-    pasteStyle,
-  } = useTemplateBuilderStore();
+    const { selectedLayers, copyLayers, pasteLayers, duplicateLayer, copyStyle, pasteStyle } = useTemplateBuilderStore();
 
-  useEffect(() => {
-    const handle = (e) => {
-      // Copy
-      if ((e.metaKey || e.ctrlKey) && e.key === "c") {
-        if (e.altKey && selectedLayers?.length) {
-          copyStyle(selectedLayers[0]);
-        } else {
-          copyLayers(selectedLayers || []);
-        }
-        e.preventDefault();
-      }
+    useEffect(() => {
+        const handle = (e) => {
+            // COPY
+            if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
+                if (e.altKey && selectedLayers?.length) {
+                    copyStyle(selectedLayers[0]);
+                } else {
+                    copyLayers(selectedLayers || []);
+                }
+                e.preventDefault();
+                return;
+            }
 
-      // Paste
-      if ((e.metaKey || e.ctrlKey) && e.key === "v") {
-        if (e.altKey) {
-          pasteStyle(selectedLayers || []);
-        } else {
-          pasteLayers();
-        }
-        e.preventDefault();
-      }
+            // PASTE
+            if ((e.metaKey || e.ctrlKey) && e.key === 'v') {
+                if (e.altKey) {
+                    pasteStyle(selectedLayers || []);
+                } else {
+                    pasteLayers();
+                }
+                e.preventDefault();
+                return;
+            }
 
-      // Duplicate
-      if ((e.metaKey || e.ctrlKey) && e.key === "d") {
-        duplicateSelection();
-        e.preventDefault();
-      }
-    };
+            // UNDO
+            if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+                useTemplateBuilderStore.getState().undoHistory();
+                e.preventDefault();
+            }
 
-    window.addEventListener("keydown", handle);
-    return () => window.removeEventListener("keydown", handle);
-  }, [
-    copyLayers,
-    copyStyle,
-    duplicateSelection,
-    pasteLayers,
-    pasteStyle,
-    selectedLayers,
-  ]);
+            // REDO
+            if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+                useTemplateBuilderStore.getState().redoHistory();
+                e.preventDefault();
+            }
 
-  return null;
+            // DUPLICATE (⌘D / Ctrl+D)
+            if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
+                if (!selectedLayers?.length) return;
+
+                selectedLayers.forEach((id) => {
+                    duplicateLayer(id);
+                });
+
+                e.preventDefault();
+            }
+        };;
+
+        window.addEventListener('keydown', handle);
+        return () => window.removeEventListener('keydown', handle);
+    }, [selectedLayers, copyLayers, pasteLayers, duplicateLayer, copyStyle, pasteStyle]);
+
+    return null;
 }

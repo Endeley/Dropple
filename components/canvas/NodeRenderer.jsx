@@ -27,10 +27,19 @@ export default function NodeRenderer({ onNodePointerDown }) {
             pointerEvents: node.locked ? 'none' : 'auto',
         };
 
+        const dragProps = {
+            draggable: true,
+            onDragStart: (e) => {
+                e.stopPropagation();
+                e.dataTransfer.setData('layer-drag-id', id);
+                e.dataTransfer.effectAllowed = 'move';
+            },
+        };
+
         const children = (node.children || []).map((cid) => renderNode(cid));
 
         /* ==================================================
-         * 🟦 FRAME — delegate rendering (SINGLE SOURCE)
+         * 🟦 FRAME
          * ================================================== */
         if (node.type === NODE_TYPES.FRAME) {
             return (
@@ -38,6 +47,7 @@ export default function NodeRenderer({ onNodePointerDown }) {
                     key={id}
                     node={node}
                     style={baseStyle}
+                    {...dragProps}
                     onPointerDown={(e) => {
                         setSelectedManual([id]);
                         onNodePointerDown?.(e, id);
@@ -54,6 +64,7 @@ export default function NodeRenderer({ onNodePointerDown }) {
             return (
                 <div
                     key={id}
+                    {...dragProps}
                     style={{
                         ...baseStyle,
                         backgroundColor: resolveValue(node.fill) || '#ffffff',
@@ -73,9 +84,11 @@ export default function NodeRenderer({ onNodePointerDown }) {
          * ================================================== */
         if (node.type === NODE_TYPES.IMAGE) {
             const src = resolveAsset(node.assetId) || node.src;
+
             return (
                 <div
                     key={id}
+                    {...dragProps}
                     style={baseStyle}
                     onMouseDown={(e) => {
                         setSelectedManual([id]);
@@ -84,9 +97,8 @@ export default function NodeRenderer({ onNodePointerDown }) {
                     <Image
                         src={src}
                         alt={node.name || ''}
+                        fill
                         style={{
-                            width: '100%',
-                            height: '100%',
                             objectFit: node.objectFit || 'cover',
                             pointerEvents: 'none',
                         }}
@@ -97,12 +109,13 @@ export default function NodeRenderer({ onNodePointerDown }) {
         }
 
         /* ==================================================
-         * 📝 TEXT (legacy/simple text nodes)
+         * 📝 TEXT
          * ================================================== */
         if (node.type === NODE_TYPES.TEXT) {
             return (
                 <div
                     key={id}
+                    {...dragProps}
                     style={{
                         ...baseStyle,
                         color: resolveValue(node.fill) || '#111',
@@ -120,11 +133,12 @@ export default function NodeRenderer({ onNodePointerDown }) {
         }
 
         /* ==================================================
-         * 🧱 FALLBACK (unknown node types)
+         * 🧱 FALLBACK
          * ================================================== */
         return (
             <div
                 key={id}
+                {...dragProps}
                 style={baseStyle}
                 onMouseDown={(e) => {
                     setSelectedManual([id]);

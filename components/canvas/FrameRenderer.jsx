@@ -5,20 +5,19 @@ import { usePageStore } from '@/zustand/pageStore';
 import { useSelectionStore } from '@/zustand/selectionStore';
 import { usePrototypeStore } from '@/zustand/prototypeStore';
 
-/* --------------------------------------------------
- * FRAME RENDERER
- * -------------------------------------------------- */
-export default function FrameRenderer({ node, style, children, onPointerDown }) {
+export default function FrameRenderer({ node, style, children, onPointerDown, ...dragProps }) {
     const workspaceMode = usePageStore((s) => s.workspaceMode);
     const selectedIds = useSelectionStore((s) => s.selectedIds);
     const triggerInteractions = usePrototypeStore((s) => s.triggerInteractions);
 
     const isSelected = selectedIds.includes(node.id);
+
     const backgroundStyle = resolveFrameBackground(node, workspaceMode);
 
     return (
         <div
             data-node-id={node.id}
+            {...dragProps}
             style={{
                 ...style,
                 position: 'absolute',
@@ -27,7 +26,7 @@ export default function FrameRenderer({ node, style, children, onPointerDown }) 
                 onPointerDown?.(e, node.id);
                 triggerInteractions(node.id, 'onClick');
             }}>
-            {/* ---------------- BACKGROUND LAYER ---------------- */}
+            {/* BACKGROUND */}
             <div
                 className='absolute inset-0 pointer-events-none'
                 style={{
@@ -39,7 +38,7 @@ export default function FrameRenderer({ node, style, children, onPointerDown }) 
                 }}
             />
 
-            {/* ---------------- CONTENT LAYER ---------------- */}
+            {/* CONTENT */}
             <div
                 className='absolute inset-0'
                 style={{
@@ -51,7 +50,7 @@ export default function FrameRenderer({ node, style, children, onPointerDown }) 
                 {children}
             </div>
 
-            {/* ---------------- SELECTION OVERLAY ---------------- */}
+            {/* SELECTION */}
             {isSelected && (
                 <div
                     className='absolute inset-0 pointer-events-none'
@@ -67,7 +66,7 @@ export default function FrameRenderer({ node, style, children, onPointerDown }) 
 }
 
 /* --------------------------------------------------
- * FRAME BACKGROUND RESOLVER (PURE + FUTURE-PROOF)
+ * BACKGROUND RESOLVER
  * -------------------------------------------------- */
 function resolveFrameBackground(node, workspaceMode) {
     const bg = node.background || {};
