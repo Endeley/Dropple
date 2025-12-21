@@ -1,6 +1,6 @@
 "use server";
 
-import { MessageBus } from "@/lib/agents/messageBus";
+import { MessageBus } from "@/lib/agents/shared/messageBus";
 import {
   runBrandKitAI,
   runStructureAI,
@@ -10,7 +10,7 @@ import {
   runPrototypeAI,
   runAnimationAI,
 } from "@/lib/agents";
-import { assembleWorkspace } from "@/lib/assembleWorkspace";
+import { assembleWorkspace } from "@/lib/agents/orchestrator/assembleWorkspace";
 
 export async function POST(req) {
   const { prompt } = await req.json();

@@ -1,6 +1,6 @@
 "use server";
 
-import { runDroppleAgent } from "@/lib/api/runDroppleAgent";
+import { runDroppleAgent } from "@/lib/agents/runDroppleAgent";
 import { convexClient } from "@/lib/convex/client";
 import { api } from "@/convex/_generated/api";
 

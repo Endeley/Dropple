@@ -155,6 +155,26 @@ export const useTemplateBuilderStore = create((set, get) => {
             layers: [],
         },
 
+        /* ===== COMPONENT LIBRARY ===== */
+
+        components: [],
+
+        createInstanceFromComponent: () => {
+            /* placeholder until component library is wired */
+        },
+
+        /* ===== PRESENCE ===== */
+
+        presence: [],
+
+        setPresence: (presence = []) => set({ presence }),
+
+        /* ===== PROJECT HYDRATION ===== */
+
+        hydrateProjectFromConvex: async () => {
+            /* placeholder until backend wiring is added */
+        },
+
         pages: [{ id: 'page_1', name: 'Page 1', layers: [] }],
         activePageId: 'page_1',
 
