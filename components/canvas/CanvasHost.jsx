@@ -27,6 +27,7 @@ import useCanvasZoom from './interactions/useCanvasZoom';
 import { useCanvasTransforms } from './interactions/useCanvasTransforms';
 
 import { NODE_TYPES } from '@/lib/nodeTypes';
+import { dispatchEvent } from '@/lib/dispatch/dispatchEvent';
 
 export default function CanvasHost({ children, nodeMap = {}, selectionBox = null, enablePanZoom = false }) {
     /* ---------- STORES ---------- */
@@ -36,7 +37,6 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
 
     const nodes = useNodeTreeStore((s) => s.nodes);
     const updateNode = useNodeTreeStore((s) => s.updateNode);
-    const addNode = useNodeTreeStore((s) => s.addNode);
     const applyConstraintsForParent = useNodeTreeStore((s) => s.applyConstraintsForParent);
     const recomputeConstraintOffsetsForNode = useNodeTreeStore((s) => s.recomputeConstraintOffsetsForNode);
 
@@ -141,15 +141,21 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
         if (tool === 'frame') {
             const id = crypto.randomUUID();
 
-            addNode({
-                id,
-                type: NODE_TYPES.FRAME,
-                name: 'Frame',
-                x: localX,
-                y: localY,
-                width: 1,
-                height: 1,
-                children: [],
+            dispatchEvent({
+                type: 'NODE_CREATE',
+                payload: {
+                    node: {
+                        id,
+                        type: NODE_TYPES.FRAME,
+                        name: 'Frame',
+                        x: localX,
+                        y: localY,
+                        width: 1,
+                        height: 1,
+                        parentId: null,
+                        children: [],
+                    },
+                },
             });
 
             useSelectionStore.getState().setSelectedManual([id]);
@@ -270,13 +276,11 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
             });
         }
 
-      if (node?.layout === 'flex' && (node.sizeX === 'hug' || node.sizeY === 'hug')) {
-          const children = node.children?.map((cid) => nodes[cid]).filter(Boolean);
-
-          const nextSize = computeAutoLayoutSize(node, children);
-          if (nextSize) updateNode(nodeId, nextSize);
-      }
-
+        if (node?.layout === 'flex' && (node.sizeX === 'hug' || node.sizeY === 'hug')) {
+            const children = node.children?.map((cid) => nodes[cid]).filter(Boolean);
+            const nextSize = computeAutoLayoutSize(node, children);
+            if (nextSize) updateNode(nodeId, nextSize);
+        }
     };
 
     /* ---------------------------------------------

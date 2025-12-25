@@ -1,7 +1,6 @@
 'use client';
 
 import { create } from 'zustand';
-import { useNodeTreeStore } from '@/zustand/nodeTreeStore';
 
 /* -------------------------------------------
    Helpers
@@ -17,57 +16,52 @@ const blend = (values) => {
 ------------------------------------------- */
 
 export const useSelectionStore = create((set, get) => ({
-    /* Existing state */
+    /* Core state */
     selectedIds: [],
     manual: false,
 
-    /* 🔹 NEW: blended constraint UI state */
+    /* Derived UI state (safe) */
     blendedConstraints: {
         x: null,
         y: null,
     },
 
     /* -------------------------------------------
-     Selection actions (existing, extended)
-  ------------------------------------------- */
+       Selection actions
+    ------------------------------------------- */
 
     setSelected: (ids, manual = false) => {
         set({ selectedIds: ids, manual });
-        get().updateBlendedConstraints();
     },
 
     setSelectedManual: (ids) => {
         set({ selectedIds: ids, manual: true });
-        get().updateBlendedConstraints();
     },
 
     addToSelection: (id) =>
-        set((state) => {
-            const next = [...new Set([...(state.selectedIds || []), id])];
-            return { selectedIds: next, manual: true };
-        }),
+        set((state) => ({
+            selectedIds: [...new Set([...(state.selectedIds || []), id])],
+            manual: true,
+        })),
 
-    clearSelection: () => {
+    deselectAll: () => {
         set({ selectedIds: [], manual: false });
-        get().updateBlendedConstraints();
     },
 
     clearManual: () => set((state) => ({ ...state, manual: false })),
 
-    deselectAll: () => {
-        set({ selectedIds: [], manual: false });
-        get().updateBlendedConstraints();
-    },
-
     /* -------------------------------------------
-     🔹 NEW: Multi-select constraint blending
-  ------------------------------------------- */
+       SAFE DERIVED UPDATE (EXTERNAL INPUT)
+    ------------------------------------------- */
 
-    updateBlendedConstraints: () => {
+    /**
+     * This MUST be called by UI code
+     * with a snapshot of nodes.
+     */
+    updateBlendedConstraintsFromNodes: (nodes) => {
         const { selectedIds } = get();
-        const { nodes } = useNodeTreeStore.getState();
 
-        if (!selectedIds.length) {
+        if (!selectedIds.length || !nodes) {
             set({
                 blendedConstraints: { x: null, y: null },
             });

@@ -1,39 +1,54 @@
 'use client';
 
+import { useEffect } from 'react';
 import CanvasHost from '@/components/canvas/CanvasHost';
 import NodeRenderer from '@/components/canvas/NodeRenderer';
+import DevicePreviewBar from '@/components/template-builder/DevicePreviewBar';
+
 import { useNodeTreeStore } from '@/zustand/nodeTreeStore';
 import { useSelectionStore } from '@/zustand/selectionStore';
 import { usePageStore } from '@/zustand/pageStore';
-import { useEffect } from 'react';
-import DevicePreviewBar from '@/components/template-builder/DevicePreviewBar';
+
+import { dispatchEvent } from '@/lib/dispatch/dispatchEvent';
 
 export default function UIUXCanvas() {
+    /* -----------------------------
+     READ-ONLY CANVAS STATE
+  ----------------------------- */
     const nodes = useNodeTreeStore((s) => s.nodes);
     const rootIds = useNodeTreeStore((s) => s.rootIds);
-    const applyResponsiveLayout = useNodeTreeStore((s) => s.applyResponsiveLayout);
+
     const setSelectedManual = useSelectionStore((s) => s.setSelectedManual);
-    const selectedIds = useSelectionStore((s) => s.selectedIds);
+
+    /* -----------------------------
+     PAGE / WORKSPACE STATE
+  ----------------------------- */
     const currentPageId = usePageStore((s) => s.currentPageId);
     const viewportWidth = usePageStore((s) => s.viewportWidth);
     const currentBreakpointId = usePageStore((s) => s.currentBreakpointId);
     const workspaceMode = usePageStore((s) => s.workspaceMode);
     const pages = usePageStore((s) => s.pages);
-    const currentPage = pages.find((p) => p.id === currentPageId);
-    const setCurrentBreakpoint = usePageStore((s) => s.setCurrentBreakpoint);
-    const attachFrameToPage = usePageStore((s) => s.attachFrameToPage);
-    const addNode = useNodeTreeStore((s) => s.addNode);
-    const setWorkspaceMode = usePageStore((s) => s.setWorkspaceMode);
 
-    // Find a free slot for a new frame so it doesn't stack on existing ones.
+    const setCurrentBreakpoint = usePageStore((s) => s.setCurrentBreakpoint);
+    const setWorkspaceMode = usePageStore((s) => s.setWorkspaceMode);
+    const attachFrameToPage = usePageStore((s) => s.attachFrameToPage);
+
+    const currentPage = pages.find((p) => p.id === currentPageId);
+
+    /* -----------------------------
+     HELPERS
+  ----------------------------- */
+
     const findNextFramePosition = (width, height) => {
         const framesOnPage = rootIds.map((id) => nodes[id]).filter((n) => n?.type === 'frame' && (!currentPageId || n.pageId === currentPageId));
 
-        const margin = 120; // space between frames
+        const margin = 120;
         const startX = 120;
         const startY = 120;
+
         const maxWidth = Math.max(width, ...framesOnPage.map((f) => f.width));
         const maxHeight = Math.max(height, ...framesOnPage.map((f) => f.height));
+
         const stepX = maxWidth + margin;
         const stepY = maxHeight + margin;
 
@@ -48,7 +63,6 @@ export default function UIUXCanvas() {
                 return !(candidate.x + candidate.width <= expanded.x1 || candidate.x >= expanded.x2 || candidate.y + candidate.height <= expanded.y1 || candidate.y >= expanded.y2);
             });
 
-        // Walk a grid until a non-overlapping slot is found.
         for (let row = 0; row < 50; row++) {
             for (let col = 0; col < 50; col++) {
                 const candidate = {
@@ -60,10 +74,13 @@ export default function UIUXCanvas() {
                 if (!overlaps(candidate)) return { x: candidate.x, y: candidate.y };
             }
         }
-        // Fallback: place at origin if somehow full.
+
         return { x: startX, y: startY };
     };
 
+    /* -----------------------------
+     INTENT: ADD FRAME PRESET
+  ----------------------------- */
     const addFramePreset = (presetId) => {
         const presets = {
             mobile: { width: 390, height: 844 },
@@ -71,55 +88,79 @@ export default function UIUXCanvas() {
             desktop: { width: 1440, height: 900 },
             large: { width: 1680, height: 1050 },
         };
+
         const preset = presets[presetId];
         if (!preset) return;
+
         const id = crypto.randomUUID();
         const { x, y } = findNextFramePosition(preset.width, preset.height);
-        addNode({
-            id,
-            type: 'frame',
-            name: `${presetId} frame`,
-            x,
-            y,
-            width: preset.width,
-            height: preset.height,
-            background: { type: 'color', value: '#d1d5db', size: 'cover', position: 'center' },
-            stroke: '#94a3b8',
-            strokeWidth: 1,
-            children: [],
-            pageId: currentPageId,
+
+        dispatchEvent({
+            type: 'NODE_CREATE',
+            payload: {
+                node: {
+                    id,
+                    type: 'frame',
+                    name: `${presetId} frame`,
+                    x,
+                    y,
+                    width: preset.width,
+                    height: preset.height,
+                    background: { type: 'color', value: '#d1d5db' },
+                    stroke: '#94a3b8',
+                    strokeWidth: 1,
+                    children: [],
+                    pageId: currentPageId,
+                },
+            },
         });
+
         attachFrameToPage(currentPageId, id);
         setSelectedManual([id]);
     };
 
+    /* -----------------------------
+     RESPONSIVE INTENT (PLACEHOLDER)
+  ----------------------------- */
     useEffect(() => {
-        applyResponsiveLayout: (viewportWidth, breakpointId) => {
-            // TODO: implement responsive behavior
-            // For now, do nothing
-        };
-    }, []);
+        if (!viewportWidth) return;
+
+        dispatchEvent({
+            type: 'CANVAS_VIEWPORT_CHANGE',
+            payload: {
+                viewportWidth,
+                breakpointId: currentBreakpointId,
+            },
+        });
+    }, [viewportWidth, currentBreakpointId]);
 
     const frames = rootIds.map((id) => nodes[id]).filter((n) => n?.type === 'frame' && (!currentPageId || n.pageId === currentPageId));
+
+    /* -----------------------------
+     RENDER
+  ----------------------------- */
     return (
         <CanvasHost enablePanZoom nodeMap={nodes}>
-            <div id='uiux-canvas-area' className='w-full h-full relative'>
+            <div className='w-full h-full relative'>
                 <div className='fixed left-4 top-28 z-50'>
                     <DevicePreviewBar onSelect={(bp) => setCurrentBreakpoint(bp)} addArtboard={(preset) => addFramePreset(preset)} />
+
                     <div className='mt-3 rounded-lg border border-neutral-200 bg-white/90 px-3 py-2 shadow-sm'>
                         <div className='text-[11px] font-semibold uppercase text-neutral-500'>Workspace</div>
-                        <select className='mt-1 w-full rounded-md border border-neutral-200 px-2 py-1 text-sm text-neutral-800' value={workspaceMode} onChange={(e) => setWorkspaceMode(e.target.value)}>
+                        <select className='mt-1 w-full rounded-md border border-neutral-200 px-2 py-1 text-sm' value={workspaceMode} onChange={(e) => setWorkspaceMode(e.target.value)}>
                             <option value='design'>Design</option>
                             <option value='layout'>Layout</option>
                             <option value='template'>Template</option>
                         </select>
                     </div>
                 </div>
-                {frames.length === 0 ? (
+
+                {frames.length === 0 && (
                     <div className='absolute inset-0 flex items-center justify-center'>
-                        <div className='pointer-events-none select-none rounded-full border border-neutral-200 bg-white/90 px-4 py-2 text-sm text-neutral-600 shadow-sm'>No artboards yet. Use the Frame tool or presets to add one. Scroll to zoom, hold space + drag to pan.</div>
+                        <div className='pointer-events-none rounded-full border bg-white/90 px-4 py-2 text-sm shadow-sm'>No artboards yet. Use Frame tool or presets.</div>
                     </div>
-                ) : null}
+                )}
+
                 <div className='absolute inset-0'>
                     {rootIds.map((id) => (
                         <NodeRenderer key={id} nodeId={id} />
