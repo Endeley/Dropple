@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePageTransitions } from "@/zustand/usePageTransitions";
+import { usePageTransitions } from "@/runtime/stores/usePageTransitions";
 
 export default function PageTransitionContainer({ children, as: Tag = "div", className = "" }) {
   const ref = useRef(null);

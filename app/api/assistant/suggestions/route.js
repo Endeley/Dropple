@@ -1,6 +1,6 @@
 "use server";
 
-import { analyzeMotion } from "@/lib/motionRefiner";
+import { analyzeMotion } from "@/engine/motion/motionRefiner";
 
 function ruleBasedSuggestions(template = {}) {
   const layers = template.layers || [];

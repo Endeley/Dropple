@@ -5,7 +5,7 @@ import { ConvexProvider } from "../providers/ConvexProvider";
 import { UserProvider } from "../providers/UserProvider";
 import "./globals.css";
 
-import AIDock from "@/components/ai-dock/AI_Dock";
+import AIDock from "@/ui/ai-dock/AI_Dock";
 
 const geistSans = Geist({
     variable: '--font-geist-sans',

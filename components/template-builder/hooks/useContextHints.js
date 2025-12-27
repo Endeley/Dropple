@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
+import { useTemplateBuilderStore } from "@/runtime/stores/useTemplateBuilderStore";
 
 const hasCTA = (layers = []) =>
   layers.some(
@@ -30,9 +30,9 @@ const findTwoCardRow = (layers = []) => {
 
 export function useContextHints() {
   const { currentTemplate, selectedLayers } = useTemplateBuilderStore();
-  const layers = currentTemplate.layers || [];
 
   const hints = useMemo(() => {
+    const layers = currentTemplate.layers || [];
     const results = [];
     const canvasHeight = currentTemplate.height || 1200;
 
@@ -64,8 +64,7 @@ export function useContextHints() {
     }
 
     return results;
-  }, [layers, currentTemplate.height, selectedLayers]);
+  }, [currentTemplate, selectedLayers]);
 
   return hints;
 }
-

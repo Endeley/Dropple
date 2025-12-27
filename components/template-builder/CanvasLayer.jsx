@@ -3,11 +3,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, useAnimation, useScroll, useTransform } from "motion/react";
-import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
-import { useComponentRegistry } from "@/zustand/useComponentRegistry";
-import { useSceneGraph } from "@/zustand/useSceneGraph";
-import { useStateMachine } from "@/zustand/useStateMachine";
-import { useBehaviorsStore } from "@/zustand/useBehaviorsStore";
+import { useTemplateBuilderStore } from "@/runtime/stores/useTemplateBuilderStore";
+import { useComponentRegistry } from "@/runtime/stores/useComponentRegistry";
+import { useSceneGraph } from "@/runtime/stores/useSceneGraph";
+import { useStateMachine } from "@/runtime/stores/useStateMachine";
+import { useBehaviorsStore } from "@/runtime/stores/useBehaviorsStore";
 
 export default function CanvasLayer({
   layer,

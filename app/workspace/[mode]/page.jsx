@@ -1,6 +1,6 @@
 "use client";
 
-import ModeLoader from "@/components/workspace/ModeLoader";
+import ModeLoader from "@/ui/shell/ModeLoader";
 import { use } from "react";
 
 export default function WorkspacePage({ params }) {

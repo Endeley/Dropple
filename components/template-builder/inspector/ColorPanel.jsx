@@ -1,6 +1,6 @@
 "use client";
 
-import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
+import { useTemplateBuilderStore } from "@/runtime/stores/useTemplateBuilderStore";
 
 export default function ColorPanel({ layer }) {
   const { writeNodePatch } = useTemplateBuilderStore();

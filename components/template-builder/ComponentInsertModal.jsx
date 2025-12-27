@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
+import { useTemplateBuilderStore } from "@/runtime/stores/useTemplateBuilderStore";
 
 export default function ComponentInsertModal({ open, onClose }) {
   const components = useTemplateBuilderStore((s) => s.components || []);

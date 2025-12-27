@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useCallback, useState, useRef } from 'react';
-import { useTemplateBuilderStore } from '@/store/useTemplateBuilderStore';
+import { useTemplateBuilderStore } from '@/runtime/stores/useTemplateBuilderStore';
 
 export default function LayerTreeItem({ layer, depth = 0 }) {
     /* ================================

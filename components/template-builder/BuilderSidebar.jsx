@@ -6,14 +6,14 @@ import LayerTree from './layers/LayerTree';
 import ThemeSwitcher from './ThemeSwitcher';
 import ThemeEditor from './ThemeEditor';
 import AssetManager from './AssetManager';
-import ComponentAIGenerator from '@/components/ai/ComponentAIGenerator';
-import AssetAIGenerator from '@/components/ai/AssetAIGenerator';
-import TemplateAIGenerator from '@/components/ai/TemplateAIGenerator';
-import AnimationAIGenerator from '@/components/ai/AnimationAIGenerator';
-import BrandKitGenerator from '@/components/ai/BrandKitGenerator';
-import DesignCriticPanel from '@/components/ai/DesignCriticPanel';
-import PrototypeAIGenerator from '@/components/ai/PrototypeAIGenerator';
-import { useTemplateBuilderStore } from '@/store/useTemplateBuilderStore';
+import ComponentAIGenerator from '@/ui/ai/ComponentAIGenerator';
+import AssetAIGenerator from '@/ui/ai/AssetAIGenerator';
+import TemplateAIGenerator from '@/ui/ai/TemplateAIGenerator';
+import AnimationAIGenerator from '@/ui/ai/AnimationAIGenerator';
+import BrandKitGenerator from '@/ui/ai/BrandKitGenerator';
+import DesignCriticPanel from '@/ui/ai/DesignCriticPanel';
+import PrototypeAIGenerator from '@/ui/ai/PrototypeAIGenerator';
+import { useTemplateBuilderStore } from '@/runtime/stores/useTemplateBuilderStore';
 
 export default function BuilderSidebar() {
     const [tab, setTab] = useState('layers');

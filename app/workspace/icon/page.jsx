@@ -1,6 +1,6 @@
 "use client";
-import ModeLoader from "@/components/workspace/ModeLoader";
-import BaseModeWorkspace from "@/components/workspace/BaseModeWorkspace";
+import ModeLoader from "@/ui/shell/ModeLoader";
+import BaseModeWorkspace from "@/ui/shell/BaseModeWorkspace";
 
 export default function IconWorkspacePage() {
   // Icon mode not wired yet; show placeholder via BaseModeWorkspace.

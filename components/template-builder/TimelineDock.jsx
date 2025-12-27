@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pause, Play, Plus, ZoomIn, ZoomOut, Repeat, CirclePlus, ChevronRight, ChevronDown, MoreHorizontal } from 'lucide-react';
-import { useShallow } from 'zustand/react/shallow';
-import { useTemplateBuilderStore } from '@/store/useTemplateBuilderStore';
-import { evaluateTrack } from '@/lib/motion/timelineEngine';
+import { useShallow } from 'runtime/stores/react/shallow';
+import { useTemplateBuilderStore } from '@/runtime/stores/useTemplateBuilderStore';
+import { evaluateTrack } from '@/engine/motion/timelineEngine';
 
 const ROW_HEIGHT = 40;
 const BASE_PX_PER_MS = 0.25;

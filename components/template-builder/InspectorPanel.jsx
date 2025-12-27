@@ -1,11 +1,11 @@
 'use client';
 //  test imports temporary
-import { normalizeExportTree } from '@/lib/export/normalizeExportTree';
-import { renderHTML } from '@/lib/export/renderHTML';
-import { useNodeTreeStore } from '@/zustand/nodeTreeStore';
+import { normalizeExportTree } from '@/engine/export/normalizeExportTree';
+import { renderHTML } from '@/engine/export/renderHTML';
+import { useNodeTreeStore } from '@/runtime/stores/nodeTreeStore';
 
 //  test imports temporary
-import { useTemplateBuilderStore } from '@/store/useTemplateBuilderStore';
+import { useTemplateBuilderStore } from '@/runtime/stores/useTemplateBuilderStore';
 
 import SizePanel from './inspector/SizePanel';
 import PositionPanel from './inspector/PositionPanel';

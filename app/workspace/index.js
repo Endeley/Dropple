@@ -1,18 +1,18 @@
 // /app/workspace/index.js
+// Declarative registry imports are centralized under workspaces/registry.
+import { graphicWorkspace } from '@/workspaces/registry/graphicWorkspace';
+import { uiuxWorkspace } from '@/workspaces/registry/uiuxWorkspace';
+import { videoWorkspace } from '@/workspaces/registry/videoWorkspace';
+import { podcastWorkspace } from '@/workspaces/registry/podcastWorkspace';
 
-import { graphicWorkspace } from './registry/graphicWorkspace';
-import { uiuxWorkspace } from './registry/uiuxWorkspace';
-import { videoWorkspace } from './registry/videoWorkspace';
-import { podcastWorkspace } from './registry/podcastWorkspace';
-
-import { aiWorkspace } from './registry/aiWorkspace';
-import { animationWorkspace } from './registry/animationWorkspace';
-import { brandingWorkspace } from './registry/brandingWorkspace';
-import { devWorkspace } from './registry/devWorkspace';
-import { documentsWorkspace } from './registry/documentsWorkspace';
-import { educationWorkspace } from './registry/educationWorkspace';
-import { iconWorkspace } from './registry/iconWorkspace';
-import { materialWorkspace } from './registry/materialWorkspace';
+import { aiWorkspace } from '@/workspaces/registry/aiWorkspace';
+import { animationWorkspace } from '@/workspaces/registry/animationWorkspace';
+import { brandingWorkspace } from '@/workspaces/registry/brandingWorkspace';
+import { devWorkspace } from '@/workspaces/registry/devWorkspace';
+import { documentsWorkspace } from '@/workspaces/registry/documentsWorkspace';
+import { educationWorkspace } from '@/workspaces/registry/educationWorkspace';
+import { iconWorkspace } from '@/workspaces/registry/iconWorkspace';
+import { materialWorkspace } from '@/workspaces/registry/materialWorkspace';
 
 /**
  * WorkspaceRegistry

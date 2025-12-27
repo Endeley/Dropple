@@ -2,7 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
+import { useTemplateBuilderStore } from "@/runtime/stores/useTemplateBuilderStore";
 
 export default function AssetLibrary() {
   const [assets, setAssets] = useState([]);

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useSelectionStore } from '@/zustand/selectionStore';
-import { useHistoryStore } from '@/zustand/historyStore';
+import { useSelectionStore } from '@/runtime/stores/selectionStore';
+import { useHistoryStore } from '@/runtime/stores/historyStore';
 import { dispatchEvent } from '@/lib/dispatch/dispatchEvent';
 
 export default function KeyboardShortcuts() {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
+import { useTemplateBuilderStore } from "@/runtime/stores/useTemplateBuilderStore";
 
 const TIMELINE_WIDTH = 640; // px
 

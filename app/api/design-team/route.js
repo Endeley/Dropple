@@ -1,6 +1,6 @@
 "use server";
 
-import { runDesignTeam } from "@/lib/orchestrator/orchestrator";
+import { runDesignTeam } from "@/ai/orchestrator/orchestrator";
 
 export async function POST(req) {
   const { prompt } = await req.json();

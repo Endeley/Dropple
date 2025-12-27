@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion } from "motion/react";
+import Image from "next/image";
 
 function decodeTemplate(searchParams) {
   const raw = searchParams.get("tpl");
@@ -72,10 +73,13 @@ function Layer({ layer }) {
   if (layer.type === "image") {
     return (
       <motion.div {...motionProps} style={style}>
-        <img
+        <Image
           src={layer.url}
           alt={layer.name || "image"}
-          style={{ width: "100%", height: "100%", objectFit: layer.props?.fit || "cover" }}
+          fill
+          sizes="100vw"
+          style={{ objectFit: layer.props?.fit || "cover" }}
+          priority
         />
       </motion.div>
     );

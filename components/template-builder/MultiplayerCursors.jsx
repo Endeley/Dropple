@@ -1,6 +1,6 @@
 'use client';
 
-import { useTemplateBuilderStore } from '@/store/useTemplateBuilderStore';
+import { useTemplateBuilderStore } from '@/runtime/stores/useTemplateBuilderStore';
 
 const COLORS = ['#3b82f6', '#22c55e', '#ec4899', '#f59e0b', '#6366f1'];
 

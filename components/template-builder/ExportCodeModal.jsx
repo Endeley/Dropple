@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import { exportLayerToJSX } from "@/lib/exportToCode";
-import { exportMotionComponent } from "@/lib/exportMotionToCode";
-import { buildStarterPack, validateMotionPack } from "@/lib/motionPack";
-import { exportThemeToCSS } from "@/lib/exportThemeToCSS";
-import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
+import { exportLayerToJSX } from "@/engine/export/exportToCode";
+import { exportMotionComponent } from "@/engine/export/exportMotionToCode";
+import { buildStarterPack, validateMotionPack } from "@/engine/motion/motionPack";
+import { exportThemeToCSS } from "@/engine/export/exportThemeToCSS";
+import { useTemplateBuilderStore } from "@/runtime/stores/useTemplateBuilderStore";
 import { generateTemplateThumbnail } from "@/lib/templates/exportTemplate";
 
 export default function ExportCodeModal() {

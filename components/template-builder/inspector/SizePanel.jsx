@@ -1,6 +1,6 @@
 "use client";
 
-import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
+import { useTemplateBuilderStore } from "@/runtime/stores/useTemplateBuilderStore";
 
 export default function SizePanel({ layer }) {
   const { updateLayer } = useTemplateBuilderStore();

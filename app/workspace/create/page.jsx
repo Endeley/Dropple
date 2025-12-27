@@ -1,14 +1,14 @@
 "use client";
 
 import BuilderHeader from "@/components/template-builder/BuilderHeader";
-import TemplateToolbar from "@/components/template-builder/TemplateToolbar";
+import TemplateToolbar from "@/ui/tools/TemplateToolbar";
 import BuilderSidebar from "@/components/template-builder/BuilderSidebar";
 import BuilderCanvas from "@/components/template-builder/BuilderCanvas";
 import BuilderRightPanel from "@/components/template-builder/BuilderRightPanel";
 import TimelineDock from "@/components/template-builder/TimelineDock";
 import AssistantPanel from "@/components/template-builder/AssistantPanel";
 import LayersPanel from "@/components/template-builder/LayersPanel";
-import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
+import { useTemplateBuilderStore } from "@/runtime/stores/useTemplateBuilderStore";
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 

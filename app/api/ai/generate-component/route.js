@@ -2,7 +2,7 @@
 
 import { convexClient } from "@/lib/convex/client";
 import { api } from "@/convex/_generated/api";
-import { uiAgent } from "@/lib/agents/roles/uiAgent";
+import { uiAgent } from "@/ai/agents/roles/uiAgent";
 
 export async function POST(req) {
   const { componentType } = await req.json();

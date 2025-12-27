@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-import { useTemplateBuilderStore } from '@/store/useTemplateBuilderStore';
+import { useTemplateBuilderStore } from '@/runtime/stores/useTemplateBuilderStore';
 import CanvasLayer from './CanvasLayer';
 import SmartGuides from './SmartGuides';
 import MarqueeSelect from './MarqueeSelect';
@@ -12,7 +12,7 @@ import PageSwitcher from './PageSwitcher';
 import PrototypeConnections from './PrototypeConnections';
 import DevicePreviewBar from './DevicePreviewBar';
 import MultiplayerCursors from './MultiplayerCursors';
-import { useTimelinePlayer } from '@/zustand/useTimelinePlayer';
+import { useTimelinePlayer } from '@/runtime/stores/useTimelinePlayer';
 
 export default function BuilderCanvas() {
     const { currentTemplate, isEditingComponent, addLayer, canvas, setCanvasZoom, setCanvasPan } = useTemplateBuilderStore();

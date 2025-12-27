@@ -1,6 +1,6 @@
 'use client';
 
-import { useTemplateBuilderStore } from '@/store/useTemplateBuilderStore';
+import { useTemplateBuilderStore } from '@/runtime/stores/useTemplateBuilderStore';
 import LayerTreeItem from './LayerTreeItem';
 
 export default function LayerTree() {

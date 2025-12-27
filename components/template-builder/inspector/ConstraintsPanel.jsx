@@ -1,8 +1,8 @@
 'use client';
 
-import { useNodeTreeStore } from '@/zustand/nodeTreeStore';
-import { useSelectionStore } from '@/zustand/selectionStore';
-import { useToolStore } from '@/zustand/toolStore';
+import { useNodeTreeStore } from '@/runtime/stores/nodeTreeStore';
+import { useSelectionStore } from '@/runtime/stores/selectionStore';
+import { useToolStore } from '@/runtime/stores/toolStore';
 
 const snap = (v, gridSize, enabled) => (enabled ? Math.round(v / gridSize) * gridSize : v);
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
+import { useTemplateBuilderStore } from "@/runtime/stores/useTemplateBuilderStore";
 import { useContextHints } from "./hooks/useContextHints";
 
 export default function AssistantPanel() {

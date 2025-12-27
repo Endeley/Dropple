@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
-import { motionPresets, getMotionPreset } from "@/lib/motionPresets";
-import { motionThemes } from "@/lib/motionThemes";
+import { useTemplateBuilderStore } from "@/runtime/stores/useTemplateBuilderStore";
+import { motionPresets, getMotionPreset } from "@/engine/motion/motionPresets";
+import { motionThemes } from "@/engine/motion/motionThemes";
 
 const STATES = ["initial", "animate", "hover", "tap", "inView"];
 const FIELDS = ["opacity", "x", "y", "scale", "rotate", "rotateX", "rotateY", "rotateZ"];

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { usePageTransitions } from "@/zustand/usePageTransitions";
+import { usePageTransitions } from "@/runtime/stores/usePageTransitions";
 
 const TransitionContext = createContext({ navigate: (href) => href });
 

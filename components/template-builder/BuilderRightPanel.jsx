@@ -1,8 +1,8 @@
 "use client";
 import InspectorPanel from "./InspectorPanel";
-import ExportCodePanel from "@/components/export/ExportCodePanel";
-import AgentCollabPanel from "@/components/ai/AgentCollabPanel";
-import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
+import ExportCodePanel from "@/ui/panels/export/ExportCodePanel";
+import AgentCollabPanel from "@/ui/ai/AgentCollabPanel";
+import { useTemplateBuilderStore } from "@/runtime/stores/useTemplateBuilderStore";
 
 export default function BuilderRightPanel() {
   const messages = useTemplateBuilderStore((s) => s.agentMessages || []);

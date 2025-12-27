@@ -1,5 +1,5 @@
 "use client";
-import ModeLoader from "@/components/workspace/ModeLoader";
+import ModeLoader from "@/ui/shell/ModeLoader";
 export default function VideoWorkspacePage() {
   return <ModeLoader mode="video" />;
 }

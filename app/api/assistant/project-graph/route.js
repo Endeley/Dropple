@@ -1,6 +1,6 @@
 "use server";
 
-import { analyzeMotion } from "@/lib/motionRefiner";
+import { analyzeMotion } from "@/engine/motion/motionRefiner";
 
 export async function POST(req) {
   try {

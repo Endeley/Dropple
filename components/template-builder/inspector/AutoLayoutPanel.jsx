@@ -1,7 +1,7 @@
 'use client';
 
-import NumericScrubber from '@/components/properties/NumericScrubber';
-import { useNodeTreeStore } from '@/zustand/nodeTreeStore';
+import NumericScrubber from '@/ui/shared/NumericScrubber';
+import { useNodeTreeStore } from '@/runtime/stores/nodeTreeStore';
 
 const JUSTIFY_OPTIONS = [
     { label: 'Start', value: 'start' },

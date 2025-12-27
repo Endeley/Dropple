@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
+import { useTemplateBuilderStore } from "@/runtime/stores/useTemplateBuilderStore";
 
 export default function ThemeSwitcher() {
   const { themes, activeThemeId, setActiveTheme, loadThemes } = useTemplateBuilderStore();

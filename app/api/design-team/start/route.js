@@ -2,7 +2,7 @@
 
 import { convexClient } from "@/lib/convex/client";
 import { api } from "@/convex/_generated/api";
-import { AGENT_PIPELINE } from "@/lib/orchestrator/multiAgentConfig";
+import { AGENT_PIPELINE } from "@/ai/orchestrator/multiAgentConfig";
 
 export async function POST(request) {
   const { prompt } = await request.json();

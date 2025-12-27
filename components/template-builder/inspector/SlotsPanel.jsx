@@ -1,7 +1,7 @@
 "use client";
 
-import { useTemplateBuilderStore } from "@/store/useTemplateBuilderStore";
-import { useTokenStore } from "@/zustand/tokenStore";
+import { useTemplateBuilderStore } from "@/runtime/stores/useTemplateBuilderStore";
+import { useTokenStore } from "@/runtime/stores/tokenStore";
 
 export default function SlotsPanel({ layer, component }) {
   const updateInstanceSlots = useTemplateBuilderStore((s) => s.updateInstanceSlots);

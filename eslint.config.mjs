@@ -1,4 +1,5 @@
 import { defineConfig, globalIgnores } from "eslint/config";
+import tseslint from "@typescript-eslint/eslint-plugin";
 import nextVitals from "eslint-config-next/core-web-vitals";
 
 const eslintConfig = defineConfig([
@@ -13,6 +14,9 @@ const eslintConfig = defineConfig([
     "convex/_generated/**",
   ]),
   {
+    plugins: {
+      "@typescript-eslint": tseslint,
+    },
     rules: {
       "no-restricted-imports": [
         "error",
@@ -25,6 +29,7 @@ const eslintConfig = defineConfig([
           ],
         },
       ],
+      "@typescript-eslint/no-var-requires": "off",
     },
   },
 ]);
