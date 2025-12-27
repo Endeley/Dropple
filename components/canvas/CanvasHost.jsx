@@ -36,9 +36,6 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
     const clearSelection = useSelectionStore((s) => s.deselectAll);
 
     const nodes = useNodeTreeStore((s) => s.nodes);
-    const updateNode = useNodeTreeStore((s) => s.updateNode);
-    const applyConstraintsForParent = useNodeTreeStore((s) => s.applyConstraintsForParent);
-    const recomputeConstraintOffsetsForNode = useNodeTreeStore((s) => s.recomputeConstraintOffsetsForNode);
 
     const previewNodes = useConstraintPreviewStore((s) => s.previewNodes);
     const setPreviewNodes = useConstraintPreviewStore((s) => s.setPreviewNodes);
@@ -71,6 +68,7 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
     /* ---------- DERIVED ---------- */
 
     const activeNodeMap = nodeMap && Object.keys(nodeMap).length ? nodeMap : nodes;
+
     const selectedBounds = getSelectedBounds(selectedIds, activeNodeMap);
 
     /* ---------------------------------------------
@@ -152,7 +150,6 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
                         y: localY,
                         width: 1,
                         height: 1,
-                        parentId: null,
                         children: [],
                     },
                 },
@@ -160,7 +157,11 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
 
             useSelectionStore.getState().setSelectedManual([id]);
 
-            creationRef.current = { id, startX: localX, startY: localY };
+            creationRef.current = {
+                id,
+                startX: localX,
+                startY: localY,
+            };
             return;
         }
 
@@ -177,16 +178,51 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
     --------------------------------------------- */
 
     const onMouseMove = (e) => {
+        /* ---------- FRAME CREATION ---------- */
+        if (creationRef.current) {
+            const { id, startX, startY } = creationRef.current;
+
+            const dx = (e.clientX - startX) / zoom;
+            const dy = (e.clientY - startY) / zoom;
+
+            const width = Math.max(1, Math.abs(dx));
+            const height = Math.max(1, Math.abs(dy));
+
+            const x = dx < 0 ? startX + dx : startX;
+            const y = dy < 0 ? startY + dy : startY;
+
+            dispatchEvent({
+                type: 'NODE_UPDATE',
+                payload: {
+                    id,
+                    updates: { x, y, width, height },
+                },
+            });
+
+            return;
+        }
+
+        /* ---------- ROTATE ---------- */
         if (rotateRef.current) {
             const { center, startAngle, initialRotations } = rotateRef.current;
+
             const delta = calculateAngle(center, toLocal(e.clientX, e.clientY)) - startAngle;
 
             selectedIds.forEach((id, i) => {
-                updateNode(id, { rotation: initialRotations[i] + delta });
+                dispatchEvent({
+                    type: 'NODE_UPDATE',
+                    payload: {
+                        id,
+                        updates: {
+                            rotation: initialRotations[i] + delta,
+                        },
+                    },
+                });
             });
             return;
         }
 
+        /* ---------- RESIZE ---------- */
         if (resizeRef.current) {
             const { startX, startY, handle, nodeId, initialNode, resizeMode } = resizeRef.current;
 
@@ -196,11 +232,17 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
             const next = { ...initialNode };
             applyResize(next, handle, dx, dy);
 
-            updateNode(nodeId, {
-                x: next.x,
-                y: next.y,
-                width: next.width,
-                height: next.height,
+            dispatchEvent({
+                type: 'NODE_UPDATE',
+                payload: {
+                    id: nodeId,
+                    updates: {
+                        x: next.x,
+                        y: next.y,
+                        width: next.width,
+                        height: next.height,
+                    },
+                },
             });
 
             if (resizeMode === 'constraint') {
@@ -211,7 +253,6 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
                               __parent: next,
                               nodes: computeConstraintPreview(next, nodes),
                           };
-
                 setPreviewNodes(preview);
             } else {
                 clearPreview();
@@ -219,8 +260,10 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
             return;
         }
 
+        /* ---------- DRAG ---------- */
         if (dragRef.current) {
             const { startX, startY, initialPositions } = dragRef.current;
+
             const dx = (e.clientX - startX) / zoom;
             const dy = (e.clientY - startY) / zoom;
 
@@ -239,7 +282,13 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
                     ny = Math.round(ny / gridSize) * gridSize;
                 }
 
-                updateNode(id, { x: nx, y: ny });
+                dispatchEvent({
+                    type: 'NODE_UPDATE',
+                    payload: {
+                        id,
+                        updates: { x: nx, y: ny },
+                    },
+                });
             });
 
             setGuides(guides);
@@ -251,8 +300,6 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
     --------------------------------------------- */
 
     const onMouseUp = () => {
-        const resizeData = resizeRef.current;
-
         dragRef.current = null;
         resizeRef.current = null;
         rotateRef.current = null;
@@ -260,27 +307,6 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
 
         clearGuides();
         clearPreview();
-
-        if (!resizeData) return;
-
-        const { nodeId, resizeMode } = resizeData;
-        const node = nodes[nodeId];
-
-        if (resizeMode === 'constraint' && node?.parent) {
-            applyConstraintsForParent(node.parent);
-        }
-
-        if (resizeMode === 'scale') {
-            node?.children?.forEach((cid) => {
-                recomputeConstraintOffsetsForNode(cid);
-            });
-        }
-
-        if (node?.layout === 'flex' && (node.sizeX === 'hug' || node.sizeY === 'hug')) {
-            const children = node.children?.map((cid) => nodes[cid]).filter(Boolean);
-            const nextSize = computeAutoLayoutSize(node, children);
-            if (nextSize) updateNode(nodeId, nextSize);
-        }
     };
 
     /* ---------------------------------------------
@@ -299,6 +325,7 @@ export default function CanvasHost({ children, nodeMap = {}, selectionBox = null
             )}
 
             {showGrid && <AdaptiveGrid zoom={zoom} />}
+
             <InfinitePlane>{children}</InfinitePlane>
 
             <CanvasOverlays nodeMap={activeNodeMap} previewNodes={previewNodes} selectionBox={selectionBox} startResize={startResize} startRotate={startRotate} pan={pan} zoom={zoom} bounds={selectedBounds} />
